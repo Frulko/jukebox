@@ -51,6 +51,11 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     jobs.stop()
     scheduler.stop()
+    // Give the handlers already in flight a moment to notice: a scan that
+    // reaches its next checkpoint resumes a few files later rather than a few
+    // thousand. Safety does not depend on this -- every write after stop() is
+    // skipped -- but cleanliness does.
+    void jobs.drain(3000)
     // A cast session is a live socket: the process will not exit while one is
     // open, and the receiver keeps showing an app nobody is talking to.
     closeOutputs()

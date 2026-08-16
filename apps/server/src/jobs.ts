@@ -99,6 +99,8 @@ export class JobQueue {
   #listeners = new Set<Listener>()
   #pumping = false
   #timer: ReturnType<typeof setInterval> | null = null
+  /** Set by `stop()`. Every write checks it — see the note there. */
+  #stopped = false
 
   constructor(db: DB) {
     this.#db = db
@@ -245,10 +247,39 @@ export class JobQueue {
     this.pump()
   }
 
+  /**
+   * Stops taking work, and stops writing.
+   *
+   * The abort flag is not enough on its own. A handler is asynchronous, so
+   * after `stop()` returns it keeps running until its next `await` — and then
+   * writes a checkpoint, or a final state, to a database the caller has since
+   * closed. "database is not open", thrown from a promise nobody is holding,
+   * which becomes an uncaught exception rather than something catchable.
+   *
+   * Skipping those writes loses nothing: a job left `running` is requeued on
+   * the next start and resumes from its cursor, which is the constructor's
+   * first act. Recording that it finished is the only thing being dropped, and
+   * it had not finished.
+   */
   stop(): void {
+    this.#stopped = true
     if (this.#timer) clearInterval(this.#timer)
     this.#timer = null
     for (const h of this.#running.values()) h.abort = true
+  }
+
+  /**
+   * Waits for the handlers already in flight to notice and stop.
+   *
+   * For a caller that would rather shut down cleanly than merely safely: a
+   * scan that gets to its next checkpoint before the process exits resumes a
+   * few files later rather than a few thousand.
+   */
+  async drain(timeoutMs = 5000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while (this.#running.size && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 25))
+    }
   }
 
   pump(): void {
@@ -293,6 +324,7 @@ export class JobQueue {
       payload: JSON.parse(String(job.payload ?? '{}')),
       cursor: job.cursor,
       checkpoint: (cursor, progress) => {
+        if (this.#stopped) return
         this.#db
           .prepare(
             `UPDATE jobs SET cursor = ?,
@@ -306,6 +338,7 @@ export class JobQueue {
         if (fresh) this.#emit(fresh)
       },
       item: (idx, ref, state, extra) => {
+        if (this.#stopped) return
         this.#db
           .prepare(
             `INSERT INTO job_items (jobId, idx, ref, state, bytes, error) VALUES (?,?,?,?,?,?)
@@ -316,7 +349,7 @@ export class JobQueue {
           .run(job.id, idx, ref, state, extra?.bytes ?? 0, extra?.error ?? null)
       },
       aborted: () => {
-        if (handle.abort) return true
+        if (handle.abort || this.#stopped) return true
         const row = this.#db.prepare(`SELECT state FROM jobs WHERE id = ?`).get(job.id) as { state: JobState } | undefined
         return !row || row.state === 'cancelled' || row.state === 'paused'
       },
@@ -324,20 +357,27 @@ export class JobQueue {
 
     try {
       await handler(ctx)
+      // Every write from here on is guarded: the queue may have been stopped
+      // while this handler was between awaits, and the database closed behind
+      // it. The job stays `running` and is requeued on the next start.
+      if (this.#stopped) return
       // A job paused or cancelled mid-flight must not be marked done.
       const state = (this.#db.prepare(`SELECT state FROM jobs WHERE id = ?`).get(job.id) as any)?.state
       if (state === 'running') {
         this.#db.prepare(`UPDATE jobs SET state = 'done', finishedAt = ?, cursor = NULL WHERE id = ?`).run(Date.now(), job.id)
       }
     } catch (err) {
+      if (this.#stopped) return
       this.#db
         .prepare(`UPDATE jobs SET state = 'failed', finishedAt = ?, error = ? WHERE id = ?`)
         .run(Date.now(), err instanceof Error ? err.message : String(err), job.id)
     } finally {
       this.#running.delete(job.id)
-      const fresh = this.get(job.id)
-      if (fresh) this.#emit(fresh)
-      this.pump()
+      if (!this.#stopped) {
+        const fresh = this.get(job.id)
+        if (fresh) this.#emit(fresh)
+        this.pump()
+      }
     }
   }
 }

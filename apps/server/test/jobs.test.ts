@@ -1,5 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { open } from '../src/db.ts'
 import { JobQueue } from '../src/jobs.ts'
 
@@ -128,4 +131,73 @@ test('idempotency dedupes in flight, not forever', async () => {
   const relance = q.create('scan', { sourceId: 's' }, { idempotencyKey: 'scan-s' })
   assert.notEqual(relance.state, 'done', 'finished: a new run starts')
   q.stop()
+})
+
+test('a handler still running when the queue stops does not write to a closed database', async () => {
+  const db = open(':memory:')
+  const jobs = new JobQueue(db)
+
+  let released: () => void
+  const midway = new Promise<void>((r) => { released = r })
+  let wroteAfterStop: unknown = null
+
+  jobs.register('scan' as any, async (ctx: any) => {
+    ctx.checkpoint('half', { done: 1, total: 2 })
+    await midway
+    // The handler resumes after stop() has been called and the database is
+    // gone. Anything it writes here throws from a promise nobody holds, which
+    // becomes an uncaught exception rather than something catchable.
+    try {
+      ctx.checkpoint('done', { done: 2, total: 2 })
+      ctx.item(0, 'x', 'done')
+    } catch (err) {
+      wroteAfterStop = err
+    }
+  })
+
+  jobs.create('scan' as any, {})
+  jobs.start()
+  await new Promise((r) => setTimeout(r, 50))
+
+  jobs.stop()
+  db.close()
+  released!()
+  await new Promise((r) => setTimeout(r, 50))
+
+  assert.equal(wroteAfterStop, null, 'the queue wrote after being stopped')
+})
+
+test('an interrupted job is left running, so the next start resumes it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'jukebox-jobs-'))
+  const file = join(dir, 'db.sqlite')
+  try {
+    const db = open(file)
+    const jobs = new JobQueue(db)
+
+    let released: () => void
+    const midway = new Promise<void>((r) => { released = r })
+    jobs.register('scan' as any, async (ctx: any) => {
+      ctx.checkpoint('halfway', { done: 5, total: 10 })
+      await midway
+    })
+
+    const job = jobs.create('scan' as any, {})
+    jobs.start()
+    await new Promise((r) => setTimeout(r, 50))
+
+    jobs.stop()
+    released!()
+    await new Promise((r) => setTimeout(r, 50))
+    db.close()
+
+    // A second process opens the same database. The job was never marked done,
+    // which is correct because it never finished -- and the constructor
+    // requeues it with its cursor intact.
+    const again = open(file)
+    const revived = new JobQueue(again)
+    const row = revived.get(job.id)!
+    assert.equal(row.state, 'queued')
+    assert.equal(row.cursor, 'halfway', 'it resumes where it stopped, not from the start')
+    again.close()
+  } finally { await rm(dir, { recursive: true, force: true }) }
 })
