@@ -44,6 +44,22 @@ export type ClientOptions = {
   /** Names this controller in the shared player, e.g. "iPhone". */
   client?: string
   fetch?: typeof globalThis.fetch
+  /**
+   * How to open the event stream.
+   *
+   * A browser has `EventSource` and needs nothing here. Node does not — not in
+   * every version, and not without a flag — so a server-side consumer of this
+   * SDK could call `events()` and get "EventSource is not defined", which reads
+   * as a bug in the SDK rather than a missing global. Passing one in is the
+   * answer, and it is also how this gets tested.
+   */
+  eventSource?: (url: string) => EventSourceLike
+}
+
+/** The part of `EventSource` this uses, so a small shim satisfies it. */
+export type EventSourceLike = {
+  addEventListener: (type: string, listener: (e: { data: string }) => void) => void
+  close: () => void
 }
 
 export function createClient(opts: ClientOptions = {}) {
@@ -412,16 +428,99 @@ export function createClient(opts: ClientOptions = {}) {
     /**
      * Event stream. One, filterable — the client never polls in a loop. Returns
      * a close function.
+     *
+     * The events a server sends: `hello` on connect (the revision and the
+     * player, so a client that reconnects mid-song is not blank), `library`
+     * when anything in the library changes, `player` for the shared queue,
+     * `play` when a listen is recorded, and `job.progress`.
+     *
+     * `library` carries only a revision, deliberately. What to do with one is
+     * `tracks.delta`, and `sync()` below is that loop written once.
      */
     events(handlers: { [event: string]: (data: any) => void }, topics?: string[]): () => void {
       const url = `${base}/events${topics?.length ? qs({ topics: topics.join(',') }) : ''}`
-      const es = new EventSource(url)
+      const open = opts.eventSource
+        ?? ((u: string) => {
+          const Impl = (globalThis as any).EventSource
+          if (!Impl) {
+            throw new Error(
+              'no EventSource in this runtime — pass one to createClient({ eventSource })')
+          }
+          return new Impl(u) as EventSourceLike
+        })
+
+      const es = open(url)
       for (const [name, fn] of Object.entries(handlers)) {
         es.addEventListener(name, (e) => {
-          try { fn(JSON.parse((e as MessageEvent).data)) } catch { /* partial frame: ignore */ }
+          try { fn(JSON.parse(e.data)) } catch { /* partial frame: ignore */ }
         })
       }
       return () => es.close()
+    },
+
+    /**
+     * Keeps a local copy of the library in step with the server.
+     *
+     * This is the five network rules used rather than described, and it exists
+     * because every client otherwise writes it again: catch up with
+     * `delta?since=`, then wait to be told rather than asking. A client that
+     * polls a page is the thing the whole design was arranged to avoid.
+     *
+     * Two details are the difference between this working and appearing to:
+     *
+     * - **The catch-up loops.** A delta is capped, so a client resuming after a
+     *   large import gets the cap, not everything. Stopping after one response
+     *   leaves it quietly behind for ever, which looks like a server that
+     *   dropped changes.
+     * - **`deleted` is applied.** A soft-deleted track keeps its row on the
+     *   server and vanishes from the page; a client that only merges `changed`
+     *   goes on showing music that is gone.
+     */
+    sync(opts: {
+      /** Called after every catch-up, with everything currently known. */
+      onChange: (state: { tracks: Map<string, Track>; revision: number }) => void
+      /** Resume from a revision held across a restart. `0` fetches everything. */
+      since?: number
+      /** Rows per request while catching up. */
+      pageSize?: number
+    }): { close: () => void; revision: () => number } {
+      const tracks = new Map<string, Track>()
+      const limit = opts.pageSize ?? 500
+      let revision = opts.since ?? 0
+      let running = false
+      let again = false
+
+      const catchUp = async () => {
+        // One at a time: an event arriving mid-catch-up sets a flag rather than
+        // starting a second overlapping walk of the same revisions.
+        if (running) { again = true; return }
+        running = true
+        try {
+          for (;;) {
+            const delta = await request<TracksDelta>(`/tracks/delta${qs({ since: revision, limit })}`)
+            for (const t of delta.changed) tracks.set(t.id, t)
+            for (const id of delta.deleted) tracks.delete(id)
+
+            const highest = delta.changed.reduce((n, t) => Math.max(n, t.rev ?? 0), revision)
+            const done = delta.changed.length < limit && delta.deleted.length < limit
+            revision = done ? delta.revision : Math.max(highest, revision)
+            if (done) break
+          }
+          opts.onChange({ tracks, revision })
+        } finally {
+          running = false
+          if (again) { again = false; void catchUp() }
+        }
+      }
+
+      const close = this.events({
+        // The revision in the event is not trusted as a cursor: it says
+        // something moved, and the catch-up decides what.
+        hello: () => void catchUp(),
+        library: () => void catchUp(),
+      })
+
+      return { close, revision: () => revision }
     },
 
     /** Walks every page of a query. Reserve this for exports. */

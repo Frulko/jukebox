@@ -66,6 +66,14 @@ hands out a URL.
       test that fails when the two drift. The direction is deliberate: the types stay the
       source and the spec is derived, because the types are what the server is checked
       against and a spec is not
+- [x] **1.8c** `client.sync()` — the five rules used rather than described: catch up with
+      `delta?since=`, then wait to be told. Every client would otherwise write this again, and
+      get the same two details wrong: the catch-up has to *loop* past the page cap, or a
+      client resuming after a large import stays quietly behind for ever; and `deleted` has to
+      be applied, or it goes on showing music that is gone. The event stream is injectable
+      (`createClient({ eventSource })`), which is what makes it testable from Node — and what
+      stops a server-side consumer meeting "EventSource is not defined" and reading it as a
+      bug in the SDK
 - [~] **1.9** Frontend on the real API — the `Track` shape matches the server and
       `apps/web/src/api.ts` carries the TanStack Query hooks; what remains is swapping the data
       source in `App.tsx`

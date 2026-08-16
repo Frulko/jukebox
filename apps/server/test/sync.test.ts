@@ -1,164 +1,178 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { open } from '../src/db.ts'
-import { planSync } from '../src/sync.ts'
-import { addTracks, createPlaylist } from '../src/playlists.ts'
+import { mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { serve } from '@hono/node-server'
+import { createApp } from '../src/app.ts'
+import { createClient, type EventSourceLike } from '../../../packages/client-sdk/src/index.ts'
 
-function fixture(opts: { capacity?: number; formats?: string[]; mode?: 'all' | 'playlists' } = {}) {
-  const db = open(':memory:')
-  db.exec(`INSERT INTO sources (id, kind, name, root, rev) VALUES ('s','local','S','/',1)`)
-  const ins = db.prepare(
-    `INSERT INTO tracks (id, sourceId, path, name, artist, albumArtist, album, format, size, dateAdded, rev)
-     VALUES (?, 's', ?, ?, ?, ?, ?, ?, ?, 1, 1)`)
-  const rows: [string, string, string, number][] = [
-    ['t1', 'Dreams', 'mp3', 5_000_000],
-    ['t2', 'Gold Dust', 'flac', 30_000_000],
-    ['t3', 'Kid A', 'mp3', 6_000_000],
-    ['t4', 'Untrue', 'opus', 4_000_000],
-  ]
-  for (const [id, name, format, size] of rows)
-    ins.run(id, `/p/${id}`, name, 'A', 'A', 'Alb', format, size)
+const FIXTURES = resolve(import.meta.dirname, '../../../.fixtures')
 
-  db.prepare(
-    `INSERT INTO devices (id, satelliteId, name, kind, capacity, acceptedFormats, syncMode, syncPlaylistIds, rev)
-     VALUES ('ipod', 'sat-1', 'iPod', 'ipod-classic', ?, ?, ?, '[]', 1)`)
-    .run(opts.capacity ?? 1_000_000_000,
-      JSON.stringify(opts.formats ?? ['mp3', 'aac', 'alac']),
-      opts.mode ?? 'all')
-  return db
+/**
+ * `client.sync()` — the five network rules used rather than described.
+ *
+ * Against a real port, because the thing under test is an event stream: an
+ * in-process `app.fetch` transport cannot hold one open, and a mocked stream
+ * would test the mock. The SDK's own `eventSource` hook is what makes a Node
+ * test possible at all, and it is the same hook a server-side consumer needs.
+ */
+
+/** The little of EventSource this needs, over `fetch`. */
+function nodeEventSource(url: string): EventSourceLike {
+  const listeners = new Map<string, ((e: { data: string }) => void)[]>()
+  const controller = new AbortController()
+
+  void (async () => {
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const frames = buffer.split('\n\n')
+        buffer = frames.pop() ?? ''
+        for (const frame of frames) {
+          const name = /^event: (.+)$/m.exec(frame)?.[1]
+          const data = /^data: (.+)$/m.exec(frame)?.[1]
+          if (name) for (const fn of listeners.get(name) ?? []) fn({ data: data ?? 'null' })
+        }
+      }
+    } catch { /* closed by the test */ }
+  })()
+
+  return {
+    addEventListener: (type, fn) => listeners.set(type, [...(listeners.get(type) ?? []), fn]),
+    close: () => controller.abort(),
+  }
 }
 
-const hold = (db: any, deviceLocalId: string, trackId: string | null, size = 5_000_000, name = 'x') =>
-  db.prepare(`INSERT INTO device_tracks (deviceId, deviceLocalId, trackId, name, size) VALUES ('ipod',?,?,?,?)`)
-    .run(deviceLocalId, trackId, name, size)
+async function harness(files = 3) {
+  const root = await mkdtemp(join(tmpdir(), 'jukebox-sync-lib-'))
+  for (let i = 0; i < files; i++) {
+    await mkdir(join(root, `A${i}`), { recursive: true })
+    await copyFile(join(FIXTURES, 'Daft Punk/Discovery/01.mp3'), join(root, `A${i}/01.mp3`))
+  }
 
-test('the plan lists what to add and what the device already holds', () => {
-  const db = fixture()
-  hold(db, 'F0', 't1')
-  const plan = planSync(db, 'ipod')
-  assert.deepEqual(plan.add.map((a) => a.trackId).sort(), ['t2', 't3', 't4'])
-  assert.equal(plan.keep, 1)
-  assert.equal(plan.remove.length, 0)
+  const dir = await mkdtemp(join(tmpdir(), 'jukebox-sync-'))
+  const app = createApp(join(dir, 'db.sqlite'))
+  const server = serve({ fetch: app.app.fetch, port: 0 })
+  const port = (server.address() as any).port
+  const baseUrl = `http://127.0.0.1:${port}/api/v1`
+
+  const api = createClient({ baseUrl, eventSource: nodeEventSource })
+  const settle = async () => {
+    const until = Date.now() + 30_000
+    while (Date.now() < until) {
+      if (!app.jobs.list({}).some((j: any) => j.state === 'queued' || j.state === 'running')) return
+      await new Promise((r) => setTimeout(r, 25))
+    }
+  }
+
+  await api.sources.create({ id: 's', name: 'S', root } as any)
+  await api.sources.scan('s')
+  await settle()
+
+  return {
+    api, settle, root,
+    cleanup: async () => {
+      app.closeOutputs()
+      app.jobs.stop()
+      await new Promise<void>((r) => server.close(() => r()))
+      await rm(dir, { recursive: true, force: true })
+      await rm(root, { recursive: true, force: true })
+    },
+  }
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** Waits for a condition instead of sleeping long enough and hoping. */
+async function until(fn: () => boolean, ms = 8000) {
+  const deadline = Date.now() + ms
+  while (Date.now() < deadline) {
+    if (fn()) return true
+    await wait(25)
+  }
+  return false
+}
+
+test('a fresh client catches up, then is told rather than asking', async () => {
+  const h = await harness(3)
+  let state: any = null
+  const sync = h.api.sync({ onChange: (s) => { state = s } })
+  try {
+    assert.ok(await until(() => state?.tracks.size === 3), `caught up: ${state?.tracks.size}`)
+
+    // An edit made elsewhere arrives without this client polling anything.
+    const [first] = [...state.tracks.values()] as any[]
+    await h.api.tracks.patch([first.id], { rating: 5 })
+
+    assert.ok(await until(() => state.tracks.get(first.id)?.rating === 5), 'the rating never arrived')
+    assert.ok(sync.revision() > 0)
+  } finally { sync.close(); await h.cleanup() }
 })
 
-test('the device declares its formats, the plan says what needs converting', () => {
-  const db = fixture({ formats: ['mp3', 'aac', 'alac'] })
-  const plan = planSync(db, 'ipod')
-  const byId = Object.fromEntries(plan.add.map((a) => [a.trackId, a.transcode]))
-  assert.equal(byId.t1, null, 'mp3 plays as is')
-  assert.equal(byId.t2, 'alac', 'flac does not, and lossless goes to lossless')
-  assert.equal(byId.t4, 'alac', 'opus does not either')
+test('a deletion is applied, not merely skipped', async () => {
+  const h = await harness(3)
+  let state: any = null
+  const sync = h.api.sync({ onChange: (s) => { state = s } })
+  try {
+    assert.ok(await until(() => state?.tracks.size === 3))
+    const gone = ([...state.tracks.values()] as any[])
+      .find((t) => t.path.includes('A0'))
+    assert.ok(gone, 'a track to remove')
+
+    // A file really disappears and the source is rescanned, which is the only
+    // way a track leaves this library.
+    await rm(join(h.root, 'A0'), { recursive: true, force: true })
+    await h.api.sources.scan('s')
+    await h.settle()
+
+    // A client that merges `changed` and ignores `deleted` goes on showing
+    // music that is not there any more.
+    assert.ok(await until(() => !state.tracks.has(gone.id)),
+      'the removed track is still in the synced copy')
+    assert.equal(state.tracks.size, 2)
+  } finally { sync.close(); await h.cleanup() }
 })
 
-test('a track the device holds but the rules no longer want is removed', () => {
-  const db = fixture({ mode: 'playlists' })
-  const pl = createPlaylist(db, { name: 'Trip' })
-  addTracks(db, pl.id, ['t1'])
-  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
-
-  hold(db, 'F0', 't1')
-  hold(db, 'F1', 't3') // in the library, not in the playlist any more
-  const plan = planSync(db, 'ipod')
-  assert.deepEqual(plan.remove.map((r) => r.deviceLocalId), ['F1'])
-  assert.equal(plan.add.length, 0)
+test('catching up loops past the page cap', async () => {
+  const h = await harness(5)
+  let state: any = null
+  // A cap smaller than the library, which is the situation a client resuming
+  // after a large import is always in. Stopping after one response leaves it
+  // quietly behind for ever.
+  const sync = h.api.sync({ onChange: (s) => { state = s }, pageSize: 2 })
+  try {
+    assert.ok(await until(() => state?.tracks.size === 5),
+      `only ${state?.tracks.size} of 5 arrived — the catch-up did not loop`)
+  } finally { sync.close(); await h.cleanup() }
 })
 
-test('an orphan is never removed: it is the only copy left', () => {
-  const db = fixture({ mode: 'playlists' })
-  db.prepare(`UPDATE devices SET syncPlaylistIds = '[]' WHERE id = 'ipod'`).run()
-  hold(db, 'F0', 't1')
-  hold(db, 'F9', null, 3_000_000, 'Lost B-side')
+test('closing stops it listening', async () => {
+  const h = await harness(2)
+  let changes = 0
+  const sync = h.api.sync({ onChange: () => { changes++ } })
+  try {
+    assert.ok(await until(() => changes > 0))
+    sync.close()
+    const after = changes
 
-  const plan = planSync(db, 'ipod')
-  assert.deepEqual(plan.remove.map((r) => r.deviceLocalId), ['F0'],
-    'the library copy goes, the orphan stays')
-  assert.ok(!plan.remove.some((r) => r.deviceLocalId === 'F9'))
+    const page = await h.api.tracks.list({ limit: 5 })
+    await h.api.tracks.patch([page.items[0].id], { rating: 2 })
+    await wait(600)
+    assert.equal(changes, after, 'it kept syncing after being closed')
+  } finally { await h.cleanup() }
 })
 
-test('a hand-picked track joins the rules instead of replacing them', () => {
-  const db = fixture({ mode: 'playlists' })
-  const pl = createPlaylist(db, { name: 'Trip' })
-  addTracks(db, pl.id, ['t1'])
-  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
-  db.prepare(`INSERT INTO device_wanted (deviceId, trackId, addedAt) VALUES ('ipod','t3',1)`).run()
-
-  const plan = planSync(db, 'ipod')
-  assert.deepEqual(plan.add.map((a) => a.trackId).sort(), ['t1', 't3'],
-    'dropping one track on the iPod must not cancel its playlist sync')
-})
-
-test('a hand-picked track that has since been deleted is ignored', () => {
-  const db = fixture({ mode: 'playlists' })
-  db.prepare(`INSERT INTO device_wanted (deviceId, trackId, addedAt) VALUES ('ipod','t1',1)`).run()
-  db.prepare(`UPDATE tracks SET deletedAt = 1 WHERE id = 't1'`).run()
-  assert.equal(planSync(db, 'ipod').add.length, 0)
-})
-
-test('a plan that does not fit says how short it is, before anything moves', () => {
-  // 45 MB of music, a device with 10 MB free.
-  const db = fixture({ capacity: 10_000_000 })
-  const plan = planSync(db, 'ipod')
-  assert.ok(plan.shortBy !== null)
-  assert.equal(plan.shortBy, plan.bytesAdded - plan.free)
-  // Knowing this before a three-hour transfer is the whole point of dryRun.
-  assert.ok(plan.shortBy > 0)
-})
-
-test('freeing space counts against what is added', () => {
-  const db = fixture({ capacity: 46_000_000, mode: 'playlists' })
-  const pl = createPlaylist(db, { name: 'Small' })
-  addTracks(db, pl.id, ['t1'])
-  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
-  hold(db, 'F1', 't2', 30_000_000) // a big track on its way out
-
-  const plan = planSync(db, 'ipod')
-  assert.equal(plan.bytesFreed, 30_000_000)
-  assert.equal(plan.shortBy, null, 'the removal pays for the addition')
-})
-
-const rendition = (db: any, trackId: string, format: string, size: number, preferred = 0) =>
-  db.prepare(`INSERT INTO renditions (id, trackId, sourceId, path, format, size, preferred, createdAt)
-              VALUES (?,?, 's', ?, ?, ?, ?, 1)`)
-    .run(`r-${trackId}-${format}`, trackId, `/p/${trackId}.${format}`, format, size, preferred)
-
-test('a device gets the file it can already play, not a re-encode', () => {
-  const db = fixture({ mode: 'playlists', formats: ['mp3', 'aac', 'alac'] })
-  const pl = createPlaylist(db, { name: 'Trip' })
-  addTracks(db, pl.id, ['t2']) // t2 is the 30 MB flac
-  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
-
-  // The library holds the same song twice: a big lossless one and a small AAC
-  // made for the iPod. Sending the FLAC through an encoder would be work already
-  // done, and the plan would be ten times the size.
-  rendition(db, 't2', 'flac', 30_000_000, 1)
-  rendition(db, 't2', 'aac', 4_000_000)
-
-  const plan = planSync(db, 'ipod')
-  assert.equal(plan.add.length, 1)
-  assert.equal(plan.add[0].transcode, null, 'nothing to convert: it is already there')
-  assert.equal(plan.add[0].size, 4_000_000, 'and the plan counts the file it will actually send')
-})
-
-test('with nothing the device plays, it still says what to convert to', () => {
-  const db = fixture({ mode: 'playlists', formats: ['mp3', 'aac', 'alac'] })
-  const pl = createPlaylist(db, { name: 'Trip' })
-  addTracks(db, pl.id, ['t4']) // opus, and only opus
-  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
-  rendition(db, 't4', 'opus', 4_000_000, 1)
-
-  const plan = planSync(db, 'ipod')
-  assert.equal(plan.add[0].transcode, 'alac')
-})
-
-test('a track with no rendition rows falls back to its own columns', () => {
-  // Tracks predate renditions, and paths that create one -- an import, a
-  // podcast download -- could always miss a row. A plan must never conclude
-  // "unplayable" because of a missing row.
-  const db = fixture({ mode: 'playlists', formats: ['mp3', 'aac', 'alac'] })
-  const pl = createPlaylist(db, { name: 'Trip' })
-  addTracks(db, pl.id, ['t1']) // mp3
-  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
-  assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM renditions`).get() as any).n, 0)
-
-  assert.equal(planSync(db, 'ipod').add[0].transcode, null, 'mp3 plays, rendition row or not')
+test('the SDK says what is missing rather than throwing a global name', async () => {
+  const bare = createClient({ baseUrl: 'http://127.0.0.1:1/api/v1' })
+  // In a runtime without EventSource -- Node, in most versions -- the old code
+  // failed with "EventSource is not defined", which reads as a bug in the SDK
+  // rather than a missing global.
+  assert.throws(() => bare.events({ library: () => {} }), /pass one to createClient/)
 })
