@@ -1,4 +1,7 @@
-# Stack — settled
+---
+title: Stack
+description: Technical choices and deployment targets — settled, with the reasoning kept.
+---
 
 One principle governs half the choices here: **zero native modules in what
 ships.** No `node-gyp`, no prebuilt-binary roulette, an identical install on x64,

@@ -1,4 +1,7 @@
-# Architecture
+---
+title: Architecture
+description: Topology, plugins, satellites and audio routing — what is decided and why.
+---
 
 The goal: host your music library on a server, sync iPods, and eventually have
 either a standalone app or one detached from the server — both are on the table.
@@ -10,7 +13,7 @@ Status: **decided** for §1–5, still waiting on a call about build order.
 
 ## Map
 
-Visual version: **[`map.html`](map.html)**.
+Visual version: **[the map](https://frulko.github.io/jukebox/map/)**.
 
 Three directions, routinely conflated elsewhere, kept apart here:
 

@@ -1,4 +1,7 @@
-# API — specification to implement
+---
+title: API
+description: The /api/v1 specification — target routes, with the existing ones marked.
+---
 
 `/api/v1`.
 
@@ -355,4 +358,4 @@ One stream. The client never polls in a loop.
 ---
 
 Architecture detail: [`architecture.md`](architecture.md) ·
-stack: [`stack.md`](stack.md) · overview: [`map.html`](map.html)
+stack: [`stack.md`](stack.md) · overview: [the map](https://frulko.github.io/jukebox/map/)

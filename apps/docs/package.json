@@ -1,0 +1,14 @@
+{
+  "name": "@jukebox/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "@astrojs/starlight": "^0.41.7",
+    "astro": "^7.2.2"
+  }
+}

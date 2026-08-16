@@ -1,4 +1,7 @@
-# iTunes → Apple Music: how the interface evolved
+---
+title: UI evolution
+description: iTunes 8 → iTunes 12 → Apple Music — the spec behind the three themes.
+---
 
 Reference notes for the prototype's themes. A theme is not just a palette:
 navigation, density and the relationship to artwork all change from one era to
