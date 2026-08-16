@@ -107,7 +107,10 @@ hands out a URL.
       channel metadata and artwork from the feed
 - [x] **6.2** Per-feed cron + `keepLast: N` — pruning clears the file, keeps the episode row
 - [ ] **6.3** Destination set in the settings UI (the API takes `targetSourceId` already)
-- [ ] **6.4** Radios CRUD · **6.5** Auto cover (favicon, ICY, Radio-Browser) or upload
+- [x] **6.4** Radios CRUD
+- [x] **6.5** Auto cover — ICY headers, then the homepage favicon, then Radio-Browser.
+      Known gap: Shoutcast v1 answers `ICY 200 OK` rather than an HTTP status line and
+      no HTTP client will parse it; those stations report the reason and are still added
 
 ## M7 · Distribution
 

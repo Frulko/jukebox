@@ -177,6 +177,24 @@ CREATE TABLE IF NOT EXISTS job_items (
   PRIMARY KEY (jobId, idx)
 );
 
+-- Internet radio. A station is a URL plus whatever the stream, its homepage and
+-- the community directory could tell us about it.
+CREATE TABLE IF NOT EXISTS radios (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  streamUrl   TEXT NOT NULL,
+  homepageUrl TEXT,
+  imageUrl    TEXT,
+  genre       TEXT NOT NULL DEFAULT '',
+  country     TEXT NOT NULL DEFAULT '',
+  bitrate     INTEGER NOT NULL DEFAULT 0,
+  codec       TEXT NOT NULL DEFAULT '',
+  favorite    INTEGER NOT NULL DEFAULT 0,
+  createdAt   INTEGER NOT NULL,
+  rev         INTEGER NOT NULL,
+  deletedAt   INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS podcasts (
   id             TEXT PRIMARY KEY,
   feedUrl        TEXT NOT NULL UNIQUE,

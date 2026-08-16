@@ -14,6 +14,7 @@ import { makeAcquireHandler } from './acquire.ts'
 import { makeSyncHandler, planSync } from './sync.ts'
 import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
 import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandler } from './podcasts.ts'
+import { createRadio, deleteRadio, discover, getRadio, listRadios, updateRadio } from './radio.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
@@ -248,6 +249,61 @@ export function createApp(dbFile: string) {
   api.delete('/jobs/:id', (c) => {
     const job = jobs.cancel(c.req.param('id'))
     return job ? c.json(publicJob(job)) : fail(c, 404, 'not_found', 'unknown job')
+  })
+
+  /* ---------------- radios ---------------- */
+
+  api.get('/radios', (c) => withETag(c, { items: listRadios(db) }))
+
+  /**
+   * Adding a station is one call: paste a URL, get a name, a genre and a logo.
+   * The discovery is best-effort and never blocks the creation — a station
+   * whose stream is asleep is still a station worth keeping.
+   */
+  api.post('/radios', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.streamUrl) return fail(c, 400, 'bad_body', 'expected { streamUrl }')
+    try {
+      const u = new URL(b.streamUrl)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('scheme')
+    } catch {
+      return fail(c, 400, 'bad_stream_url', 'expected an http or https URL')
+    }
+
+    const found = b.discover === false ? { ...b, error: null } : await discover(b.streamUrl, b, { directory: b.directory !== false })
+    const radio = createRadio(db, { ...found, streamUrl: b.streamUrl, favorite: b.favorite })
+    // The probe error travels with the response but is not stored: it describes
+    // this moment, not the station.
+    return c.json({ ...radio, probeError: found.error ?? null }, 201)
+  })
+
+  api.get('/radios/:id', (c) => {
+    const r = getRadio(db, c.req.param('id'))
+    return r ? c.json(r) : fail(c, 404, 'not_found', 'unknown radio')
+  })
+
+  api.patch('/radios/:id', async (c) => {
+    const b = await c.req.json().catch(() => ({}))
+    const r = updateRadio(db, c.req.param('id'), b)
+    return r ? c.json(r) : fail(c, 404, 'not_found', 'unknown radio')
+  })
+
+  api.delete('/radios/:id', (c) =>
+    deleteRadio(db, c.req.param('id'))
+      ? c.body(null, 204)
+      : fail(c, 404, 'not_found', 'unknown radio'))
+
+  /** Re-runs discovery on an existing station, without overwriting what was set by hand. */
+  api.post('/radios/:id/discover', async (c) => {
+    const r = getRadio(db, c.req.param('id'))
+    if (!r) return fail(c, 404, 'not_found', 'unknown radio')
+    const found = await discover(r.streamUrl, {
+      // Only blanks are filled: re-running this must not undo a rename.
+      name: r.name, homepageUrl: r.homepageUrl ?? undefined,
+      imageUrl: r.imageUrl ?? undefined, genre: r.genre, country: r.country,
+    }, { directory: c.req.query('directory') !== 'false' })
+    const updated = updateRadio(db, r.id, found)
+    return c.json({ ...updated, probeError: found.error ?? null })
   })
 
   /* ---------------- podcasts ---------------- */

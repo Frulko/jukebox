@@ -204,6 +204,19 @@ export type Schedule = {
   lastJobId: string | null
 }
 
+export type Radio = {
+  id: string
+  name: string
+  streamUrl: string
+  homepageUrl: string | null
+  imageUrl: string | null
+  genre: string
+  country: string
+  bitrate: number
+  codec: string
+  favorite: 0 | 1
+}
+
 export type Podcast = {
   id: string
   feedUrl: string

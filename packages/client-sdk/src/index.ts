@@ -1,6 +1,6 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Schedule, Source, SyncPlan,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Radio, Schedule, Source, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
@@ -147,6 +147,23 @@ export function createClient(opts: ClientOptions = {}) {
         request<JobItemsPage>(`/jobs/${id}/items${qs(q)}`),
     },
 
+    radios: {
+      list: () => request<{ items: Radio[] }>('/radios', {}, true),
+      get: (id: string) => request<Radio>(`/radios/${id}`),
+      /**
+       * Paste a URL, get a name, a genre and a logo. Pass `discover: false` to
+       * skip the probe, `directory: false` to keep it off third-party servers.
+       */
+      create: (r: Partial<Radio> & { streamUrl: string; discover?: boolean; directory?: boolean }) =>
+        request<Radio & { probeError: string | null }>('/radios', { method: 'POST', body: JSON.stringify(r) }),
+      update: (id: string, patch: Partial<Radio>) =>
+        request<Radio>(`/radios/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+      remove: (id: string) => request<void>(`/radios/${id}`, { method: 'DELETE' }),
+      /** Re-runs discovery, filling blanks only — it never undoes a rename. */
+      discover: (id: string) =>
+        request<Radio & { probeError: string | null }>(`/radios/${id}/discover`, { method: 'POST' }),
+    },
+
     podcasts: {
       list: () => request<{ items: Podcast[] }>('/podcasts', {}, true),
       get: (id: string) => request<Podcast>(`/podcasts/${id}`),
@@ -243,7 +260,7 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Schedule, Source, SyncPlan,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Radio, Schedule, Source, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }
