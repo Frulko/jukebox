@@ -70,7 +70,7 @@ const DOCS: Record<string, Doc> = {
 
   'GET /auth/state': { summary: 'Whether this install has been claimed yet.', tag: 'auth', returns: '{ open, users }' },
   'POST /auth/setup': { summary: 'Claims a fresh install. Refused once any account exists.', tag: 'auth', body: '{ username, password }' },
-  'POST /auth/login': { summary: 'Exchanges a password for a token.', tag: 'auth', body: '{ username, password }' },
+  'POST /auth/login': { summary: 'Exchanges a password for a token. Throttled per username and address: repeated failures answer 429 with Retry-After, refused before the password is checked so guessing cannot burn the server\u2019s CPU.', tag: 'auth', body: '{ username, password }' },
   'GET /auth/me': { summary: 'The signed-in user, with the capabilities it has and the sources it may see.', tag: 'auth' },
   'GET /auth/tokens': { summary: 'Tokens belonging to the signed-in user. Secrets are never returned.', tag: 'auth' },
   'POST /auth/tokens': { summary: 'Issues a token. The secret is shown once and only its hash is kept.', tag: 'auth' },

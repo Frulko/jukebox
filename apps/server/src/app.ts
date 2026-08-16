@@ -28,6 +28,7 @@ import * as airplay from './airplay.ts'
 import * as cast from './chromecast.ts'
 import { canStreamTo, streamMimeFor, transcodeStream } from './ffmpeg.ts'
 import { mountFor, readMounts, writable as writableAt } from './mounts.ts'
+import { callerKey, Throttle } from './throttle.ts'
 
 /**
  * A renderer, whichever protocol found it.
@@ -260,6 +261,18 @@ export function createApp(dbFile: string) {
   // Cached between searches: SSDP takes seconds, and a UI that lists outputs on
   // every render would spend its life waiting for a multicast timeout.
   let renderers: { at: number; items: Output[] } = { at: 0, items: [] }
+  /*
+   * Failed logins, remembered briefly.
+   *
+   * Pruned on a timer rather than on every attempt: the map is keyed partly on
+   * a caller-supplied address, so an attacker varying it would otherwise grow
+   * it without bound — a memory exhaustion introduced by the thing meant to
+   * prevent one.
+   */
+  const logins = new Throttle()
+  const pruneLogins = setInterval(() => logins.prune(), 5 * 60_000)
+  pruneLogins.unref?.()
+
   const player = new Player(db, events)
 
   /**
@@ -478,10 +491,31 @@ export function createApp(dbFile: string) {
   api.post('/auth/login', async (c) => {
     const b = await c.req.json().catch(() => null)
     if (!b?.username || !b?.password) return fail(c, 400, 'bad_body', 'expected { username, password }')
+
+    /*
+     * Refused *before* the password is checked, which is the whole point.
+     *
+     * scrypt is memory-hard, so verifying a guess costs this server real CPU
+     * and memory. Doing that work and then refusing would make the login route
+     * a denial of service against a Raspberry Pi: an attacker who never guesses
+     * the password still stops the music.
+     */
+    const key = callerKey(String(b.username), c.req.raw.headers)
+    const wait = logins.retryAfter(key)
+    if (wait > 0) {
+      c.header('Retry-After', String(wait))
+      return fail(c, 429, 'too_many_attempts',
+        `too many failed attempts; try again in ${wait} seconds`)
+    }
+
     const user = await authenticate(db, b.username, b.password)
     // One message for both wrong username and wrong password: telling them
     // apart is telling an attacker which half to keep.
-    if (!user) return fail(c, 401, 'unauthorized', 'wrong username or password')
+    if (!user) {
+      logins.fail(key)
+      return fail(c, 401, 'unauthorized', 'wrong username or password')
+    }
+    logins.succeed(key)
     return c.json({ user, ...createToken(db, user.id, b.tokenName ?? 'login') })
   })
 
@@ -2279,6 +2313,7 @@ export function createApp(dbFile: string) {
   // A cast connection is a live socket, so it has to be given back. Without
   // this the process will not exit on its own.
   const closeOutputs = () => {
+    clearInterval(pruneLogins)
     for (const id of [...castSessions.keys()]) closeCast(id)
     if (revisionPending) clearTimeout(revisionPending)
     stopRevisionWatch()
