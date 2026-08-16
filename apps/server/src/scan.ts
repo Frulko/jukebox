@@ -1,11 +1,12 @@
 import { opendir, stat } from 'node:fs/promises'
 import { join, relative, extname } from 'node:path'
 import { createHash } from 'node:crypto'
-import { parseFile } from 'music-metadata'
+import { parseFile, parseBuffer } from 'music-metadata'
 import type { DB } from './db.ts'
 import { nextRev } from './db.ts'
 import type { JobContext } from './jobs.ts'
 import { shortFormat } from './tags.ts'
+import { configOf, open as rcOpen, walk as rcWalk } from './rclone.ts'
 
 const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.flac', '.alac', '.ogg', '.opus', '.wav', '.aiff', '.aif', '.wma', '.m4b'])
 
@@ -35,6 +36,63 @@ async function* walk(root: string, rel = ''): AsyncGenerator<string> {
 // contain: without it, source `a` + path `b/c` and source `a/b` + path `c`
 // would hash to the same track. Written as an escape, not as a raw byte -- a
 // literal NUL in the file makes git treat the whole source as binary.
+type Entry = { path: string; size: number; mtime: number; mimeType?: string }
+
+/**
+ * Every file under a source, whatever kind it is.
+ *
+ * The local walk uses `opendir`; an rclone source walks the daemon's directory
+ * listings. Both stream one entry at a time -- a 100,000-file library must
+ * never exist as an array, on either side.
+ */
+async function* entries(source: any): AsyncGenerator<Entry> {
+  if (source.kind === 'rclone') {
+    const cfg = configOf(source)
+    for await (const e of rcWalk(cfg)) {
+      if (!AUDIO.has(extname(e.name).toLowerCase())) continue
+      yield { path: e.path, size: e.size, mtime: e.modTime, mimeType: e.mimeType }
+    }
+    return
+  }
+
+  for await (const rel of walk(source.root)) {
+    const st = await stat(join(source.root, rel)).catch(() => null)
+    if (!st) continue
+    yield { path: rel, size: st.size, mtime: Math.floor(st.mtimeMs) }
+  }
+}
+
+/**
+ * How much of a remote file to pull just to read its tags.
+ *
+ * Tags live at the front of every format this indexes, so the header is all
+ * that is needed. Fetching whole files would make the first scan of a Drive
+ * remote download the entire library -- the one thing a userspace source is
+ * supposed to avoid.
+ */
+const TAG_HEAD = 512 * 1024
+
+async function readMeta(source: any, e: Entry): Promise<any> {
+  if (source.kind !== 'rclone') {
+    const parsed = await parseFile(join(source.root, e.path), { duration: true, skipCovers: true })
+    return { ...parsed.common, ...parsed.format }
+  }
+
+  const end = Math.min(TAG_HEAD, Math.max(e.size - 1, 0))
+  const res = await rcOpen(configOf(source), e.path, { start: 0, end })
+  const buf = Buffer.from(await res.arrayBuffer())
+  // The real size goes in as file info so a VBR duration is worked out from the
+  // header rather than from the slice we actually hold. `skipPostHeaders` is
+  // what the parser asks for when the data is partial: without it, it hunts for
+  // trailing headers that are not in the buffer and reports the file as broken.
+  const parsed = await parseBuffer(
+    buf,
+    { size: e.size, mimeType: e.mimeType },
+    { duration: true, skipCovers: true, skipPostHeaders: true },
+  )
+  return { ...parsed.common, ...parsed.format }
+}
+
 const idFor = (sourceId: string, path: string) =>
   createHash('sha1').update(`${sourceId}\0${path}`).digest('base64url').slice(0, 16)
 
@@ -67,8 +125,9 @@ export function makeScanHandler(db: DB) {
     const resumeAfter = ctx.cursor
     let resuming = Boolean(resumeAfter)
 
-    for await (const rel of walk(source.root)) {
+    for await (const entry of entries(source)) {
       if (ctx.aborted()) return
+      const rel = entry.path
 
       // Resume: walk again without re-doing work until the last known path.
       // The walk is deterministic, so this is reliable and only costs `readdir`
@@ -78,20 +137,12 @@ export function makeScanHandler(db: DB) {
         continue
       }
 
-      const abs = join(source.root, rel)
-      let st
-      try {
-        st = await stat(abs)
-      } catch {
-        continue
-      }
-
       // A file whose size and mtime have not moved does not need re-reading:
       // on a rescan that is 99% of them. `full` overrides that -- the only way
       // back when the server changes how it derives a field, since the files
       // themselves have not moved and nothing else would ever re-read them.
       const prev = known.get(source.id, rel) as { mtime: number; size: number } | undefined
-      if (!full && prev && prev.mtime === Math.floor(st.mtimeMs) && prev.size === st.size) {
+      if (!full && prev && prev.mtime === entry.mtime && prev.size === entry.size) {
         seen.run(source.id, rel)
         skipped++
         done++
@@ -101,8 +152,7 @@ export function makeScanHandler(db: DB) {
 
       let meta: any = {}
       try {
-        const parsed = await parseFile(abs, { duration: true, skipCovers: true })
-        meta = { ...parsed.common, ...parsed.format }
+        meta = await readMeta(source, entry)
       } catch {
         // An unreadable file still enters the database: the user has to see it
         // in their library to be able to fix it.
@@ -118,12 +168,12 @@ export function makeScanHandler(db: DB) {
         meta.disk?.no ?? 1, Math.round(meta.duration ?? 0),
         Math.round((meta.bitrate ?? 0) / 1000), meta.sampleRate ?? 0, meta.numberOfChannels ?? 2,
         shortFormat(meta.container, meta.codec) || extname(rel).slice(1).toLowerCase(),
-        st.size, Math.floor(st.mtimeMs),
+        entry.size, entry.mtime,
         meta.compilation ? 1 : 0, Date.now(), nextRev(db),
       )
 
       done++
-      bytes += st.size
+      bytes += entry.size
       if (done % 50 === 0) ctx.checkpoint(rel, { done, bytes })
     }
 

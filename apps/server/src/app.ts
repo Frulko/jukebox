@@ -20,6 +20,7 @@ import {
 } from './library.ts'
 import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
+import { configOf, open as rcOpen, RcloneError } from './rclone.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
@@ -27,6 +28,54 @@ import {
 
 /** Node stream to the web stream Hono returns. Never buffers the file. */
 const toWeb = (s: import('node:fs').ReadStream) => Readable.toWeb(s) as unknown as ReadableStream
+
+/**
+ * Serves a track that lives on a remote, by proxying the range to rclone.
+ *
+ * The daemon already speaks `Range` over `--rc-serve`, so the request is passed
+ * through rather than reimplemented, and its answer -- 200 or 206, with the
+ * content-range it chose -- is what goes back to the player. Reimplementing the
+ * arithmetic on this side would mean two places that can disagree about the
+ * same file.
+ */
+async function streamRemote(c: any, t: any): Promise<Response> {
+  const cfg = configOf(t)
+  const range = c.req.header('range')
+
+  let upstream: Response
+  try {
+    upstream = await rcOpen(cfg, t.path, range ? parseUpstreamRange(range) : undefined)
+  } catch (err) {
+    const status = err instanceof RcloneError ? err.status : 502
+    return c.json({ error: { code: status === 503 ? 'rclone_down' : 'gone',
+      message: err instanceof Error ? err.message : 'the remote could not serve this track' } },
+      status === 503 ? 503 : 410)
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': mimeFor(t.format),
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, max-age=3600',
+  }
+  for (const h of ['content-length', 'content-range']) {
+    const v = upstream.headers.get(h)
+    if (v) headers[h === 'content-length' ? 'Content-Length' : 'Content-Range'] = v
+  }
+  return c.body(upstream.body, upstream.status === 206 ? 206 : 200, headers)
+}
+
+/**
+ * `bytes=a-b` for the upstream request.
+ *
+ * A suffix range (`bytes=-500`) is handed to rclone untouched by returning
+ * nothing here and letting the header pass: resolving it needs the file size,
+ * which only the remote knows.
+ */
+function parseUpstreamRange(header: string): { start: number; end?: number } | undefined {
+  const m = /^bytes=(\d+)-(\d*)/.exec(header.trim())
+  if (!m) return undefined
+  return { start: Number(m[1]), end: m[2] === '' ? undefined : Number(m[2]) }
+}
 
 export function createApp(dbFile: string) {
   const db: DB = open(dbFile)
@@ -652,10 +701,15 @@ export function createApp(dbFile: string) {
    */
   api.get('/stream/:id', async (c) => {
     const t = db.prepare(
-      `SELECT t.path, t.format, t.size, t.mtime, s.root FROM tracks t
+      `SELECT t.path, t.format, t.size, t.mtime, s.root, s.kind, s.config FROM tracks t
        JOIN sources s ON s.id = t.sourceId
        WHERE t.id = ? AND t.deletedAt IS NULL`).get(c.req.param('id')) as any
     if (!t) return fail(c, 404, 'not_found', 'unknown track')
+
+    // A remote source is proxied rather than read: the range goes to rclone and
+    // the body flows straight back out. Nothing is copied to local disk, which
+    // is the whole reason the source is userspace in the first place.
+    if (t.kind === 'rclone') return streamRemote(c, t)
 
     const abs = join(t.root, t.path)
     let size: number

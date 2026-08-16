@@ -79,7 +79,9 @@ hands out a URL.
 
 ## M4 · Sources and file organization
 
-- [ ] **4.1** rclone sidecar (`rclone rcd`) — SMB, S3, Drive, Dropbox, Mega, WebDAV, FTP
+- [x] **4.1** rclone sidecar (`rclone rcd --rc-serve`) — listing, walking and range-streaming.
+      Scanning and `/stream/:id` both work against a remote; tested against a real daemon.
+      Left: artwork extraction for remote tracks, and writing back to a remote
 - [ ] **4.2** Optional OS mount (NFS, pre-existing mounts)
 - [ ] **4.3** Plex / Emby / Jellyfin — read + metadata import
 - [ ] **4.4** **Reorganization tool** — pattern, two-column preview, conflicts up top,
