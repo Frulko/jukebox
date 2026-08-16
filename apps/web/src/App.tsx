@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
   api, useDevices, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth,
   useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
+import { useAudio } from './audio'
 import { Sidebar } from './Sidebar'
 import { Player, type Repeat } from './Player'
 import { TrackList } from './TrackList'
@@ -60,8 +61,6 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
   // The playing track can fall outside the current view, so keep it separately.
   const [nowPlayingTrack, setNowPlayingTrack] = useState<Track | null>(null)
-  const [playing, setPlaying] = useState(false)
-  const [position, setPosition] = useState(0)
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<Repeat>('off')
   const [volume, setVolume] = useState(75)
@@ -99,15 +98,28 @@ export default function App() {
     [patchTracks],
   )
 
-  /* ---- playback (fake, but it ticks) ---- */
+  /* ---- playback ---- */
+  // `step` is defined below and closes over the queue; the ref lets the audio
+  // element call whatever the current one is without re-attaching its listeners.
+  const stepRef = useRef<(dir: 1 | -1) => void>(() => {})
+  const audio = useAudio({
+    base: import.meta.env.VITE_API_URL ?? '/api/v1',
+    volume,
+    onEnded: () => {
+      if (repeat === 'one') return audio.seek(0), audio.resume()
+      stepRef.current(1)
+    },
+  })
+
   const playTrack = useCallback(
     (id: string) => {
       setNowPlaying(id)
-      setPosition(0)
-      setPlaying(true)
+      // No "playing" flag to set: the element raises `play` when it actually
+      // starts, and that is what the button reads.
+      audio.play(id)
       api.tracks.get(id).then(setNowPlayingTrack).catch(() => setNowPlayingTrack(null))
     },
-    [],
+    [audio],
   )
 
   const step = useCallback(
@@ -115,40 +127,40 @@ export default function App() {
       if (!tracks.length) return
       if (shuffle && dir === 1) return playTrack(tracks[Math.floor(Math.random() * tracks.length)].id)
       const i = tracks.findIndex((t) => t.id === nowPlaying)
+      // Falling off the end only wraps when repeat is on. Otherwise the list
+      // finishes and stops, which is what "repeat: off" means -- wrapping
+      // regardless would leave a playlist looping all night.
+      if (repeat === 'off' && i === tracks.length - 1 && dir === 1) return audio.pause()
       const next = tracks[(i + dir + tracks.length) % tracks.length]
       if (next) playTrack(next.id)
     },
-    [tracks, nowPlaying, shuffle, playTrack],
+    [tracks, nowPlaying, shuffle, repeat, playTrack, audio],
   )
 
   const current = tracks.find((t) => t.id === nowPlaying) ?? nowPlayingTrack
 
-  useEffect(() => {
-    if (!playing || !current) return
-    const id = setInterval(() => {
-      setPosition((s) => {
-        if (s + 0.5 < current.duration) return s + 0.5
-        if (repeat === 'one') return 0
-        if (repeat === 'all' || tracks.length > 1) step(1)
-        else setPlaying(false)
-        return 0
-      })
-    }, 500)
-    return () => clearInterval(id)
-  }, [playing, current, repeat, step, tracks.length])
+  useEffect(() => { stepRef.current = step }, [step])
+
+  // Toggling goes straight to the element, inside the click's own call stack.
+  // Routing it through a state flag first put the decision one task later, past
+  // the point where the browser still counts the click as the gesture that
+  // authorises playback.
+  const toggle = useCallback(() => {
+    if (!current) return tracks[0] && playTrack(tracks[0].id)
+    audio.playing ? audio.pause() : audio.resume()
+  }, [current, tracks, playTrack, audio])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement
       if (e.code === 'Space' && !/INPUT|TEXTAREA/.test(el.tagName)) {
         e.preventDefault()
-        if (current) setPlaying((v) => !v)
-        else if (tracks[0]) playTrack(tracks[0].id)
+        toggle()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [current, tracks, playTrack])
+  }, [toggle])
 
   /* ---- playlist mutations ---- */
   const refresh = () => {
@@ -222,17 +234,18 @@ export default function App() {
     <div className="itunes">
       <Player
         track={current}
-        playing={playing}
-        position={position}
+        playing={audio.playing}
+        position={audio.position}
+        duration={audio.duration}
         shuffle={shuffle}
         repeat={repeat}
         volume={volume}
         search={search}
         browserOpen={browserOpen}
-        onToggle={() => (current ? setPlaying((v) => !v) : tracks[0] && playTrack(tracks[0].id))}
-        onPrev={() => (position > 3 ? setPosition(0) : step(-1))}
+        onToggle={toggle}
+        onPrev={() => (audio.position > 3 ? audio.seek(0) : step(-1))}
         onNext={() => step(1)}
-        onSeek={setPosition}
+        onSeek={audio.seek}
         onVolume={setVolume}
         onShuffle={() => setShuffle((v) => !v)}
         onRepeat={() => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off'))}

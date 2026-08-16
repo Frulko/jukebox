@@ -8,6 +8,7 @@ export function Player({
   track,
   playing,
   position,
+  duration,
   shuffle,
   repeat,
   volume,
@@ -26,6 +27,8 @@ export function Player({
   track: Track | null
   playing: boolean
   position: number
+  /** The decoder's duration, which beats the tag's on a VBR file whose header lies. */
+  duration: number
   shuffle: boolean
   repeat: Repeat
   volume: number
@@ -41,7 +44,9 @@ export function Player({
   onSearch: (s: string) => void
   onToggleBrowser: () => void
 }) {
-  const pct = track ? (position / track.duration) * 100 : 0
+  // Fall back to the tag only until the decoder has read the file.
+  const total = duration || track?.duration || 0
+  const pct = total ? (position / total) * 100 : 0
 
   return (
     <div className="topbar">
@@ -77,13 +82,13 @@ export function Player({
                   className="track"
                   onMouseDown={(e) => {
                     const r = e.currentTarget.getBoundingClientRect()
-                    onSeek(((e.clientX - r.left) / r.width) * track.duration)
+                    onSeek(((e.clientX - r.left) / r.width) * total)
                   }}
                 >
                   <div className="fill" style={{ width: `${pct}%` }} />
                   <div className="knob" style={{ left: `${pct}%` }} />
                 </div>
-                <span className="t r">-{fmtTime(Math.max(0, track.duration - position))}</span>
+                <span className="t r">-{fmtTime(Math.max(0, total - position))}</span>
               </div>
             </div>
             <button className="lcd-eye" title="Cover art">

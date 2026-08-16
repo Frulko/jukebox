@@ -485,8 +485,17 @@ export function createApp(dbFile: string) {
       return c.body(null, 416, { ...base, 'Content-Range': `bytes */${size}` })
     }
 
+    // A HEAD must answer exactly what the matching GET would, minus the body --
+    // a player that probes with HEAD and is told 200/full-length stops asking
+    // for ranges at all.
     if (c.req.method === 'HEAD') {
-      return c.body(null, 200, { ...base, 'Content-Length': String(size) })
+      return range
+        ? c.body(null, 206, {
+            ...base,
+            'Content-Length': String(range.end - range.start + 1),
+            'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
+          })
+        : c.body(null, 200, { ...base, 'Content-Length': String(size) })
     }
 
     if (!range) {
