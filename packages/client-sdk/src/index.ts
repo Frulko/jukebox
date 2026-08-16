@@ -1,7 +1,8 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats, SyncPlan,
+  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats,
+  StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
@@ -114,6 +115,21 @@ export function createClient(opts: ClientOptions = {}) {
           method: 'PATCH',
           body: JSON.stringify({ ids, patch, writeToFiles }),
         }),
+    },
+
+    store: {
+      /**
+       * Browses an index. The URL is passed every time and there is no default:
+       * installing from a store runs someone else's code as the server, so
+       * which store is a deliberate choice rather than an inherited one.
+       */
+      browse: (index: string) =>
+        request<{ items: StoreEntry[]; hostApi: string }>(`/store?index=${encodeURIComponent(index)}`),
+      install: (index: string, id: string) =>
+        request<{ id: string; version: string; files: number; plugin: Plugin }>('/store/install', {
+          method: 'POST', body: JSON.stringify({ index, id }),
+        }),
+      uninstall: (id: string) => request<void>(`/store/${id}`, { method: 'DELETE' }),
     },
 
     plugins: {
@@ -310,7 +326,8 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats, SyncPlan,
+  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats,
+  StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }

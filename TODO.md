@@ -103,8 +103,11 @@ hands out a URL.
       something nothing uses, and a plugin can carry its own client. The host takes it over
       when several plugins want to share one broker connection
 - [ ] **5.3** Declarative settings (`ui.json`) + UI extension zones
-- [ ] **5.4** Store — git index with tagged releases, permissions shown before install
-- [ ] **5.5** Installed plugins (replaces Purchased)
+- [x] **5.4** Store — a JSON index at a URL the user chooses (no default: installing runs
+      someone else's code). sha256 checked, the archive read by an extractor that refuses
+      links and climbing paths, and the manifest's own id matched against the index's
+- [~] **5.5** Installed plugins — the API is there (`GET /plugins`, install, uninstall);
+      the Purchased pane that renders it is the front session's
 - [x] **5.6b** ListenBrainz scrobbler — the first real plugin, shipped in `plugins/`, with a
       queue that survives an unreachable server
 - [ ] **5.6** Last.fm scrobble (same shape, plus an MD5-signed parameter dance)

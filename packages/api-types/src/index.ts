@@ -287,6 +287,27 @@ export type Move = {
   undoneAt: number | null
 }
 
+/**
+ * A plugin as a store index advertises it. `installable` is false when this
+ * host is too old or too new for it, with the reason — better said before the
+ * install than after it fails.
+ */
+export type StoreEntry = {
+  id: string
+  name: string
+  version: string
+  description?: string
+  author?: string
+  homepage?: string
+  hostApi: string
+  tarball: string
+  /** Checked when present: an index over HTTPS cannot vouch for bytes elsewhere. */
+  sha256?: string
+  permissions?: string[]
+  installable: boolean
+  reason?: string
+}
+
 export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
 
 /**

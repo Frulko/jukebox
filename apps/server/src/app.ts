@@ -25,6 +25,7 @@ import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
 import { Events, recordPlay } from './plays.ts'
+import { compatible, fetchIndex, install, uninstall } from './store.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
@@ -268,6 +269,54 @@ export function createApp(dbFile: string) {
     }
     if (b.enabled !== undefined) return c.json(await plugins.setEnabled(id, Boolean(b.enabled)))
     return c.json(getPlugin(db, id))
+  })
+
+  /**
+   * Browsing a store.
+   *
+   * The index URL is given per request rather than baked in. There is no
+   * default store, because installing from one is running someone else's code
+   * as this server and that has to be a deliberate choice, not a default
+   * inherited from whatever this file shipped with.
+   */
+  api.get('/store', async (c) => {
+    const url = c.req.query('index')
+    if (!url) return fail(c, 400, 'no_index', 'pass ?index= with the URL of a plugin index')
+    try {
+      // What this host could actually run is marked, with the reason for the
+      // rest -- an install that fails on hostApi should be visible before it is
+      // attempted, not after.
+      return c.json({ items: compatible(await fetchIndex(url)), hostApi: HOST_API_VERSION })
+    } catch (err) {
+      return fail(c, 502, 'store_unreachable', err instanceof Error ? err.message : 'cannot read that index')
+    }
+  })
+
+  api.post('/store/install', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.index || !b?.id) return fail(c, 400, 'bad_body', 'expected { index, id }')
+    try {
+      const entry = (await fetchIndex(b.index)).find((p) => p.id === b.id)
+      if (!entry) return fail(c, 404, 'not_found', `${b.id} is not in that index`)
+
+      const result = await install(entry, plugins.root)
+      // Discovered, then activated: the plugin appears in the list with its
+      // real manifest whether or not it starts.
+      await plugins.discover()
+      const plugin = await plugins.activate(result.id)
+      return c.json({ ...result, plugin }, 201)
+    } catch (err) {
+      return fail(c, 400, 'install_failed', err instanceof Error ? err.message : 'install failed')
+    }
+  })
+
+  api.delete('/store/:id', async (c) => {
+    const id = c.req.param('id')
+    if (!getPlugin(db, id)) return fail(c, 404, 'not_found', 'unknown plugin')
+    await plugins.deactivate(id)
+    await uninstall(id, plugins.root)
+    db.prepare(`DELETE FROM plugins WHERE id = ?`).run(id)
+    return c.body(null, 204)
   })
 
   /* ---------------- file organisation ---------------- */
