@@ -1,0 +1,49 @@
+{
+  "id": "homeassistant",
+  "name": "Home Assistant",
+  "version": "1.0.0",
+  "hostApi": "^1.1.0",
+  "main": "index.mjs",
+  "description": "Publishes the player to Home Assistant over MQTT, and accepts its commands. The entity configures itself through MQTT discovery.",
+  "author": "jukebox",
+  "permissions": [
+    "network:mqtt",
+    "events:player",
+    "player:control"
+  ],
+  "contributes": {
+    "settings": [
+      {
+        "key": "url",
+        "label": "Broker",
+        "type": "text",
+        "default": "mqtt://homeassistant.local:1883",
+        "help": "The MQTT broker Home Assistant uses. mqtts:// for TLS. Nothing happens until this is set."
+      },
+      {
+        "key": "username",
+        "label": "Username",
+        "type": "text"
+      },
+      {
+        "key": "password",
+        "label": "Password",
+        "type": "password"
+      },
+      {
+        "key": "name",
+        "label": "Entity name",
+        "type": "text",
+        "default": "Jukebox",
+        "help": "What it is called in Home Assistant."
+      },
+      {
+        "key": "id",
+        "label": "Entity id",
+        "type": "text",
+        "default": "jukebox",
+        "help": "Only change this if you run two of these against one broker."
+      }
+    ]
+  }
+}

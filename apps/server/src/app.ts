@@ -261,7 +261,7 @@ export function createApp(dbFile: string) {
   // every render would spend its life waiting for a multicast timeout.
   let renderers: { at: number; items: Output[] } = { at: 0, items: [] }
   const player = new Player(db, events)
-  const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events)
+  const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events, player)
   seedPresets(db)
 
   const app = new Hono()

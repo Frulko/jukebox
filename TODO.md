@@ -108,7 +108,11 @@ hands out a URL.
       fake device over a plain socket; **not yet against real hardware**, since there is no
       Chromecast on this network (the mDNS reader itself is proven here: it finds the six
       Sonos and both AirPlay endpoints)
-- [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)
+- [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other). **Needs a
+      decision that is not mine**: resolving those URLs means shipping `yt-dlp`, the same tool
+      used for the acquisition path already ruled out. Relaying a live broadcast is playback
+      and keeps nothing, which is a different thing from ripping a catalogue — but it is the
+      same binary in the image, so the call belongs upstairs
 
 ## M4b · One song, several files
 
@@ -185,7 +189,14 @@ hands out a URL.
 - [x] **5.6b** ListenBrainz scrobbler — the first real plugin, shipped in `plugins/`, with a
       queue that survives an unreachable server
 - [ ] **5.6** Last.fm scrobble (same shape, plus an MD5-signed parameter dance)
-- [ ] **5.7** AudioMuse · **5.8** Home Assistant + MQTT
+- [ ] **5.7** AudioMuse
+- [x] **5.8** Home Assistant + MQTT — the player publishes itself as a `media_player` entity
+      through MQTT discovery, so nobody edits a YAML file, and accepts its commands back.
+      MQTT 3.1.1 written by hand inside the plugin (QoS 0, keepalive, reconnect): its packet
+      format is a byte, a varint and length-prefixed strings, where the popular client also
+      carries QoS 2, sessions, websockets and a browser build. Needed host API 1.1.0 — a minor
+      bump adding `on('player')` and `host.player`, since a plugin that can watch but not act
+      is the useless half of a home-automation integration
 - [ ] **5.10** Spotify Connect · **5.11** Acquisition
 - [ ] **5.12** Sandboxed iframe for rich UI contributions
 - [ ] **5.13** Extism as an option once the store opens up to unknown authors

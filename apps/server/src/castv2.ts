@@ -208,8 +208,22 @@ export class CastChannel extends EventEmitter {
         this.emit('message', m)
       }
     })
-    socket.on('error', (err: Error) => this.emit('error', err))
-    socket.on('close', () => this.emit('close'))
+    // Not a bare `emit('error')`.
+    //
+    // An EventEmitter that emits `error` with nobody listening *throws*, and
+    // the throw is asynchronous, so it becomes an uncaught exception rather
+    // than something a caller could catch. A speaker dropping off the wifi
+    // would take the whole server down with it — which is precisely what a
+    // flaky test in the suite turned out to be telling us.
+    socket.on('error', (err: Error) => {
+      if (this.listenerCount('error')) this.emit('error', err)
+      else console.warn(`[cast] ${this.#opts.host}: ${err.message}`)
+      this.#teardown()
+    })
+    socket.on('close', () => {
+      this.#teardown()
+      this.emit('close')
+    })
 
     // The virtual connection, which is separate from the TCP one: a device
     // ignores everything sent before it.
@@ -253,6 +267,13 @@ export class CastChannel extends EventEmitter {
       this.on('message', onMessage)
       this.send(namespace, { ...payload, requestId }, destination)
     })
+  }
+
+  /** Stops the heartbeat and forgets the socket, without pretending to say goodbye. */
+  #teardown(): void {
+    if (this.#heartbeat) clearInterval(this.#heartbeat)
+    this.#heartbeat = null
+    this.#socket = null
   }
 
   close(): void {

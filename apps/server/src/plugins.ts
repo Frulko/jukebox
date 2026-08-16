@@ -5,6 +5,7 @@ import type { DB } from './db.ts'
 import type { JobQueue } from './jobs.ts'
 import { Resources, type Transports } from './transports.ts'
 import type { Events, PlayEvent } from './plays.ts'
+import type { Player, PlayerState } from './player.ts'
 import { createPlaylist as makePlaylist } from './playlists.ts'
 
 /**
@@ -30,7 +31,14 @@ import { createPlaylist as makePlaylist } from './playlists.ts'
  */
 
 /** Bumped on a breaking change to what `PluginHost` hands a plugin. */
-export const HOST_API_VERSION = '1.0.0'
+/**
+ * 1.1.0: the player.
+ *
+ * A minor bump, because it only adds — `on('player')` and `host.player`. Every
+ * plugin declaring `^1.0.0` still loads, which is the whole reason the range is
+ * a range.
+ */
+export const HOST_API_VERSION = '1.1.0'
 
 export type Manifest = {
   id: string
@@ -181,7 +189,32 @@ export type Host = {
    * plugin stops — a listener that outlives its plugin fires into code that is
    * no longer there.
    */
-  on: (event: 'play', handler: (e: PlayEvent) => void) => () => void
+  on: {
+    (event: 'play', handler: (e: PlayEvent) => void): () => void
+    (event: 'player', handler: (state: PlayerState) => void): () => void
+  }
+  /**
+   * The shared queue: what is playing, and the verbs to change it.
+   *
+   * Given to plugins because the interesting integrations are the ones that
+   * make the music controllable from somewhere that is not this app — a wall
+   * switch, a voice assistant, a dashboard. Without this a plugin can watch and
+   * never act, which is half a home-automation integration and the useless
+   * half.
+   *
+   * The same object the HTTP routes use, so a plugin cannot reach a state the
+   * API could not have produced, and every controller sees the change.
+   */
+  player: {
+    state: () => PlayerState
+    play: (by?: string) => PlayerState
+    pause: (by?: string) => PlayerState
+    next: (by?: string) => PlayerState
+    previous: (by?: string) => PlayerState
+    seek: (seconds: number, by?: string) => PlayerState
+    enqueue: (trackIds: string[], by?: string) => PlayerState
+    set: (patch: { repeat?: PlayerState['repeat']; shuffle?: boolean }, by?: string) => PlayerState
+  }
 }
 
 type Loaded = {
@@ -218,12 +251,19 @@ export class PluginHost {
   #loaded = new Map<string, Loaded>()
 
   #events: Events
+  #player: Player | null = null
 
-  constructor(db: DB, jobs: JobQueue, root: string, events: Events) {
+  constructor(db: DB, jobs: JobQueue, root: string, events: Events, player?: Player) {
     this.#db = db
     this.#jobs = jobs
     this.#root = resolve(root)
     this.#events = events
+    this.#player = player ?? null
+  }
+
+  #requirePlayer(): Player {
+    if (!this.#player) throw new Error('this host has no player')
+    return this.#player
   }
 
   get root(): string {
@@ -434,11 +474,25 @@ export class PluginHost {
         db.prepare(`UPDATE plugins SET config = ? WHERE id = ?`).run(JSON.stringify(next), manifest.id)
       },
       net: resources.transports(),
-      on: (event, handler) => {
+      on: ((event: string, handler: (...args: any[]) => void) => {
         this.#events.on(event, handler)
         const unsubscribe = () => this.#events.off(event, handler)
         off.push(unsubscribe)
         return unsubscribe
+      }) as Host['on'],
+
+      // Throwing rather than handing over a no-op: a plugin told the queue
+      // moved when nothing moved is worse than one that fails loudly on a host
+      // that has no player.
+      player: {
+        state: () => this.#requirePlayer().state,
+        play: (by) => this.#requirePlayer().play(by ?? manifest.id),
+        pause: (by) => this.#requirePlayer().pause(by ?? manifest.id),
+        next: (by) => this.#requirePlayer().step(1, by ?? manifest.id),
+        previous: (by) => this.#requirePlayer().step(-1, by ?? manifest.id),
+        seek: (seconds, by) => this.#requirePlayer().seek(seconds, by ?? manifest.id),
+        enqueue: (ids, by) => this.#requirePlayer().enqueue(ids, by ?? manifest.id),
+        set: (patch, by) => this.#requirePlayer().set(patch, by ?? manifest.id),
       },
       registerCommand: (name, handler) => commands.set(name, handler),
       createPlaylist: (name, trackIds) => {

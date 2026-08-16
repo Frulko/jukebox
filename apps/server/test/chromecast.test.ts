@@ -60,7 +60,9 @@ async function fakeCastDevice() {
   const received: { namespace: string; data: any; destination: string }[] = []
   let sessionCounter = 0
 
+  const sockets: Socket[] = []
   const server: Server = createServer((socket: Socket) => {
+    sockets.push(socket)
     const framer = new Framer()
     const reply = (namespace: string, payload: unknown, destination: string) =>
       socket.write(encode({
@@ -110,7 +112,10 @@ async function fakeCastDevice() {
         const s = connect(p, host, () => resolve(s))
       }),
     },
-    close: () => server.close(),
+    // Sockets destroyed as well as the server closed: `server.close()` stops
+    // it accepting and leaves open connections alone, which keeps handles --
+    // and this file's event loop -- alive after the test that made them.
+    close: () => { for (const s of sockets) s.destroy(); server.close() },
   }
 }
 
@@ -223,3 +228,31 @@ test('the TXT is what names a device, not the escaped instance label', () => {
 })
 
 const SERVICE_TYPE = '_googlecast._tcp.local'
+
+test('a device dropping off the network does not take the server with it', async () => {
+  // The failure this file found by being flaky. CastChannel is an EventEmitter,
+  // and an EventEmitter that emits `error` with nobody listening *throws* --
+  // asynchronously, so it surfaces as an uncaught exception rather than
+  // something a caller could catch. A speaker losing wifi would have crashed
+  // the process.
+  const device = await fakeCastDevice()
+  const session = new CastSession(device.options)
+  try {
+    await session.open()
+    await session.load({ url: 'http://x/1', contentType: 'audio/mpeg' })
+
+    const uncaught: Error[] = []
+    const onUncaught = (err: Error) => uncaught.push(err)
+    process.on('uncaughtException', onUncaught)
+
+    // The speaker vanishes mid-song, the rude way: a reset, not a goodbye.
+    device.close()
+    await new Promise((r) => setTimeout(r, 120))
+    process.off('uncaughtException', onUncaught)
+
+    assert.deepEqual(uncaught.map((e) => e.message), [])
+
+    // And the next command is a rejection rather than a crash.
+    await assert.rejects(() => session.pause())
+  } finally { session.close(); device.close() }
+})
