@@ -183,6 +183,57 @@ CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5(
 );
 `
 
+/**
+ * Migrations, in order. Append only; never edit or reorder one that has shipped.
+ *
+ * `SCHEMA` above is `CREATE TABLE IF NOT EXISTS`, which is exactly right for a
+ * fresh database and silently does nothing to an existing one. Adding a column
+ * there would apply to new installs and to no one else's — their database would
+ * keep working right up to the first query that reads the column. That is the
+ * gap this closes.
+ *
+ * The version lives in `PRAGMA user_version`, a counter SQLite already keeps per
+ * database. A `schema_version` table would hold the same integer and need
+ * creating, reading and writing.
+ *
+ * Kept as SQL in this file rather than numbered `.sql` files on disk: the server
+ * runs from TypeScript sources under `--experimental-strip-types`, so shipping
+ * loose files means resolving a path relative to the module at runtime and
+ * keeping them in the package. An array costs neither, and the ordering is just
+ * as explicit.
+ */
+const MIGRATIONS: string[] = [
+  // 1 — the baseline. Everything in SCHEMA up to this point; nothing to do, it
+  // exists only so a database created before migrations lands on a known number.
+  ``,
+]
+
+/**
+ * Brings a database up to the current schema.
+ *
+ * Each migration runs in its own transaction: a failure halfway leaves the
+ * version where it was, so a fixed build re-runs the same step rather than
+ * finding a half-applied one.
+ */
+export function migrate(db: DB, list: string[] = MIGRATIONS): number {
+  const at = (db.prepare(`PRAGMA user_version`).get() as { user_version: number }).user_version
+  for (let v = at; v < list.length; v++) {
+    const sql = list[v]
+    db.exec('BEGIN')
+    try {
+      if (sql.trim()) db.exec(sql)
+      // Interpolated, not bound: PRAGMA does not take parameters. The value is a
+      // loop index over a literal array, so there is nothing to inject.
+      db.exec(`PRAGMA user_version = ${v + 1}`)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw new Error(`migration ${v + 1} failed: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+  return list.length
+}
+
 export function open(file: string): DB {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true })
   const db = new DatabaseSync(file)
@@ -193,6 +244,7 @@ export function open(file: string): DB {
   db.exec('PRAGMA foreign_keys = ON')
   db.exec('PRAGMA busy_timeout = 5000')
   db.exec(SCHEMA)
+  migrate(db)
   db.exec(`INSERT OR IGNORE INTO meta (key, value) VALUES ('revision', '0')`)
   return db
 }

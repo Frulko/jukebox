@@ -23,7 +23,9 @@ hands out a URL.
       `ETag`, a full page in one round trip, SSE. Retrofitting this costs ten times as much.
 - [x] **1.4** Raw SQL schema on `node:sqlite` — WAL, covering indexes, FTS5. Drizzle evaluated
       then dropped (see `docs/stack.md`)
-- [ ] **1.4b** Migration runner — numbered `.sql` files + `schema_version`, ~20 lines
+- [x] **1.4b** Migration runner — an ordered array + `PRAGMA user_version`, one transaction each.
+      Not `.sql` files: the server runs from TS sources, so loose files mean runtime path
+      resolution for no gain
 - [x] **1.5** **Job system** — persisted, resumable, pausable, per-kind concurrency,
       idempotent, aggregates
 - [ ] **1.5b** Per-item job detail — the `job_items` table exists but is neither written
