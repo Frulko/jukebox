@@ -49,10 +49,11 @@ export function useTracks(query: TrackQuery, enabled = true) {
   })
 }
 
-export function useTrackCount(query: TrackQuery) {
+export function useTrackCount(query: TrackQuery, enabled = true) {
   return useQuery({
     queryKey: keys.count(query),
     queryFn: () => api.tracks.count(query),
+    enabled,
     placeholderData: (prev) => prev,
     staleTime: 30_000,
   })
@@ -294,6 +295,8 @@ export function useTrackQuery(input: {
   lossless?: string | null
   /** One of the listener's own tags, or null. */
   tag?: string | null
+  /** A field left empty — the review page's whole question. */
+  missing?: string | null
   sort?: TrackQuery['sort']
   deviceFilter?: { deviceId: string; mode: 'on' | 'not' } | null
 }): TrackQuery {
@@ -312,6 +315,7 @@ export function useTrackQuery(input: {
     }
     if (input.lossless) q.lossless = input.lossless === 'yes'
     if (input.tag) q.tag = input.tag
+    if (input.missing) q.missing = input.missing as never
     // Only the ids that are actually a kind of track. The library also holds
     // places — albums, artists, playlists, missing — and sending one of those
     // as `kind` would ask the server for a kind of music that does not exist.
@@ -332,6 +336,6 @@ export function useTrackQuery(input: {
     }
     return q
   }, [input.view.kind, input.view.id, input.search, input.browse.genre, input.browse.artist,
-      input.browse.album, input.format, input.rating, input.lossless, input.tag, input.sort,
+      input.browse.album, input.format, input.rating, input.lossless, input.tag, input.missing, input.sort,
       input.deviceFilter?.deviceId, input.deviceFilter?.mode])
 }

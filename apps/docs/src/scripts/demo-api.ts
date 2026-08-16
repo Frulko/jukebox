@@ -87,6 +87,21 @@ function match(t: Track, q: TrackQuery) {
     if (isLossless !== want) return false
   }
   if (q.tag && !t.tags.includes(q.tag)) return false
+  if (q.missing) {
+    // The same rules as the server's, including that `albumartist` is its own
+    // gap: browsing by artist reads that column, so a track with an artist and
+    // no album artist is in the library and unreachable from the Artists page.
+    const gaps: Record<string, boolean> = {
+      album: t.album === '',
+      artist: t.artist === '' && t.albumArtist === '',
+      albumartist: t.artist !== '' && t.albumArtist === '',
+      genre: t.genre === '',
+      year: t.year === 0,
+      track: t.trackNumber === 0,
+    }
+    const hit = q.missing === 'any' ? Object.values(gaps).some(Boolean) : gaps[q.missing]
+    if (!hit) return false
+  }
   if (q.onDevice && !t.devices.includes(q.onDevice)) return false
   if (q.notOnDevice && t.devices.includes(q.notOnDevice)) return false
   if (q.q) {
@@ -331,6 +346,23 @@ for (const e of EPISODES) {
     tags: [],
   })
   e.trackId = `pt-${e.id}`
+}
+
+/**
+ * A handful of tracks with something left out.
+ *
+ * A fabricated library is perfectly tagged, which would leave the review page
+ * empty and the sidebar entry absent — the demo would hide the one thing that
+ * page is for. Blanked after generation rather than in the fixture, so the rest
+ * of the library is unchanged.
+ */
+for (const [i, t] of tracks.entries()) {
+  if (i % 47 === 3) t.album = ''
+  if (i % 53 === 7) t.genre = ''
+  if (i % 61 === 11) t.year = 0
+  if (i % 71 === 13) t.trackNumber = 0
+  // The rare one worth surfacing: an artist, no album artist.
+  if (i % 137 === 19) t.albumArtist = ''
 }
 
 const SOURCES: Source[] = [

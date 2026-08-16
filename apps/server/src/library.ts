@@ -14,6 +14,8 @@ export type TrackQuery = {
   format?: string
   /** A tag the listener wrote. One at a time; two of them is a smart playlist. */
   tag?: string
+  /** A field left empty: `album`, `artist`, `genre`, `year`, `track`, `artwork`, or `any`. */
+  missing?: string
   sourceId?: string
   /**
    * The sources this request may see at all, or absent for every one.
@@ -236,6 +238,42 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
   // lowercase by the scanner, but a client typing `FLAC` should not silently
   // get nothing back.
   if (qs.format) { sql.push(`lower(t.format) = lower(?)`); params.push(qs.format) }
+
+  /**
+   * Fields left empty, which is what "consolidate the library" is about.
+   *
+   * The scanner writes `''` and `0` rather than NULL, so this is an equality
+   * test and not `IS NULL`.
+   *
+   * There is no `artwork`, and its absence is the interesting part: the column
+   * exists and *nothing writes it*. Covers are read on demand rather than
+   * during a scan — opening a hundred thousand files for their artwork would
+   * make a first scan interminable — so `artworkHash IS NULL` is true of every
+   * track ever scanned. A filter on it would return the whole library while
+   * looking like it worked, which is worse than not offering it.
+   */
+  const EMPTY: Record<string, string> = {
+    album: `t.album = ''`,
+    artist: `(t.artist = '' AND t.albumArtist = '')`,
+    // Its own case rather than part of `artist`, because of what it breaks: the
+    // `?artist=` filter and the artists facet both read `albumArtist`, so a
+    // track with an artist and an empty album artist looks complete in a
+    // listing and cannot be reached by browsing artists at all. The scanner
+    // falls back to the artist, so this only happens to a file carrying an
+    // explicitly empty tag — rare, and invisible without asking for it.
+    albumartist: `(t.artist <> '' AND t.albumArtist = '')`,
+    genre: `t.genre = ''`,
+    year: `t.year = 0`,
+    track: `t.trackNumber = 0`,
+  }
+  if (qs.missing) {
+    const clause = qs.missing === 'any'
+      ? `(${Object.values(EMPTY).join(' OR ')})`
+      : EMPTY[qs.missing]
+    // An unknown field name filters for nothing rather than everything: a typo
+    // in a query parameter must not quietly return the whole library.
+    sql.push(clause ?? '0')
+  }
 
   // Tags are a table, so this is an EXISTS rather than a join: a join would
   // multiply the row by its tags and turn a page of 300 into a page of 300

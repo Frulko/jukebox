@@ -4,7 +4,8 @@ import { summarize, type Track } from './data'
 import type { Episode, Podcast } from '@jukebox/client-sdk'
 import {
   api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
-  usePlayer, usePlayerActions, usePodcasts, useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
+  usePlayer, usePlayerActions, usePodcasts, useTagTracks, useTrackCount, useTrackQuery, useTracks,
+  useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
 import { Sidebar } from './Sidebar'
@@ -53,6 +54,17 @@ export const THEME_ROW_H: Record<Theme, number> = { classic: 17, itunes12: 21, m
 const NO_TRACKS: Track[] = []
 const NO_QUEUE: string[] = []
 
+/** Reads after "N tracks have …" on the review page. */
+const GAP_PHRASE: Record<string, string> = {
+  any: 'a field left empty',
+  album: 'no album name',
+  artist: 'no artist at all',
+  albumartist: 'no album artist, so browsing by artist cannot reach them',
+  genre: 'no genre',
+  year: 'no year',
+  track: 'no track number',
+}
+
 export default function App() {
   const qc = useQueryClient()
   const [view, setViewState] = useState<View>({ kind: 'library', id: 'music' })
@@ -63,6 +75,8 @@ export default function App() {
   const [lossless, setLossless] = useState<string | null>(null)
   /** One of the listener's own tags. A query parameter, like every other chip. */
   const [tag, setTag] = useState<string | null>(null)
+  /** Which gap the review page is looking at. `any` is what it opens on. */
+  const [gap, setGap] = useState<string>('any')
   const [queueOpen, setQueueOpen] = useState(false)
   const [artOpen, setArtOpen] = useState(false)
   /**
@@ -187,6 +201,10 @@ export default function App() {
   // Counted in SQL over the whole library: the front only ever holds a page, so
   // it cannot know how much is missing by looking at what it has.
   const missing = useStats().data?.missing ?? 0
+  // Counted in SQL over the whole library, for the same reason as `missing`:
+  // the front holds one page, and "how much is incomplete" is a question about
+  // all of it. One request, not one per field.
+  const incomplete = useTrackCount({ missing: 'any', limit: 1 }).data?.count ?? 0
   // A track whose source the server no longer lists cannot be streamed; the row
   // says so rather than letting the player fail on a double-click.
   const sourceIds = (useSources().data?.items ?? []).map((s) => s.id)
@@ -197,7 +215,17 @@ export default function App() {
    * locally can end up rendering three, and the UI looks empty while 40,000
    * tracks are still sitting behind it.
    */
-  const query = useTrackQuery({ view, search, browse, format, rating, lossless, tag, deviceFilter })
+  // Review is the library list with one more question asked of the server, not
+  // a page of its own: the same table, the same multi-edit, the same paging —
+  // which is the point, since fixing what it finds *is* editing the library.
+  const reviewing = view.kind === 'library' && view.id === 'review'
+  const query = useTrackQuery({
+    view, search, browse, format, rating, lossless, tag, deviceFilter,
+    missing: reviewing ? gap : null,
+  })
+  // The page's own number, which is not the page in hand: with a chip on, the
+  // heading has to say how many carry *that* gap, not how many were loaded.
+  const reviewCount = useTrackCount(query, reviewing).data?.count ?? 0
   // Which formats the library holds is asked without the format filter applied:
   // computed through it, picking FLAC would leave FLAC as the only choice.
   const formatQuery = useMemo(() => {
@@ -213,7 +241,8 @@ export default function App() {
   // Songs, Albums and Artists are three ways of drawing one query: the same
   // page of tracks, grouped differently. Only the drawing changes with the view.
   const isLibraryList =
-    view.kind === 'library' && (view.id === 'music' || view.id === 'albums' || view.id === 'artists')
+    view.kind === 'library' &&
+    (view.id === 'music' || view.id === 'albums' || view.id === 'artists' || reviewing)
   const libraryPage = useTracks(query, isLibraryList)
   const playlistPage = usePlaylistTracks(view.kind === 'playlist' ? view.id : null, query)
 
@@ -278,6 +307,27 @@ export default function App() {
       ],
       onChange: setLossless,
     },
+    // Only on the review page: everywhere else "what is empty" is not the
+    // question being asked, and a chip that is nearly always off is furniture.
+    ...(reviewing
+      ? [{
+          id: 'gap',
+          label: 'Missing',
+          value: gap === 'any' ? null : gap,
+          options: [
+            { value: 'album', label: 'No album' },
+            { value: 'artist', label: 'No artist at all' },
+            // Its own entry because of what it breaks rather than what it is:
+            // browsing by artist reads the album artist, so these are in the
+            // library and unreachable from the Artists page.
+            { value: 'albumartist', label: 'No album artist' },
+            { value: 'genre', label: 'No genre' },
+            { value: 'year', label: 'No year' },
+            { value: 'track', label: 'No track number' },
+          ],
+          onChange: (v: string | null) => setGap(v ?? 'any'),
+        }]
+      : []),
     {
       id: 'tag',
       label: 'Tag',
@@ -696,6 +746,7 @@ export default function App() {
         <Sidebar
           view={view}
           missing={missing}
+          incomplete={incomplete}
           playlists={playlists}
           playlistArt={theme === 'music'}
           devices={devices}
@@ -748,6 +799,19 @@ export default function App() {
               {/* One filter control rather than a bespoke bar per dimension: the
                   device buttons were the only filter with their own furniture,
                   and a second one would have needed its own again. */}
+              {reviewing && (
+                <p className="review-lead">
+                  <b>{reviewCount.toLocaleString('en-US')}</b> track{reviewCount === 1 ? '' : 's'}{' '}
+                  {reviewCount === 1 ? 'has' : 'have'}{' '}
+                  {/* The sentence follows the chip: with one chosen, "a field
+                      left empty" is vaguer than what the page is showing. */}
+                  {GAP_PHRASE[gap] ?? 'a field left empty'}. Nothing is wrong with them — they play — but
+                  an album with no album name cannot be browsed to, and a track with no year cannot be
+                  found by one. Select several and press <b>Get Info</b> to fill the same field on all of
+                  them at once.
+                </p>
+              )}
+
               <FilterBar chips={libraryFilters} onClear={clearFilters} />
 
               {theme !== 'classic' && (
