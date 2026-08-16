@@ -68,6 +68,11 @@ export function makeLibrary(): Track[] {
         const plays = Math.floor(r() * r() * 90)
         const bitRate = [128, 160, 192, 256, 320][Math.floor(r() * 5)]
         const time = 95 + Math.floor(r() * 400)
+        // Drawn once and used twice: the flat `format` is the preferred
+        // rendition's by definition, and two draws would make the row disagree
+        // with the file it claims to describe.
+        const format = KINDS[Math.floor(r() * KINDS.length)]
+        const bytes = Math.round((bitRate * 1000 * time) / 8)
         tracks.push({
           id: `t${++n}`,
           sourceId: 'demo',
@@ -95,12 +100,27 @@ export function makeLibrary(): Track[] {
           lastPlayed: plays ? now - Math.floor(r() * 400) * 864e5 : null,
           bitRate,
           sampleRate: 44100,
-          size: Math.round((bitRate * 1000 * time) / 8),
-          format: KINDS[Math.floor(r() * KINDS.length)],
+          size: bytes,
+          format,
           compilation,
           loved: r() < 0.1,
           artwork: null,
           devices: [],
+          // One file per track here. The demo does not fabricate several
+          // formats of the same song: that is the conversion feature's story to
+          // tell, and inventing it now would show a library nobody could have.
+          renditions: [{
+            id: `r${n}`,
+            format,
+            bitRate,
+            sampleRate: 44100,
+            channels: 2,
+            size: bytes,
+            lossless: 0 as const,
+            preferred: 1 as const,
+            path: `${artist}/${album}/${i}.flac`,
+            sourceId: 'demo',
+          }],
           rev: n,
         })
       }

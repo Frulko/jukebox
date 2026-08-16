@@ -42,7 +42,7 @@ export function groupAlbums(tracks: Track[]): Album[] {
  * mean "all of that". It offers the same two verbs as a row, because that is
  * what makes a folder feel like one — you can act on it without opening it.
  */
-function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void) {
+function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void, onPlayNext: (ids: string[]) => void) {
   const [menu, setMenu] = useState<{ x: number; y: number; ids: string[]; label: string } | null>(null)
 
   useEffect(() => {
@@ -64,6 +64,7 @@ function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void) {
   const node = menu ? (
     <div className="ctx" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
       <button onClick={() => (onPlay(menu.ids[0], menu.ids), setMenu(null))}>Play {menu.label}</button>
+      <button onClick={() => (onPlayNext(menu.ids), setMenu(null))}>Play Next</button>
       <button onClick={() => (onEnqueue(menu.ids), setMenu(null))}>
         Add {menu.ids.length} to Queue
       </button>
@@ -96,18 +97,20 @@ export function AlbumsView({
   nowPlaying,
   onPlay,
   onEnqueue,
+  onPlayNext,
   onGetInfo,
 }: {
   tracks: Track[]
   nowPlaying: string | null
   onPlay: Play
   onEnqueue: (ids: string[]) => void
+  onPlayNext: (ids: string[]) => void
   onGetInfo: (ids: string[]) => void
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const [open, setOpen] = useRemembered<string | null>('albums.open', null)
   const pane = useScrollMemory<HTMLDivElement>('albums')
-  const menu = useGroupMenu(onPlay, onEnqueue)
+  const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext)
   const current = albums.find((a) => a.key === open)
 
   return (
@@ -166,11 +169,13 @@ export function ArtistsView({
   nowPlaying,
   onPlay,
   onEnqueue,
+  onPlayNext,
 }: {
   tracks: Track[]
   nowPlaying: string | null
   onPlay: Play
   onEnqueue: (ids: string[]) => void
+  onPlayNext: (ids: string[]) => void
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const artists = useMemo(() => {
@@ -179,7 +184,7 @@ export function ArtistsView({
     return [...by.entries()].sort((x, y) => x[0].localeCompare(y[0]))
   }, [albums])
 
-  const menu = useGroupMenu(onPlay, onEnqueue)
+  const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext)
   const [sel, setSel] = useRemembered<string | null>('artists.sel', null)
   const list = useScrollMemory<HTMLDivElement>('artists.list')
   const body = useScrollMemory<HTMLDivElement>('artists.body')

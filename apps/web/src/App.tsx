@@ -205,6 +205,29 @@ export default function App() {
     [nowPlaying, playTrack],
   )
 
+  /**
+   * Put tracks immediately after the one playing.
+   *
+   * The difference with the queue's end is the whole point of the verb: "next"
+   * is a decision about the song after this one, and a queue three hundred long
+   * makes "add to queue" indistinguishable from doing nothing.
+   */
+  const playNext = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return
+      if (!nowPlaying) return playTrack(ids[0], ids)
+      setQueue((q) => {
+        const at = q.indexOf(nowPlaying)
+        // Playing something that is not in the queue at all — a track from a
+        // view nobody queued — still has an "after this one", and it is the front.
+        if (at < 0) return [...ids, ...q]
+        return [...q.slice(0, at + 1), ...ids, ...q.slice(at + 1)]
+      })
+      setNotice(`${ids.length} track${ids.length > 1 ? 's' : ''} playing next`)
+    },
+    [nowPlaying, playTrack],
+  )
+
   const step = useCallback(
     (dir: 1 | -1) => {
       if (!queue.length) return
@@ -441,10 +464,17 @@ export default function App() {
                   nowPlaying={nowPlaying}
                   onPlay={playTrack}
                   onEnqueue={enqueue}
+                  onPlayNext={playNext}
                   onGetInfo={setInfoIds}
                 />
               ) : theme !== 'classic' && mode === 'artists' ? (
-                <ArtistsView tracks={tracks} nowPlaying={nowPlaying} onPlay={playTrack} onEnqueue={enqueue} />
+                <ArtistsView
+                  tracks={tracks}
+                  nowPlaying={nowPlaying}
+                  onPlay={playTrack}
+                  onEnqueue={enqueue}
+                  onPlayNext={playNext}
+                />
               ) : (
               <TrackList
                 key={viewKey}
@@ -462,6 +492,7 @@ export default function App() {
                 nowPlaying={nowPlaying}
                 onPlay={playTrack}
                 onEnqueue={enqueue}
+                onPlayNext={playNext}
                 onUpdate={update}
                 onDelete={remove}
                 onAddToPlaylist={addToPlaylist}
