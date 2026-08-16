@@ -86,8 +86,10 @@ hands out a URL.
 - [ ] **4.3** Plex / Emby / Jellyfin — read + metadata import
 - [ ] **4.4** **Reorganization tool** — pattern, two-column preview, conflicts up top,
       dry run by default, log and undo
-- [ ] **4.5** Settings / admin — sources, destination folders, write capabilities
-- [ ] **4.6** Backup / restore — secrets excluded by default
+- [~] **4.5** Settings / admin — server side done: `GET /stats` (totals in SQL),
+      `GET /tracks/missing`, backup/restore. The UI pane is the front session’s
+- [x] **4.6** Backup / restore — the curation, not the library; matched back by path then by
+      metadata; adds and never replaces; secrets excluded by default
 - [x] **4.7** Cron scheduler — five-field expressions matched against the wall clock, no
       dependency, no catch-up. Named workflows (chained jobs) still to come
 

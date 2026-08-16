@@ -21,6 +21,7 @@ import {
 import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
 import { configOf, open as rcOpen, RcloneError } from './rclone.ts'
+import { exportBackup, importBackup } from './backup.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
@@ -131,6 +132,24 @@ export function createApp(dbFile: string) {
     return c.json({ revision: revision(db), ...tracksDelta(db, since, Number(c.req.query('limit') ?? 500)) })
   })
 
+  /**
+   * Tracks whose file the scanner could not find any more.
+   *
+   * They are soft deleted, never removed: the row carries the ratings and play
+   * counts, and it is what playlists point at. An unmounted share must not cost
+   * anyone their library, so plugging it back in and rescanning restores them.
+   */
+  api.get('/tracks/missing', (c) => {
+    const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 1000)
+    return c.json({
+      items: db.prepare(
+        `SELECT t.id, t.sourceId, t.path, t.name, t.artist, t.album, t.duration,
+                t.rating, t.playCount, t.deletedAt, s.name AS sourceName
+         FROM tracks t JOIN sources s ON s.id = t.sourceId
+         WHERE t.deletedAt IS NOT NULL ORDER BY t.deletedAt DESC, t.id LIMIT ?`).all(limit),
+    })
+  })
+
   api.get('/tracks/:id', (c) => {
     const track = getTrack(db, c.req.param('id'))
     return track ? c.json(track) : fail(c, 404, 'not_found', 'unknown track')
@@ -162,6 +181,54 @@ export function createApp(dbFile: string) {
       : null
 
     return c.json({ updated: body.ids.length, revision: rev, job: job ? publicJob(job) : null })
+  })
+
+  /**
+   * Library totals, computed in SQL.
+   *
+   * The front end cannot work these out from a page: with cursor pagination it
+   * only ever holds a few hundred rows, and counting those answers a different
+   * question. Every number here is over the whole library.
+   */
+  api.get('/stats', (c) => withETag(c, {
+    ...(db.prepare(
+      `SELECT COUNT(*) AS tracks,
+              COUNT(DISTINCT album) AS albums,
+              COUNT(DISTINCT albumArtist) AS artists,
+              COALESCE(SUM(size), 0) AS bytes,
+              COALESCE(SUM(duration), 0) AS seconds
+       FROM tracks WHERE deletedAt IS NULL AND kind = 'music'`).get() as any),
+    missing: (db.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE deletedAt IS NOT NULL`).get() as any).n,
+    playlists: (db.prepare(`SELECT COUNT(*) AS n FROM playlists WHERE deletedAt IS NULL`).get() as any).n,
+    podcasts: (db.prepare(`SELECT COUNT(*) AS n FROM podcasts WHERE deletedAt IS NULL`).get() as any).n,
+    radios: (db.prepare(`SELECT COUNT(*) AS n FROM radios WHERE deletedAt IS NULL`).get() as any).n,
+    sources: (db.prepare(`SELECT COUNT(*) AS n FROM sources`).get() as any).n,
+    devices: (db.prepare(`SELECT COUNT(*) AS n FROM devices WHERE connected = 1`).get() as any).n,
+    jobs: db.prepare(`SELECT state, COUNT(*) AS n FROM jobs GROUP BY state`).all()
+      .reduce((acc: any, r: any) => ({ ...acc, [r.state]: r.n }), {}),
+  }))
+
+  /* ---------------- backup ---------------- */
+
+  /**
+   * Everything a rescan cannot rebuild. Credentials are left out unless asked
+   * for: a backup file is the thing most likely to be emailed to someone.
+   */
+  api.get('/backup', (c) => {
+    const body = exportBackup(db, { secrets: c.req.query('secrets') === 'true' })
+    c.header('content-disposition',
+      `attachment; filename="jukebox-backup-${new Date(body.createdAt).toISOString().slice(0, 10)}.json"`)
+    return c.json(body)
+  })
+
+  api.post('/restore', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b) return fail(c, 400, 'bad_body', 'expected a backup document')
+    try {
+      return c.json(importBackup(db, b))
+    } catch (err) {
+      return fail(c, 400, 'bad_backup', err instanceof Error ? err.message : 'unreadable backup')
+    }
   })
 
   /* ---------------- playlists ---------------- */

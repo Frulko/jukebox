@@ -19,17 +19,20 @@ test('migrating twice is a no-op', () => {
 })
 
 test('a database from before migrations existed is brought up without losing data', () => {
-  // What an install created by an earlier build looks like: the tables are
-  // there, `user_version` never having been set is 0.
-  const old = new DatabaseSync(':memory:')
-  old.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
-  old.exec(`INSERT INTO meta (key, value) VALUES ('revision', '42')`)
-  assert.equal(versionOf(old), 0)
+  // What an install from an earlier build actually looks like: every table
+  // present, because `open` runs the schema first, and `user_version` still 0
+  // because nothing ever set it. Migrations alter those tables, so a stripped
+  // stand-in would test a database that has never existed.
+  const old = open(':memory:')
+  old.exec(`PRAGMA user_version = 0`)
+  old.exec(`INSERT OR REPLACE INTO meta (key, value) VALUES ('revision', '42')`)
 
   migrate(old)
   assert.ok(versionOf(old) > 0)
   const row = old.prepare(`SELECT value FROM meta WHERE key = 'revision'`).get() as { value: string }
   assert.equal(row.value, '42', 'existing rows survive the upgrade')
+  // Re-running an ALTER that already applied must not throw.
+  assert.doesNotThrow(() => migrate(old))
 })
 
 test('a failing migration rolls back and leaves the version where it was', () => {

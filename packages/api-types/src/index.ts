@@ -261,6 +261,47 @@ export type Episode = {
   position: number
 }
 
+/** Library totals, computed in SQL over the whole library rather than a page. */
+export type Stats = {
+  tracks: number
+  albums: number
+  artists: number
+  bytes: number
+  seconds: number
+  missing: number
+  playlists: number
+  podcasts: number
+  radios: number
+  sources: number
+  devices: number
+  jobs: Partial<Record<JobState, number>>
+}
+
+/** What a restore did. It adds, never replaces, so most of it is counts of skips. */
+export type RestoreReport = {
+  tracks: { matched: number; missing: number }
+  playlists: { created: number; skipped: number }
+  radios: { created: number; skipped: number }
+  podcasts: { created: number; skipped: number }
+  schedules: { created: number; skipped: number }
+  devices: { updated: number }
+}
+
+/** A track whose file the scanner could not find. Soft deleted, never removed. */
+export type MissingTrack = {
+  id: string
+  sourceId: string
+  sourceName: string
+  path: string
+  name: string
+  artist: string
+  album: string
+  duration: number
+  rating: number
+  playCount: number
+  deletedAt: number
+}
+
 /** Cursor pagination. `next` of `null` means: last page. */
 export type Page<T> = { items: T[]; next: string | null; revision?: number }
 

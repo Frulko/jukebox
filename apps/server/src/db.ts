@@ -287,10 +287,28 @@ CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5(
  * keeping them in the package. An array costs neither, and the ordering is just
  * as explicit.
  */
-const MIGRATIONS: string[] = [
+type Migration = string | ((db: DB) => void)
+
+const MIGRATIONS: Migration[] = [
   // 1 — the baseline. Everything in SCHEMA up to this point; nothing to do, it
   // exists only so a database created before migrations lands on a known number.
   ``,
+
+  // 2 — when the scanner last saw each file. Without it a scan can clear
+  // `deletedAt` on what it found but never set it on what vanished, so a
+  // deleted file stayed in the library for ever.
+  //
+  // Written as a function because SQLite has no `ADD COLUMN IF NOT EXISTS`, and
+  // the day someone adds `lastSeenAt` to SCHEMA as well -- the obvious thing to
+  // do for new installs -- a bare ALTER would throw `duplicate column name` and
+  // leave the database unopenable. A migration may only be skipped by checking,
+  // never by swallowing the error, which would hide a genuine failure too.
+  (db) => {
+    const has = (db.prepare(`PRAGMA table_info(tracks)`).all() as any[])
+      .some((c) => c.name === 'lastSeenAt')
+    if (!has) db.exec(`ALTER TABLE tracks ADD COLUMN lastSeenAt INTEGER`)
+    db.exec(`CREATE INDEX IF NOT EXISTS tracks_seen ON tracks (sourceId, lastSeenAt)`)
+  },
 ]
 
 /**
@@ -300,13 +318,14 @@ const MIGRATIONS: string[] = [
  * version where it was, so a fixed build re-runs the same step rather than
  * finding a half-applied one.
  */
-export function migrate(db: DB, list: string[] = MIGRATIONS): number {
+export function migrate(db: DB, list: Migration[] = MIGRATIONS): number {
   const at = (db.prepare(`PRAGMA user_version`).get() as { user_version: number }).user_version
   for (let v = at; v < list.length; v++) {
     const sql = list[v]
     db.exec('BEGIN')
     try {
-      if (sql.trim()) db.exec(sql)
+      if (typeof sql === 'function') sql(db)
+      else if (sql.trim()) db.exec(sql)
       // Interpolated, not bound: PRAGMA does not take parameters. The value is a
       // loop index over a literal array, so there is nothing to inject.
       db.exec(`PRAGMA user_version = ${v + 1}`)

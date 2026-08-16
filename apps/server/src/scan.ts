@@ -116,7 +116,13 @@ export function makeScanHandler(db: DB) {
         mtime=excluded.mtime, deletedAt=NULL, rev=excluded.rev`)
 
     const known = db.prepare(`SELECT mtime, size FROM tracks WHERE sourceId = ? AND path = ?`)
-    const seen = db.prepare(`UPDATE tracks SET deletedAt = NULL WHERE sourceId = ? AND path = ?`)
+    // `lastSeenAt` is stamped rather than `rev`: bumping the revision for a file
+    // that has not changed would make every client re-download the whole
+    // library after each scan, which is the one thing the revision exists to
+    // prevent.
+    const seen = db.prepare(
+      `UPDATE tracks SET deletedAt = NULL, lastSeenAt = ? WHERE sourceId = ? AND path = ?`)
+    const startedAt = Date.now()
 
     const full = Boolean(ctx.payload.full)
     let done = 0
@@ -133,6 +139,10 @@ export function makeScanHandler(db: DB) {
       // The walk is deterministic, so this is reliable and only costs `readdir`
       // calls, not tag reads.
       if (resuming) {
+        // Still stamped while skipping ahead: without this the sweep at the end
+        // would treat everything before the resume point as missing and delete
+        // the first half of the library.
+        seen.run(startedAt, source.id, rel)
         if (rel === resumeAfter) resuming = false
         continue
       }
@@ -143,7 +153,7 @@ export function makeScanHandler(db: DB) {
       // themselves have not moved and nothing else would ever re-read them.
       const prev = known.get(source.id, rel) as { mtime: number; size: number } | undefined
       if (!full && prev && prev.mtime === entry.mtime && prev.size === entry.size) {
-        seen.run(source.id, rel)
+        seen.run(startedAt, source.id, rel)
         skipped++
         done++
         if (done % 200 === 0) ctx.checkpoint(rel, { done, bytes })
@@ -172,12 +182,38 @@ export function makeScanHandler(db: DB) {
         meta.compilation ? 1 : 0, Date.now(), nextRev(db),
       )
 
+      seen.run(startedAt, source.id, rel)
       done++
       bytes += entry.size
       if (done % 50 === 0) ctx.checkpoint(rel, { done, bytes })
     }
 
     ctx.checkpoint(null, { done, total: done, bytes })
+
+    // Anything not seen during a *complete* pass is gone from the source. Soft
+    // deleted, never removed: the row carries ratings and play counts, it is
+    // what playlists point at, and a network share that was briefly unmounted
+    // must not cost anyone their library. Plugging it back in and rescanning
+    // brings every one of them back.
+    //
+    // Guarded on a complete pass for the same reason: a cancelled scan has seen
+    // only part of the source, and sweeping there would delete the rest.
+    // Counted before writing, so the revision is only bumped when something
+    // actually went. Bumping it on every scan would make each client
+    // re-download the whole library after every scan -- the exact cost the
+    // revision exists to avoid.
+    const gone = (db.prepare(
+      `SELECT COUNT(*) AS n FROM tracks
+       WHERE sourceId = ? AND deletedAt IS NULL AND (lastSeenAt IS NULL OR lastSeenAt < ?)`)
+      .get(source.id, startedAt) as { n: number }).n
+
+    if (gone > 0) {
+      db.prepare(
+        `UPDATE tracks SET deletedAt = ?, rev = ?
+         WHERE sourceId = ? AND deletedAt IS NULL AND (lastSeenAt IS NULL OR lastSeenAt < ?)`)
+        .run(Date.now(), nextRev(db), source.id, startedAt)
+      console.log(`[scan] ${source.name}: ${gone} tracks no longer on disk`)
+    }
     db.prepare(`UPDATE sources SET lastScanAt = ? WHERE id = ?`).run(Date.now(), source.id)
 
     // FTS is rebuilt after the batch: indexing row by row costs far more.

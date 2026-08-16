@@ -1,6 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Radio, Schedule, Source, SyncPlan,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
+  RestoreReport, Schedule, Source, Stats, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
@@ -92,6 +93,8 @@ export function createClient(opts: ClientOptions = {}) {
       /** Fetches only what changed since `since`. The main network win. */
       delta: (since: number, limit = 500) => request<TracksDelta>(`/tracks/delta${qs({ since, limit })}`),
       get: (id: string) => request<Track>(`/tracks/${id}`),
+      /** Tracks whose file has gone. They keep their ratings and come back on rescan. */
+      missing: (limit = 200) => request<{ items: MissingTrack[] }>(`/tracks/missing?limit=${limit}`),
       /**
        * Single or bulk edit — same call either way. The database answers at
        * once; if tags go to disk, a job is returned.
@@ -102,6 +105,14 @@ export function createClient(opts: ClientOptions = {}) {
           body: JSON.stringify({ ids, patch, writeToFiles }),
         }),
     },
+
+    /** Totals over the whole library — never derivable from a page. */
+    stats: () => request<Stats>('/stats', {}, true),
+
+    /** Everything a rescan cannot rebuild. Credentials are excluded by default. */
+    backup: (secrets = false) => request<unknown>(`/backup${secrets ? '?secrets=true' : ''}`),
+    restore: (backup: unknown) =>
+      request<RestoreReport>('/restore', { method: 'POST', body: JSON.stringify(backup) }),
 
     playlists: {
       list: () => request<{ items: Playlist[] }>('/playlists', {}, true),
@@ -260,7 +271,8 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Radio, Schedule, Source, SyncPlan,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
+  RestoreReport, Schedule, Source, Stats, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }
