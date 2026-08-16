@@ -10,7 +10,7 @@
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
 import type {
-  Device, DeviceTrack, Job, MissingTrack, Playlist, Source, Stats, SyncPlan, Track, TrackQuery,
+  Device, DeviceTrack, Episode, Job, MissingTrack, Playlist, Source, Stats, SyncPlan, Track, TrackQuery,
 } from '@jukebox/api-types'
 
 const all = makeLibrary()
@@ -230,6 +230,94 @@ const PLAN: SyncPlan = (() => {
     shortBy: null,
   }
 })()
+
+/**
+ * Episodes for the two feeds.
+ *
+ * Half of the newest ones are downloaded and point at real tracks of this
+ * library, so playing one goes through the queue exactly as the app claims;
+ * the older ones exist only in the feed and carry a publisher URL. That split
+ * is the whole point of the view, so a demo without both halves would show a
+ * distinction it never has to make.
+ */
+const EPISODES: Episode[] = [
+  ...Array.from({ length: 12 }, (_, i) => ({
+    id: `ep-vinyl-${i}`,
+    podcastId: 'pod-vinyl',
+    guid: `vinyl-${i}`,
+    title: [
+      'Side one, over and over', 'The pressing plant problem', 'What a mastering engineer hears',
+      'Two turntables and a phone', 'The record shop that would not close', 'On sleeve notes',
+      'A crate in the attic', 'Why nobody agrees about warmth', 'The 45 that started it',
+      'Static, and how to live with it', 'Reissues, honestly', 'Everything skips eventually',
+    ][i],
+    description: '',
+    pubDate: Date.UTC(2026, 7, 16) - i * 7 * 864e5,
+    duration: 2400 + i * 137,
+    episodeNumber: 128 - i,
+    season: 3,
+    enclosureUrl: `https://example.invalid/vinyl/${i}.mp3`,
+    enclosureLength: 42_000_000 + i * 1_100_000,
+    enclosureType: 'audio/mpeg',
+    imageUrl: null,
+    // The ten most recent are on disk, which is what `keepLast: 10` means.
+    trackId: i < 10 ? tracks[40 + i]?.id ?? null : null,
+    played: (i > 3 ? 1 : 0) as 0 | 1,
+    position: i === 3 ? 812 : 0,
+  })),
+  ...Array.from({ length: 8 }, (_, i) => ({
+    id: `ep-comp-${i}`,
+    podcastId: 'pod-compression',
+    guid: `comp-${i}`,
+    title: [
+      'Attack and release, again', 'The loudness war is over, we lost', 'Sidechains for people in a hurry',
+      'Limiters that lie', 'A parallel chain worth having', 'Metering you can trust',
+      'Room correction, cheaply', 'What the mix bus is for',
+    ][i],
+    description: '',
+    pubDate: Date.UTC(2026, 6, 2) - i * 7 * 864e5,
+    duration: 1800 + i * 90,
+    episodeNumber: 41 - i,
+    season: 1,
+    enclosureUrl: `https://example.invalid/compression/${i}.mp3`,
+    enclosureLength: 28_000_000 + i * 800_000,
+    enclosureType: 'audio/mpeg',
+    imageUrl: null,
+    trackId: i < 5 ? tracks[60 + i]?.id ?? null : null,
+    played: 0 as 0 | 1,
+    position: 0,
+  })),
+]
+
+/**
+ * A downloaded episode is a track in the library, named after the episode.
+ *
+ * Pointing `trackId` at some music track instead would have the row say one
+ * thing and the player say another, which is exactly the confusion this view
+ * exists to remove. They carry `kind: 'podcast'`, so Songs does not list them
+ * between two albums.
+ */
+for (const e of EPISODES) {
+  if (!e.trackId) continue
+  const show = e.podcastId === 'pod-vinyl' ? 'The Vinyl Hours' : 'Compression'
+  const author = e.podcastId === 'pod-vinyl' ? 'Frulko' : 'anon'
+  const base = tracks.find((t) => t.id === e.trackId)!
+  tracks.push({
+    ...base,
+    id: `pt-${e.id}`,
+    kind: 'podcast',
+    name: e.title,
+    artist: author,
+    albumArtist: author,
+    album: show,
+    genre: 'Podcast',
+    duration: e.duration,
+    size: e.enclosureLength,
+    devices: [],
+    tags: [],
+  })
+  e.trackId = `pt-${e.id}`
+}
 
 const SOURCES: Source[] = [
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
@@ -490,6 +578,8 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   }
   // Two feeds: one healthy, one that has been failing — the state the home
   // page exists to surface rather than hide behind a count.
+  const eps = path.match(/^\/podcasts\/([^/]+)\/episodes$/)
+  if (eps) return { items: EPISODES.filter((e) => e.podcastId === eps[1]), next: null }
   if (path === '/podcasts') {
     return {
       items: [

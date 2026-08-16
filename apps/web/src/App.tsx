@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
+import type { Episode, Podcast } from '@jukebox/client-sdk'
 import {
   api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
   usePlayer, usePlayerActions, useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
@@ -13,7 +14,8 @@ import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
-import { AppsView, AudiobooksView, mediaSummary, PodcastsView, RadioView, StoreView } from './MediaViews'
+import { AppsView, AudiobooksView, mediaSummary, RadioView, StoreView } from './MediaViews'
+import { episodeAsTrack, hostOf, PodcastsView } from './PodcastsView'
 import { MissingView } from './MissingView'
 import { QueueView } from './QueueView'
 import { AlbumsView, ArtistsView } from './LibraryViews'
@@ -314,6 +316,10 @@ export default function App() {
     // whichever comes first, never under thirty seconds. The front only reports
     // what was heard; a play count that the client could set is not a fact.
     onPlayed: (id, seconds, startedAt) => {
+      // A podcast episode that is only in its feed has no track behind it, so
+      // there is nothing to count a play against. The server would refuse the
+      // id anyway; not asking is the honest version of the same answer.
+      if (id.startsWith('ep:')) return
       api.tracks
         .play(id, seconds, startedAt)
         .then((r) => {
@@ -341,6 +347,30 @@ export default function App() {
       else void control.goTo(id)
     },
     [audio, control],
+  )
+
+  /**
+   * A podcast episode.
+   *
+   * Downloaded, it is a track like any other and goes through the queue with
+   * the rest of the show behind it. Only in the feed, it is a URL at the
+   * publisher: it plays, but it cannot be queued — the queue is a list of
+   * library tracks and inventing an id for something the library does not hold
+   * would make every other part of the app wrong about it. The status line says
+   * which of the two just happened, because on a train it is the difference
+   * between music and silence.
+   */
+  const playEpisode = useCallback(
+    (ep: Episode, show: Podcast, downloaded: string[]) => {
+      if (ep.trackId) return playTrack(ep.trackId, downloaded)
+      if (!ep.enclosureUrl) return setNotice(`“${ep.title}” has no file to play.`)
+      const id = `ep:${ep.id}`
+      audio.play(id, ep.enclosureUrl)
+      setNowPlaying(id)
+      setNowPlayingTrack(episodeAsTrack(ep, show))
+      setNotice(`Streaming “${ep.title}” from ${hostOf(ep.enclosureUrl)} — it is not in your library`)
+    },
+    [audio, playTrack],
   )
 
   /**
@@ -509,7 +539,7 @@ export default function App() {
   const mode = view.kind === 'library' && (view.id === 'albums' || view.id === 'artists') ? view.id : 'songs'
 
   const MEDIA: Record<string, React.ReactNode> = {
-    podcasts: <PodcastsView search={search} />,
+    podcasts: <PodcastsView search={search} nowPlaying={nowPlaying} onPlayEpisode={playEpisode} />,
     audiobooks: <AudiobooksView search={search} />,
     apps: <AppsView search={search} />,
     radio: <RadioView search={search} />,

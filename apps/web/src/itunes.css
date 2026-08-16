@@ -2009,3 +2009,22 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .dev-failed span { flex: 1; min-width: 0; }
 .dev-failed button { flex: none; }
+
+/* ---------------- podcasts, from the feed ----------------
+   Two marks that mean two different things: the dot is "not listened to yet",
+   the glyph is "on disk or at the publisher". An episode can be either without
+   the other, so they cannot share a channel. */
+.ep .c-name .icon { margin-right: 6px; vertical-align: -1px; }
+.ep-have { color: var(--accent); }
+.ep .c-name .ep-remote { opacity: .5; }
+.ep.playing .c-name { color: var(--accent); font-weight: 600; }
+.show .meta .s.err {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--danger, #d4342c);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.show .art { object-fit: cover; }

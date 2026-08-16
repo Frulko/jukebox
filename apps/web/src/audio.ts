@@ -29,7 +29,7 @@ export type Audio = {
   duration: number
   /** Non-null when the browser refused the file — a codec it cannot decode, usually. */
   error: string | null
-  play: (id: string) => void
+  play: (id: string, src?: string) => void
   resume: () => void
   pause: () => void
   seek: (seconds: number) => void
@@ -135,7 +135,12 @@ export function useAudio({
     if (el.current) el.current.volume = Math.min(1, Math.max(0, volume / 100))
   }, [volume])
 
-  const play = useCallback((id: string) => {
+  /**
+   * `src` is for what the library does not hold — a podcast episode that is
+   * only in its feed. Everything else is `/stream/:id`, and the id is what the
+   * play report is keyed on either way.
+   */
+  const play = useCallback((id: string, src?: string) => {
     const a = el.current
     if (!a) return
     // Whatever was playing is over as far as counting goes, however far it got.
@@ -143,7 +148,7 @@ export function useAudio({
     current.current = { id, listened: 0, startedAt: Date.now(), last: 0 }
     setError(null)
     setPosition(0)
-    a.src = streamUrl(base, id)
+    a.src = src ?? streamUrl(base, id)
     // A rejected play() is normal: autoplay policy before any user gesture, or
     // a track replaced while it was still loading. Neither deserves an error in
     // the UI, and an unhandled rejection here would be noise in the console.

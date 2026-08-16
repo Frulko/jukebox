@@ -311,6 +311,14 @@ export function useTrackQuery(input: {
     if (input.view.kind === 'library' && (input.view.id === 'podcasts' || input.view.id === 'audiobooks')) {
       q.kind = (input.view.id === 'podcasts' ? 'podcast' : 'audiobook') as never
     }
+    // Songs, Albums and Artists are about music. A downloaded podcast episode
+    // is a track like any other and would otherwise turn up between two albums
+    // — which is why iTunes had a Media Kind at all. Only the library's own
+    // listings narrow this way: a playlist holding an episode still shows it,
+    // because someone put it there on purpose.
+    if (input.view.kind === 'library' && ['music', 'albums', 'artists'].includes(input.view.id)) {
+      q.kind = 'music' as never
+    }
     if (input.deviceFilter) {
       if (input.deviceFilter.mode === 'on') q.onDevice = input.deviceFilter.deviceId
       else q.notOnDevice = input.deviceFilter.deviceId
