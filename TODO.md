@@ -98,7 +98,10 @@ hands out a URL.
 
 - [x] **5.1** Plugin host — manifest, lifecycle, semver `hostApi`, failure isolation.
       Sidecars (a plugin owning a child process) still to come
-- [ ] **5.2** Host-provided transports — `http`, `ws`, `mqtt`, `tcp`, `udp`
+- [x] **5.2** Host-provided transports — `http`, `ws`, `tcp`, `udp`, plus timers, all closed
+      when the plugin stops. No `mqtt`: it would be the first runtime dependency added for
+      something nothing uses, and a plugin can carry its own client. The host takes it over
+      when several plugins want to share one broker connection
 - [ ] **5.3** Declarative settings (`ui.json`) + UI extension zones
 - [ ] **5.4** Store — git index with tagged releases, permissions shown before install
 - [ ] **5.5** Installed plugins (replaces Purchased)

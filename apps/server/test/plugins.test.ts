@@ -188,3 +188,115 @@ test('a plugin gets its config and can register a namespaced job', async () => {
     await h.cleanup()
   }
 })
+
+/* ---- what happens to a plugin's sockets and timers when it stops ---- */
+
+test('turning a plugin off closes what it opened', async () => {
+  const { createServer } = await import('node:net')
+  const echo = createServer((s) => s.on('data', (d) => s.write(d)))
+  await new Promise<void>((r) => echo.listen(0, '127.0.0.1', r))
+  const port = (echo.address() as any).port
+
+  const h = await harness({
+    chatty: {
+      manifest: manifest('chatty'),
+      code: `
+        export function activate(host) {
+          globalThis.__ticks = 0
+          host.net.setInterval(() => { globalThis.__ticks++ }, 5)
+          globalThis.__sock = host.net.tcp({ host: '127.0.0.1', port: ${port} })
+        }
+      `,
+    },
+  })
+  try {
+    await h.host.discover()
+    await h.host.activate('chatty')
+    await new Promise((r) => setTimeout(r, 60))
+
+    const held = h.host.resourcesOf('chatty')!
+    assert.equal(held.timers, 1)
+    assert.equal(held.sockets, 1)
+    const ticked = (globalThis as any).__ticks
+    assert.ok(ticked > 0, 'the timer really was running')
+
+    await h.host.setEnabled('chatty', false)
+    await new Promise((r) => setTimeout(r, 60))
+
+    // The leak this exists to prevent: a disabled plugin still polling, and
+    // still holding a connection, until the process restarts.
+    assert.equal((globalThis as any).__ticks, ticked, 'the timer stopped with the plugin')
+    assert.equal((globalThis as any).__sock.destroyed, true, 'the socket was closed')
+    assert.equal(h.host.resourcesOf('chatty'), null)
+  } finally {
+    delete (globalThis as any).__ticks
+    delete (globalThis as any).__sock
+    echo.close()
+    await h.cleanup()
+  }
+})
+
+test('a plugin that opens something and then throws still lets go of it', async () => {
+  const h = await harness({
+    leaky: {
+      manifest: manifest('leaky'),
+      code: `
+        export function activate(host) {
+          globalThis.__leaked = host.net.setInterval(() => { globalThis.__leaks = (globalThis.__leaks ?? 0) + 1 }, 5)
+          throw new Error('half way through')
+        }
+      `,
+    },
+  })
+  try {
+    await h.host.discover()
+    const p = await h.host.activate('leaky')
+    assert.equal(p!.state, 'failed')
+
+    const before = (globalThis as any).__leaks ?? 0
+    await new Promise((r) => setTimeout(r, 60))
+    // Without the cleanup on the failure path, a plugin that throws on every
+    // restart leaves another timer running each time.
+    assert.equal((globalThis as any).__leaks ?? 0, before)
+  } finally {
+    delete (globalThis as any).__leaks
+    delete (globalThis as any).__leaked
+    await h.cleanup()
+  }
+})
+
+test('requests in flight are cancelled when the plugin stops', async () => {
+  const { createServer } = await import('node:http')
+  // A server that accepts and never answers, which is what a hung request is.
+  const slow = createServer(() => {})
+  await new Promise<void>((r) => slow.listen(0, '127.0.0.1', r))
+  const port = (slow.address() as any).port
+
+  const h = await harness({
+    waiter: {
+      manifest: manifest('waiter'),
+      code: `
+        export function activate(host) {
+          globalThis.__result = 'pending'
+          host.net.fetch('http://127.0.0.1:${port}/')
+            .then(() => { globalThis.__result = 'answered' })
+            .catch((e) => { globalThis.__result = 'aborted: ' + e.name })
+        }
+      `,
+    },
+  })
+  try {
+    await h.host.discover()
+    await h.host.activate('waiter')
+    await new Promise((r) => setTimeout(r, 40))
+    assert.equal((globalThis as any).__result, 'pending')
+
+    await h.host.setEnabled('waiter', false)
+    await new Promise((r) => setTimeout(r, 60))
+    assert.match((globalThis as any).__result, /aborted/, 'the request did not outlive the plugin')
+  } finally {
+    delete (globalThis as any).__result
+    slow.close()
+    await h.cleanup()
+  }
+})
