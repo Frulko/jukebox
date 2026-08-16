@@ -29,6 +29,40 @@ const COLUMNS = `t.id, t.sourceId, t.path, t.kind, t.name, t.artist, t.albumArti
 
 const ids = (csv: string) => csv.split(',').map((s) => s.trim()).filter(Boolean)
 
+export type Rendition = {
+  id: string
+  format: string
+  bitRate: number
+  sampleRate: number
+  channels: number
+  size: number
+  lossless: 0 | 1
+  preferred: 0 | 1
+  path: string
+  sourceId: string
+}
+
+/**
+ * The renditions of a page of tracks, in one query.
+ *
+ * One query for the page rather than one per track: a 300-row page would
+ * otherwise be 301 round trips to SQLite, which is the shape of every slow
+ * listing endpoint ever written.
+ */
+export function renditionsFor(db: DB, trackIds: string[]): Map<string, Rendition[]> {
+  const out = new Map<string, Rendition[]>()
+  if (!trackIds.length) return out
+  const rows = db.prepare(
+    `SELECT id, trackId, format, bitRate, sampleRate, channels, size, lossless, preferred, path, sourceId
+     FROM renditions WHERE trackId IN (${trackIds.map(() => '?').join(',')})
+     ORDER BY preferred DESC, format`).all(...(trackIds as never[])) as any[]
+  for (const r of rows) {
+    const { trackId, ...rest } = r
+    out.set(trackId, [...(out.get(trackId) ?? []), rest as Rendition])
+  }
+  return out
+}
+
 /**
  * Builds the filter clause. Device presence is computed here, in SQL — never by
  * filtering a page that was already fetched, or a 200-row page can return 3 and
@@ -96,8 +130,14 @@ function withPresence(db: DB, rows: any[]): any[] {
     const cur = byTrack.get(l.trackId)
     cur ? cur.push(l.deviceId) : byTrack.set(l.trackId, [l.deviceId])
   }
+  // Renditions ride along on the same page, for the same reason: a listing that
+  // shows a format column, or a sync that has to pick a playable file, must not
+  // turn one page into three hundred queries.
+  const byRendition = renditionsFor(db, rows.map((r) => r.id))
+
   for (const r of rows) {
     r.devices = byTrack.get(r.id) ?? []
+    r.renditions = byRendition.get(r.id) ?? []
     r.loved = !!r.loved
     r.enabled = !!r.enabled
     r.compilation = !!r.compilation

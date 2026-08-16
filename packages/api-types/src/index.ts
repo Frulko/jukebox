@@ -8,6 +8,28 @@
 
 export type TrackKind = 'music' | 'audiobook' | 'podcast'
 
+/**
+ * One playable file of a track.
+ *
+ * A track is the song; a rendition is a file of it. The same music can exist as
+ * FLAC for listening and AAC for an iPod, and that is one library entry rather
+ * than two — a device that takes AAC and a browser that wants Opus are asking
+ * for the same song.
+ */
+export type Rendition = {
+  id: string
+  format: string
+  bitRate: number
+  sampleRate: number
+  channels: number
+  size: number
+  lossless: 0 | 1
+  /** Exactly one per track: what a player gets and what a listing shows. */
+  preferred: 0 | 1
+  path: string
+  sourceId: string
+}
+
 export type Track = {
   id: string
   sourceId: string
@@ -44,6 +66,13 @@ export type Track = {
   artwork: string | null
   /** Ids of the devices holding this track. Delivered with the page. */
   devices: string[]
+  /**
+   * Every file of this track, preferred first. Delivered with the page.
+   *
+   * The flat `format`, `size` and `bitRate` above are the preferred one's, so a
+   * client that does not care about renditions never has to look here.
+   */
+  renditions: Rendition[]
   rev: number
 }
 

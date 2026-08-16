@@ -78,6 +78,18 @@ export function makeAcquireHandler(db: DB) {
             (meta.audio?.format || t.format || '').toLowerCase(), buf.byteLength, Date.now(),
             Date.now(), nextRev(db))
 
+        // The imported file is this track's rendition. Every path that creates a
+        // track has to create one, or the track has no playable file and the
+        // sync plan would call it unconvertible.
+        db.prepare(`
+          INSERT INTO renditions (id, trackId, sourceId, path, format, bitRate, size, mtime, preferred, createdAt)
+          VALUES (?,?,?,?,?,?,?,?,1,?)
+          ON CONFLICT (sourceId, path) DO UPDATE SET
+            format = excluded.format, size = excluded.size, mtime = excluded.mtime`)
+          .run(`r-${id}`, id, source.id, rel,
+            (meta.audio?.format || t.format || '').toLowerCase(),
+            meta.audio?.bitRate ?? 0, buf.byteLength, Date.now(), Date.now())
+
         // Link the device row to the track we just created: the same music is now
         // in both places, and the presence column should say so immediately.
         db.prepare(`UPDATE device_tracks SET trackId = ? WHERE deviceId = ? AND deviceLocalId = ?`)

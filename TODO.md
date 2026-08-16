@@ -79,6 +79,15 @@ hands out a URL.
 - [ ] **3.5** AirPlay · **3.6** Satellite renderer (tablet, Pi + DAC) · **3.7** Chromecast
 - [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)
 
+## M4b · One song, several files
+
+- [x] **4b.1** `renditions` — a track is the song, a rendition is a file of it. Backfilled by
+      migration; the flat format/size/bitRate on tracks stay as the preferred one's copy
+- [x] **4b.2** Sync picks a rendition the device already plays before deciding to convert
+- [ ] **4b.3** `POST /transcode` — { ids, format, quality?, replace }, needs ffmpeg on PATH
+- [ ] **4b.4** Streaming picks a rendition, and can be asked for a specific one
+- [ ] **4b.5** Duplicate detection — merge two scanned files of the same song into renditions
+
 ## M4 · Sources and file organization
 
 - [x] **4.1** rclone sidecar (`rclone rcd --rc-serve`) — listing, walking and range-streaming.

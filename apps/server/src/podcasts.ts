@@ -228,6 +228,15 @@ async function download(db: DB, ctx: JobContext, p: any): Promise<void> {
           p.title, meta.audio?.duration ?? e.duration, meta.audio?.format ?? '',
           buf.byteLength, Date.now(), Date.now(), nextRev(db))
 
+      // Same rule as everywhere else: a track without a rendition has no file.
+      db.prepare(`
+        INSERT INTO renditions (id, trackId, sourceId, path, format, size, mtime, preferred, createdAt)
+        VALUES (?,?,?,?,?,?,?,1,?)
+        ON CONFLICT (sourceId, path) DO UPDATE SET
+          format = excluded.format, size = excluded.size, mtime = excluded.mtime`)
+        .run(`r-${trackId}`, trackId, source.id, rel,
+          meta.audio?.format ?? '', buf.byteLength, Date.now(), Date.now())
+
       db.prepare(`UPDATE episodes SET trackId = ?, rev = ? WHERE id = ?`)
         .run(trackId, nextRev(db), e.id)
     } catch (err) {

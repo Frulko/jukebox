@@ -1,7 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats,
+  Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule, Source, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
@@ -326,7 +326,7 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats,
+  Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule, Source, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,

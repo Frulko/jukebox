@@ -115,3 +115,50 @@ test('freeing space counts against what is added', () => {
   assert.equal(plan.bytesFreed, 30_000_000)
   assert.equal(plan.shortBy, null, 'the removal pays for the addition')
 })
+
+const rendition = (db: any, trackId: string, format: string, size: number, preferred = 0) =>
+  db.prepare(`INSERT INTO renditions (id, trackId, sourceId, path, format, size, preferred, createdAt)
+              VALUES (?,?, 's', ?, ?, ?, ?, 1)`)
+    .run(`r-${trackId}-${format}`, trackId, `/p/${trackId}.${format}`, format, size, preferred)
+
+test('a device gets the file it can already play, not a re-encode', () => {
+  const db = fixture({ mode: 'playlists', formats: ['mp3', 'aac', 'alac'] })
+  const pl = createPlaylist(db, { name: 'Trip' })
+  addTracks(db, pl.id, ['t2']) // t2 is the 30 MB flac
+  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
+
+  // The library holds the same song twice: a big lossless one and a small AAC
+  // made for the iPod. Sending the FLAC through an encoder would be work already
+  // done, and the plan would be ten times the size.
+  rendition(db, 't2', 'flac', 30_000_000, 1)
+  rendition(db, 't2', 'aac', 4_000_000)
+
+  const plan = planSync(db, 'ipod')
+  assert.equal(plan.add.length, 1)
+  assert.equal(plan.add[0].transcode, null, 'nothing to convert: it is already there')
+  assert.equal(plan.add[0].size, 4_000_000, 'and the plan counts the file it will actually send')
+})
+
+test('with nothing the device plays, it still says what to convert to', () => {
+  const db = fixture({ mode: 'playlists', formats: ['mp3', 'aac', 'alac'] })
+  const pl = createPlaylist(db, { name: 'Trip' })
+  addTracks(db, pl.id, ['t4']) // opus, and only opus
+  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
+  rendition(db, 't4', 'opus', 4_000_000, 1)
+
+  const plan = planSync(db, 'ipod')
+  assert.equal(plan.add[0].transcode, 'alac')
+})
+
+test('a track with no rendition rows falls back to its own columns', () => {
+  // Tracks predate renditions, and paths that create one -- an import, a
+  // podcast download -- could always miss a row. A plan must never conclude
+  // "unplayable" because of a missing row.
+  const db = fixture({ mode: 'playlists', formats: ['mp3', 'aac', 'alac'] })
+  const pl = createPlaylist(db, { name: 'Trip' })
+  addTracks(db, pl.id, ['t1']) // mp3
+  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
+  assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM renditions`).get() as any).n, 0)
+
+  assert.equal(planSync(db, 'ipod').add[0].transcode, null, 'mp3 plays, rendition row or not')
+})

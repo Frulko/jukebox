@@ -1,5 +1,6 @@
 import type { DB } from './db.ts'
 import type { JobContext } from './jobs.ts'
+import { renditionsFor } from './library.ts'
 
 /**
  * Deciding what a device sync would do.
@@ -56,15 +57,41 @@ export function planSync(db: DB, deviceId: string): SyncPlan {
       .prepare(`SELECT id, name, artist, size, format FROM tracks
                 WHERE id IN (${[...wanted].map(() => '?').join(',')}) AND deletedAt IS NULL`)
       .all(...([...wanted] as never[])) as any[]
+
+    // Every file of every wanted track, so the plan can prefer one the device
+    // already plays over converting the preferred one. A library holding both a
+    // FLAC and an AAC of the same song should send the AAC to an iPod, not
+    // re-encode the FLAC -- that is the whole reason a track has renditions.
+    const byTrack = renditionsFor(db, rows.map((t) => t.id))
+
     for (const t of rows) {
       if (heldTrackIds.has(t.id)) continue
-      // The device declares what it plays; the server converts only what will
-      // not. Same rule as the streaming endpoint, and the reason a satellite
-      // never needs to know transcoding exists.
-      const needsTranscode = accepted.length > 0 && !accepted.includes(t.format)
+      // A track with no rendition rows falls back to its own flat columns. That
+      // is not hypothetical: the flat fields are the preferred rendition's copy,
+      // and a plan must never conclude "unplayable" because a row is missing.
+      const files = byTrack.get(t.id) ?? []
+      if (!files.length && t.format) {
+        files.push({ format: t.format, size: t.size } as never)
+      }
+      const playable = accepted.length === 0
+        ? files[0]
+        : files.find((f) => accepted.includes(f.format))
+
+      if (playable) {
+        // Its own size, not the preferred one's: sending the 4 MB AAC instead
+        // of the 30 MB FLAC is most of what makes the plan fit.
+        add.push({
+          trackId: t.id, name: t.name, artist: t.artist,
+          size: playable.size || t.size, transcode: null,
+        })
+        continue
+      }
+
+      // Nothing on hand that this device plays. The server converts; a
+      // satellite still never needs to know transcoding exists.
       add.push({
         trackId: t.id, name: t.name, artist: t.artist, size: t.size,
-        transcode: needsTranscode ? (accepted.includes('alac') ? 'alac' : accepted[0]) : null,
+        transcode: accepted.includes('alac') ? 'alac' : accepted[0],
       })
     }
   }

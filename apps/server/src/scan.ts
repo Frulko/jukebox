@@ -183,6 +183,23 @@ export function makeScanHandler(db: DB) {
       )
 
       seen.run(startedAt, source.id, rel)
+      // The file itself, as this track's rendition. One per scanned file today;
+      // a second appears when something is transcoded, and the duplicates pass
+      // will later merge two scanned files that are the same song.
+      db.prepare(`
+        INSERT INTO renditions (id, trackId, sourceId, path, format, bitRate, sampleRate,
+          channels, size, mtime, lossless, preferred, createdAt)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?)
+        ON CONFLICT (sourceId, path) DO UPDATE SET
+          format = excluded.format, bitRate = excluded.bitRate,
+          sampleRate = excluded.sampleRate, channels = excluded.channels,
+          size = excluded.size, mtime = excluded.mtime, lossless = excluded.lossless`)
+        .run(`r-${idFor(source.id, rel)}`, idFor(source.id, rel), source.id, rel,
+          shortFormat(meta.container, meta.codec) || extname(rel).slice(1).toLowerCase(),
+          Math.round((meta.bitrate ?? 0) / 1000), meta.sampleRate ?? 0,
+          meta.numberOfChannels ?? 2, entry.size, entry.mtime,
+          meta.lossless ? 1 : 0, Date.now())
+
       done++
       bytes += entry.size
       if (done % 50 === 0) ctx.checkpoint(rel, { done, bytes })

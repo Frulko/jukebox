@@ -66,6 +66,35 @@ CREATE TABLE IF NOT EXISTS tracks (
   UNIQUE (sourceId, path)
 );
 
+-- One playable file. A track is the song; a rendition is a file of it.
+--
+-- The same music can exist as FLAC for listening and AAC for the iPod, and
+-- those are one entry in the library rather than two: a device that takes AAC
+-- and a browser that wants Opus are asking for the same song, and under two
+-- rows "is this on the iPod" has two different answers for one piece of music.
+--
+-- The flat path/format/size/bitRate on tracks stay as a copy of the preferred
+-- rendition. Denormalised on purpose: every listing query would otherwise need
+-- a join to show a format column.
+CREATE TABLE IF NOT EXISTS renditions (
+  id         TEXT PRIMARY KEY,
+  trackId    TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  sourceId   TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  path       TEXT NOT NULL,
+  format     TEXT NOT NULL DEFAULT '',
+  bitRate    INTEGER NOT NULL DEFAULT 0,
+  sampleRate INTEGER NOT NULL DEFAULT 0,
+  channels   INTEGER NOT NULL DEFAULT 2,
+  size       INTEGER NOT NULL DEFAULT 0,
+  mtime      INTEGER NOT NULL DEFAULT 0,
+  lossless   INTEGER NOT NULL DEFAULT 0,
+  -- Exactly one per track. What the player gets and what a listing shows.
+  preferred  INTEGER NOT NULL DEFAULT 0,
+  createdAt  INTEGER NOT NULL,
+  UNIQUE (sourceId, path)
+);
+CREATE INDEX IF NOT EXISTS rend_track ON renditions (trackId, preferred DESC);
+
 -- Covering indexes: every sort order the API exposes needs one, otherwise
 -- cursor pagination degrades into a full table scan.
 CREATE INDEX IF NOT EXISTS tracks_rev      ON tracks (rev);
@@ -341,6 +370,18 @@ const MIGRATIONS: Migration[] = [
       .some((c) => c.name === 'lastSeenAt')
     if (!has) db.exec(`ALTER TABLE tracks ADD COLUMN lastSeenAt INTEGER`)
     db.exec(`CREATE INDEX IF NOT EXISTS tracks_seen ON tracks (sourceId, lastSeenAt)`)
+  },
+
+  // 3 — every existing track becomes a track with one rendition. Backfilled
+  // rather than left empty, or a library scanned before this would have no
+  // playable file at all until someone rescanned it.
+  (db) => {
+    db.exec(`
+      INSERT OR IGNORE INTO renditions
+        (id, trackId, sourceId, path, format, bitRate, sampleRate, channels, size, mtime, preferred, createdAt)
+      SELECT 'r-' || t.id, t.id, t.sourceId, t.path, t.format, t.bitRate, t.sampleRate,
+             t.channels, t.size, t.mtime, 1, t.dateAdded
+      FROM tracks t`)
   },
 ]
 
