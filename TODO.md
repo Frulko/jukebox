@@ -273,6 +273,16 @@ hands out a URL.
       channel metadata and artwork from the feed
 - [x] **6.2** Per-feed cron + `keepLast: N` — pruning clears the file, keeps the episode row
 - [ ] **6.3** Destination set in the settings UI (the API takes `targetSourceId` already)
+- [ ] **6.6** A **local show** — a `podcasts` row with no `feedUrl`, whose `episodes` point at
+      tracks that already exist. Today `PATCH /tracks { kind: 'podcast' }` files a folder of
+      files under Podcasts and out of Songs, which is real and reversible on its own, but they
+      never become episodes *of* anything: no show groups them, and the feed machinery has
+      nothing to key on. The front ships the honest half and says so on the page ("there is no
+      feed to check, so nothing new will ever appear by itself"), listing them as *Episodes on
+      disk* beside the subscriptions rather than pretending to be one. Closing it is a server
+      change — nullable `feedUrl`, episodes created from existing tracks — after which the
+      front needs only to stop filtering them out. Recorded rather than started, so neither
+      session rediscovers it in a month
 - [x] **6.4** Radios CRUD
 - [x] **6.5** Auto cover — ICY headers, then the homepage favicon, then Radio-Browser.
       Known gap: Shoutcast v1 answers `ICY 200 OK` rather than an HTTP status line and
