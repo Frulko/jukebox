@@ -22,6 +22,7 @@ import { ConvertDialog } from './ConvertDialog'
 import { AdminView } from './AdminView'
 import { DuplicatesView } from './DuplicatesView'
 import { HomeView, useRecentPlaylists } from './HomeView'
+import { usePluginMenu } from './pluginMenu'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -55,6 +56,7 @@ export default function App() {
   const [queueOpen, setQueueOpen] = useState(false)
   const [recentPlaylists, rememberPlaylist] = useRecentPlaylists()
   const [converting, setConverting] = useState<string[] | null>(null)
+  const [selectIds, setSelectIds] = useState<string[] | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
@@ -157,6 +159,15 @@ export default function App() {
   const loading = libraryPage.isLoading || playlistPage.isLoading
 
   for (const t of tracks) known.current.set(t.id, t)
+
+  const pluginMenu = usePluginMenu({
+    notice: setNotice,
+    openPlaylist: (id) => setView({ kind: 'playlist', id }),
+    select: (ids) => {
+      setView({ kind: 'library', id: 'music' })
+      setSelectIds(ids)
+    },
+  })
 
   const patchTracks = useUpdateTracks()
   const update = useCallback(
@@ -537,6 +548,9 @@ export default function App() {
                 onEnqueue={enqueue}
                 onPlayNext={playNext}
                 onConvert={setConverting}
+                pluginEntries={pluginMenu.entries}
+                onPluginCommand={pluginMenu.run}
+                selectIds={selectIds}
                 onUpdate={update}
                 onDelete={remove}
                 onAddToPlaylist={addToPlaylist}

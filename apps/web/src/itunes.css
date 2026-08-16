@@ -1797,3 +1797,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .home-zone-empty p { margin: 0; line-height: 1.5; font-size: 12px; }
 .home-nudge { margin-top: 24px; padding: 10px 14px; border-left: 3px solid var(--accent); color: var(--dim); }
+/* Which plugin an entry came from, so a menu that grew by itself can be traced
+   back to the thing that grew it. */
+.ctx-from { margin-left: auto; padding-left: 14px; font-style: normal; font-size: 10px; color: var(--dim); }
+.ctx button:disabled { opacity: .45; }

@@ -8,6 +8,7 @@ import { COLUMN_LABELS, DEFAULT_VISIBLE, makeColumns, NUMERIC } from './columns'
 import type { Playlist, Track } from './data'
 import type { View } from './App'
 import { isUnavailable } from './trackBadges'
+import type { PluginEntry } from './pluginMenu'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -43,6 +44,11 @@ type Props = {
   onPlayNext: (ids: string[]) => void
   /** Opens the conversion dialog for these tracks. */
   onConvert: (ids: string[]) => void
+  /** Entries plugins asked to add, and how to run one. */
+  pluginEntries: PluginEntry[]
+  onPluginCommand: (entry: PluginEntry, ids: string[]) => void
+  /** A selection handed in from outside — a plugin command that found tracks. */
+  selectIds: string[] | null
   onUpdate: (ids: string[], patch: Partial<Track>) => void
   onDelete: (ids: string[]) => void
   onAddToPlaylist: (playlistId: string, ids: string[]) => void
@@ -124,6 +130,20 @@ export function TrackList(p: Props) {
     estimateSize: () => p.rowHeight,
     overscan: 12,
   })
+
+  // A plugin answered with tracks: show them as a selection rather than as a
+  // playlist nobody asked to keep.
+  useLayoutEffect(() => {
+    if (!p.selectIds?.length) return
+    const chosen: Record<string, true> = {}
+    for (const id of p.selectIds) chosen[id] = true
+    table.setRowSelection(chosen)
+    // And take the list there: twelve selected rows below the fold are twelve
+    // rows nobody knows were found.
+    const first = table.getRowModel().rows.findIndex((r) => chosen[r.id])
+    if (first >= 0) virtualizer.scrollToIndex(first, { align: 'center' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.selectIds])
 
   // The row height is the theme's. TanStack Virtual keeps its measurements in a
   // cache that a new `estimateSize` does not invalidate: switching theme changed
@@ -444,6 +464,22 @@ export function TrackList(p: Props) {
               <button onClick={() => (p.onConvert(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Convert ${selectedIds.length} Tracks…` : 'Convert…'}
               </button>
+              {p.pluginEntries.length > 0 && <hr />}
+              {p.pluginEntries.map((entry) => (
+                <button
+                  key={entry.id}
+                  disabled={!entry.runnable}
+                  title={
+                    entry.runnable
+                      ? `${entry.pluginName} · ${entry.command}`
+                      : `${entry.pluginName} is switched off`
+                  }
+                  onClick={() => (p.onPluginCommand(entry, selectedIds), setMenu(null))}
+                >
+                  {entry.label}
+                  <em className="ctx-from">{entry.pluginName}</em>
+                </button>
+              ))}
               <hr />
               <div className="ctx-sub">
                 Rating

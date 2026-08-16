@@ -286,17 +286,40 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
       ],
     }
   }
+  const cmd = path.match(/^\/plugins\/([^/]+)\/command$/)
+  if (cmd && method === 'POST') {
+    const { command, trackIds } = JSON.parse(body ?? '{}') as { command: string; trackIds?: string[] }
+    if (command === 'similar') {
+      // "More like this" answers with a selection, not a playlist: an
+      // exploratory command should not leave something behind to delete.
+      const seed = tracks.find((t) => t.id === trackIds?.[0])
+      const like = tracks.filter((t) => t.genre === seed?.genre && t.id !== seed?.id).slice(0, 12)
+      return { kind: 'tracks', ids: like.map((t) => t.id) }
+    }
+    if (command === 'playlist') return { kind: 'playlist', id: 'p-top', name: 'Built from your listening' }
+    if (command === 'flush') return { kind: 'done', message: '3 listens sent.' }
+    return { kind: 'done', message: `${command} done` }
+  }
   if (path === '/plugins') {
     return {
       hostApi: '1.0',
       items: [
         { id: 'listenbrainz', name: 'ListenBrainz', version: '0.2.0', author: 'jukebox',
           description: 'Scrobbles what you listen to, hanging off the play event.',
-          permissions: ['http:api.listenbrainz.org', 'events:play'], contributes: { settings: [] },
+          permissions: ['http:api.listenbrainz.org', 'events:play'],
+          contributes: { settings: [], 'track.contextMenu': [
+            { id: 'lb.similar', label: 'Find similar tracks', command: 'similar' },
+            { id: 'lb.playlist', label: 'Build a playlist from this', command: 'playlist' },
+          ] },
+          commands: ['similar', 'playlist', 'flush'],
           enabled: 1, state: 'active', error: null, config: {} },
         { id: 'audiomuse', name: 'AudioMuse', version: '0.4.1', author: 'community',
           description: 'Sonic analysis: tempo, key and a similarity map of the library.',
-          permissions: ['http:localhost:8008', 'library:read'], contributes: {},
+          permissions: ['http:localhost:8008', 'library:read'],
+          // Contributes an entry while being unable to run it: the case the menu
+          // has to draw greyed rather than silently drop.
+          contributes: { 'track.contextMenu': [{ id: 'am.analyse', label: 'Analyse with AudioMuse', command: 'analyse' }] },
+          commands: [],
           enabled: 1, state: 'failed', error: 'Sidecar not reachable at http://localhost:8008', config: {} },
       ],
     }
