@@ -10,6 +10,8 @@ export type TrackQuery = {
   genre?: string
   artist?: string
   album?: string
+  /** Codec name as stored: `mp3`, `aac`, `alac`, `flac`, `opus`, `vorbis`, `wav`, `aiff`. */
+  format?: string
   sourceId?: string
   /** Present on this device (comma-separated ids). */
   onDevice?: string
@@ -42,6 +44,11 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
   ] as const) {
     if (val) { sql.push(`${col} = ?`); params.push(val) }
   }
+
+  // Lowercased rather than matched case-sensitively: the column is written
+  // lowercase by the scanner, but a client typing `FLAC` should not silently
+  // get nothing back.
+  if (qs.format) { sql.push(`lower(t.format) = lower(?)`); params.push(qs.format) }
 
   if (qs.q?.trim()) {
     // FTS5 over an external content table: fetch the rowids, join on them.
@@ -144,7 +151,7 @@ export function getTrack(db: DB, id: string) {
  * filters of the panes to its left, never its own.
  */
 export function facets(db: DB, qs: TrackQuery) {
-  const distinct = (column: 'genre' | 'albumArtist' | 'album', scope: TrackQuery) => {
+  const distinct = (column: 'genre' | 'albumArtist' | 'album' | 'format', scope: TrackQuery) => {
     const f = filters(scope)
     return (db
       .prepare(`SELECT ${column} AS value, COUNT(*) AS count FROM tracks t
@@ -158,6 +165,11 @@ export function facets(db: DB, qs: TrackQuery) {
     genres: distinct('genre', base),
     artists: distinct('albumArtist', { ...base, genre: qs.genre }),
     albums: distinct('album', { ...base, genre: qs.genre, artist: qs.artist }),
+    // Deliberately not cascaded with the other three. Format is orthogonal to
+    // genre and artist -- "which formats does this library hold" is the useful
+    // question, and narrowing it by the browser selection would offer a filter
+    // that empties itself as soon as it is used.
+    formats: distinct('format', base),
   }
 }
 

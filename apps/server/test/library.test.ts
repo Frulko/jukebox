@@ -7,17 +7,17 @@ function fixture() {
   const db = open(':memory:')
   db.exec(`INSERT INTO sources (id, kind, name, root, rev) VALUES ('s', 'local', 'Local', '/m', 1)`)
   const ins = db.prepare(
-    `INSERT INTO tracks (id, sourceId, path, kind, name, artist, albumArtist, album, genre, dateAdded, rev)
-     VALUES (?, 's', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-  const data: [string, string, string, string, string, string, number][] = [
-    ['t1', 'music',     'Dreams',   'Fleetwood Mac', 'Rumours', 'Rock', 10],
-    ['t2', 'music',     'Gold Dust','Fleetwood Mac', 'Rumours', 'Rock', 11],
-    ['t3', 'music',     'Kid A',    'Radiohead',     'Kid A',   'Alt',  12],
-    ['t4', 'audiobook', 'Chapter 1','Anouk Duval',  'Analog',  'Book', 13],
-    ['t5', 'podcast',   'Episode 4','Compression',   'Season 1','Tech', 14],
+    `INSERT INTO tracks (id, sourceId, path, kind, name, artist, albumArtist, album, genre, format, dateAdded, rev)
+     VALUES (?, 's', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const data: [string, string, string, string, string, string, string, number][] = [
+    ['t1', 'music',     'Dreams',   'Fleetwood Mac', 'Rumours', 'Rock', 'flac', 10],
+    ['t2', 'music',     'Gold Dust','Fleetwood Mac', 'Rumours', 'Rock', 'mp3',  11],
+    ['t3', 'music',     'Kid A',    'Radiohead',     'Kid A',   'Alt',  'mp3',  12],
+    ['t4', 'audiobook', 'Chapter 1','Anouk Duval',  'Analog',  'Book', 'aac',  13],
+    ['t5', 'podcast',   'Episode 4','Compression',   'Season 1','Tech', 'mp3',  14],
   ]
-  for (const [id, kind, name, artist, album, genre, rev] of data)
-    ins.run(id, `/m/${id}.flac`, kind, name, artist, artist, album, genre, 1700000000000 + rev, rev)
+  for (const [id, kind, name, artist, album, genre, format, rev] of data)
+    ins.run(id, `/m/${id}.${format}`, kind, name, artist, artist, album, genre, format, 1700000000000 + rev, rev)
 
   db.exec(`INSERT INTO devices (id, name, kind, rev) VALUES
     ('ipod', 'iPod', 'ipod-classic', 1), ('nano', 'Nano', 'ipod-nano', 1)`)
@@ -133,4 +133,27 @@ test('facets respect the search and the device filter', () => {
   assert.deepEqual(facets(db, { q: 'fleetwood' }).genres.map((g: any) => g.value), ['Rock'])
   // "What is left to put on the iPod" must narrow the panes too.
   assert.ok(!facets(db, { notOnDevice: 'ipod' }).artists.some((a: any) => a.value === 'Radiohead'))
+})
+
+test('the format filter runs in SQL, and the facets say what is there', () => {
+  const db = fixture()
+  // Whatever the library actually holds, counted over all of it -- a front end
+  // filtering the page it happens to hold would offer "3 FLAC" out of four
+  // hundred, which is worse than no filter.
+  const f = facets(db, {})
+  assert.ok(Array.isArray(f.formats))
+  const total = f.formats.reduce((n, x) => n + x.count, 0)
+  assert.equal(total, listTracks(db, { limit: 500 }).items.length)
+
+  assert.deepEqual(f.formats.map((x) => x.value), ['aac', 'flac', 'mp3'], 'sorted, and only what is there')
+  assert.equal(f.formats.find((x) => x.value === 'mp3')?.count, 3)
+
+  const first = f.formats[0]
+  const only = listTracks(db, { format: first.value, limit: 500 })
+  assert.equal(only.items.length, first.count)
+  assert.ok(only.items.every((t: any) => t.format === first.value))
+
+  // A client typing FLAC should not silently get nothing.
+  assert.equal(listTracks(db, { format: first.value.toUpperCase(), limit: 500 }).items.length, first.count)
+  assert.equal(listTracks(db, { format: 'not-a-codec', limit: 500 }).items.length, 0)
 })

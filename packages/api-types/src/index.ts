@@ -389,6 +389,12 @@ export type TrackQuery = {
   genre?: string
   artist?: string
   album?: string
+  /**
+   * Codec name, as the scanner stores it: `mp3`, `aac`, `alac`, `flac`, `opus`,
+   * `vorbis`, `wav`, `aiff`. Not a container — an `.m4a` is `aac` or `alac`,
+   * and an `.ogg` is `opus` or `vorbis`. Matched case-insensitively.
+   */
+  format?: string
   sourceId?: string
   /** Present on these devices. */
   onDevice?: string
