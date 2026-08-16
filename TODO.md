@@ -176,6 +176,12 @@ hands out a URL.
 - [x] **4.4** **Reorganization tool** — pattern with padding, dry run by default, conflicts
       refused rather than resolved, every move logged, undo in reverse order. Local sources
       only for now; the two-column preview is the front session's
+- [ ] **4.7** A source cannot be removed or renamed — there is no `DELETE /sources/:id` and no
+      `PATCH /sources/:id`. Surfaced by the authorisation table in `authz.test.ts`, which lists
+      every mutating route: those two were in the list I wrote from memory and not in the
+      router. Deleting one is the question that needs answering first — its tracks carry
+      ratings, play counts and tags, so "delete the source" and "delete its music" are not the
+      same request and the API should not decide which was meant
 - [~] **4.5** Settings / admin — server side done: `GET /stats` (totals in SQL),
       `GET /tracks/missing`, backup/restore. The UI pane is the front session’s
 - [x] **4.6** Backup / restore — the curation, not the library; matched back by path then by

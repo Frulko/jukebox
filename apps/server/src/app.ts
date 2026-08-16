@@ -379,7 +379,16 @@ export function createApp(dbFile: string) {
    * list that goes stale the first week — a new admin endpoint under /users
    * should be admin-only by virtue of where it lives.
    */
-  const ADMIN_PREFIXES = ['/users', '/sources', '/plugins', '/store', '/backup', '/settings', '/schedules']
+  const ADMIN_PREFIXES = [
+    '/users', '/sources', '/plugins', '/store', '/settings', '/schedules',
+    '/backup',
+    // The destructive mirror of /backup, and it was missing: `/restore` is
+    // mounted at its own path rather than under /backup, so the prefix that
+    // covered the read did not cover the write. It rewrites every rating, play
+    // count, playlist and tag in the library at once — for everybody, not for
+    // the account that called it.
+    '/restore',
+  ]
 
   /** Routes a guest may still call, because they are playback rather than change. */
   const GUEST_WRITES = [
