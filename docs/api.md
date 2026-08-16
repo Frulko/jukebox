@@ -5,6 +5,14 @@ description: The /api/v1 specification — target routes, with the existing ones
 
 `/api/v1`.
 
+> **This page is the reasoning, not the inventory.** It explains the rules the
+> API is built on and why they are what they are. The exhaustive list of routes
+> lives in **[the API reference](./api-reference.md)**, which is generated from
+> the router itself and cannot fall behind it — this page once described 42 of
+> the server's 102 routes, and a reader could reasonably have concluded there
+> was no authentication, no player and no plugin store. Prose revised
+> deliberately does not drift; a route table maintained by hand always does.
+
 > **Status.** This document is the **target**, not the current state. Routes
 > marked ✅ exist; the rest are still to be implemented. The spec will be
 > *generated* from the Zod schemas via `@hono/zod-openapi` — until that is done,

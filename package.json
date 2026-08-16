@@ -20,7 +20,8 @@
     "fixtures": "node scripts/fixtures.mjs",
     "verify": "node scripts/verify.mjs",
     "dev:satellite": "npm run dev --workspace @jukebox/satellite",
-    "api-reference": "node --experimental-strip-types --no-warnings scripts/api-reference.mjs"
+    "api-reference": "node --experimental-strip-types --no-warnings scripts/api-reference.mjs",
+    "api-reference-doc": "node scripts/api-reference-doc.mjs"
   },
   "devDependencies": {
     "typescript": "~5.9.2",
