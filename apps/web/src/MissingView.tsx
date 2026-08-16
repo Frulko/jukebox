@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { createColumnHelper } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import type { MissingTrack } from '@jukebox/client-sdk'
 import { api, useMissing, useSources } from './api'
@@ -6,6 +7,34 @@ import { fmtTime } from './data'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
 import { useViewSearch, ViewSearch } from './ViewSearch'
+import { DataTable } from './DataTable'
+import type { features } from './tableFeatures'
+
+const h = createColumnHelper<typeof features, MissingTrack>()
+
+/**
+ * The same table the rest of the app uses, so a hundred missing files sort,
+ * resize and scroll like everything else rather than being a list of divs that
+ * happens to look similar.
+ */
+const columns = [
+  h.accessor('name', { header: 'Name', size: 230 }),
+  h.accessor('artist', {
+    header: 'Artist',
+    size: 200,
+    cell: (c) => (
+      <>
+        {c.getValue()}
+        {c.row.original.album ? <em className="dim"> — {c.row.original.album}</em> : null}
+      </>
+    ),
+  }),
+  h.accessor('duration', { header: 'Time', size: 58, cell: (c) => <span className="num">{fmtTime(c.getValue())}</span> }),
+  h.accessor('deletedAt', { header: 'Last seen', size: 110, cell: (c) => when(c.getValue()) }),
+  // The path is the actionable column — it names the drive to plug back in — so
+  // it gets the room, and the ellipsis falls at the front where the prefix repeats.
+  h.accessor('path', { header: 'Where it was', size: 320, cell: (c) => <span className="c-path">{c.getValue()}</span> }),
+]
 
 const when = (ms: number) =>
   new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -101,28 +130,14 @@ export function MissingView() {
               </button>
             </div>
 
-            <div className="ep-head">
-              <span className="c-name">Name</span>
-              <span className="c-artist">Artist</span>
-              <span className="c-time">Time</span>
-              <span className="c-date">Last seen</span>
-              <span className="c-path">Where it was</span>
-            </div>
-            <div className="ep-body">
-              {list.map((t, i) => (
-                <div key={t.id} className={`ep missing-row ${i % 2 ? 'odd' : ''}`}>
-                  <span className="c-name">{t.name}</span>
-                  <span className="c-artist">
-                    {t.artist}
-                    {t.album ? <em className="dim"> — {t.album}</em> : null}
-                  </span>
-                  <span className="c-time num">{fmtTime(t.duration)}</span>
-                  <span className="c-date">{when(t.deletedAt)}</span>
-                  {/* The path is the actionable part: it says which drive to plug in. */}
-                  <span className="c-path" title={t.path}>{t.path}</span>
-                </div>
-              ))}
-            </div>
+            <DataTable
+              data={list}
+              columns={columns}
+              getRowId={(t) => t.id}
+              memoryKey={`missing:${sourceId}`}
+              rowHeight={22}
+              empty="Nothing matches."
+            />
           </div>
         )
       })}

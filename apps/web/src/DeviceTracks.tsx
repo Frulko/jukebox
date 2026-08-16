@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { createColumnHelper } from '@tanstack/react-table'
 import { api } from './api'
 import { Icon } from './Icon'
-import type { Source } from '@jukebox/client-sdk'
-import { fmtTime } from './data'
+import type { DeviceTrack, Source } from '@jukebox/client-sdk'
+import { fmtSize, fmtTime } from './data'
 import type { Play } from './App'
+import { DataTable } from './DataTable'
+import type { features } from './tableFeatures'
+
+const h = createColumnHelper<typeof features, DeviceTrack>()
 
 /**
  * What is actually on the device.
@@ -47,6 +52,54 @@ export function DeviceTracks({
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+
+  const columns = useMemo(
+    () => [
+      h.display({
+        id: 'pick',
+        header: '',
+        size: 26,
+        enableResizing: false,
+        // Only an orphan the satellite can serve is importable; the rest have
+        // nothing to tick, so they get no box rather than a disabled one.
+        cell: ({ row }) =>
+          row.original.libraryTrackId === null && row.original.sourceUrl ? (
+            <input
+              type="checkbox"
+              checked={selected.has(row.original.deviceLocalId)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onChange={() => toggle(row.original.deviceLocalId)}
+            />
+          ) : null,
+      }),
+      h.accessor('name', {
+        header: 'Name',
+        size: 240,
+        cell: (c) => c.getValue() || c.row.original.deviceLocalId,
+      }),
+      h.accessor('artist', { header: 'Artist', size: 170 }),
+      h.accessor('album', { header: 'Album', size: 170 }),
+      h.accessor('duration', {
+        header: 'Time',
+        size: 58,
+        cell: (c) => <span className="num">{fmtTime(c.getValue())}</span>,
+      }),
+      h.accessor('format', { header: 'Format', size: 62, cell: (c) => c.getValue().toUpperCase() }),
+      h.accessor('size', { header: 'Size', size: 72, cell: (c) => <span className="num">{fmtSize(c.getValue())}</span> }),
+      h.accessor('libraryTrackId', {
+        id: 'state',
+        header: 'In library',
+        size: 110,
+        cell: (c) =>
+          c.getValue() ? (
+            <Icon name="music" size={10} className="dim" />
+          ) : (
+            <em className="tag-orphan">{c.row.original.sourceUrl ? 'importable' : 'not fetchable'}</em>
+          ),
+      }),
+    ],
+    [selected],
+  )
 
   const importable = items.filter((t) => t.libraryTrackId === null && t.sourceUrl)
   const chosen = [...selected].filter((id) => importable.some((t) => t.deviceLocalId === id))
@@ -96,61 +149,33 @@ export function DeviceTracks({
         </div>
       )}
 
-      <div className="ep-head devtracks-head">
-        <span />
-        <span className="c-name">Name</span>
-        <span className="c-artist">Artist</span>
-        <span className="c-time">Time</span>
-        <span className="c-state">In library</span>
-      </div>
-
-      <div className="ep-body">
-        {isPending && <div className="list-empty">Reading the device…</div>}
-        {!isPending && items.length === 0 && (
-          <div className="list-empty">{orphansOnly ? 'Everything on this device is in the library' : 'Nothing on this device'}</div>
-        )}
-        {items.map((t, i) => {
-          const orphan = t.libraryTrackId === null
-          return (
-            <div
-              key={t.deviceLocalId}
-              className={`ep devtracks-row ${i % 2 ? 'odd' : ''} ${orphan ? 'orphan' : ''} ${t.libraryTrackId && t.libraryTrackId === nowPlaying ? 'playing' : ''}`}
-              // The server can only stream what the library holds. A row that
-              // exists solely on the device has no source to play from — the
-              // file is on the iPod, not here — so it says so rather than
-              // failing silently on a double-click.
-              title={orphan ? 'Only on the device — import it to play it' : 'Double-click to play'}
-              onDoubleClick={() => {
-                if (!t.libraryTrackId) return
-                onPlay(
-                  t.libraryTrackId,
-                  items.map((x) => x.libraryTrackId).filter((id): id is string => id !== null),
-                )
-              }}
-            >
-              <span>
-                {orphan && t.sourceUrl && (
-                  <input
-                    type="checkbox"
-                    checked={selected.has(t.deviceLocalId)}
-                    onChange={() => toggle(t.deviceLocalId)}
-                  />
-                )}
-              </span>
-              <span className="c-name">{t.name || t.deviceLocalId}</span>
-              <span className="c-artist">{t.artist}</span>
-              <span className="c-time num">{fmtTime(t.duration)}</span>
-              <span className="c-state">
-                {orphan ? (
-                  <em className="tag-orphan">{t.sourceUrl ? 'importable' : 'not fetchable'}</em>
-                ) : (
-                  <Icon name="music" size={10} className="dim" />
-                )}
-              </span>
-            </div>
+      <DataTable
+        data={items}
+        columns={columns}
+        getRowId={(t) => t.deviceLocalId}
+        memoryKey={`device:${deviceId}`}
+        rowHeight={24}
+        empty={
+          isPending
+            ? 'Reading the device…'
+            : orphansOnly
+              ? 'Everything on this device is in the library'
+              : 'Nothing on this device'
+        }
+        rowClass={(t) =>
+          `${t.libraryTrackId === null ? 'orphan' : ''} ${t.libraryTrackId && t.libraryTrackId === nowPlaying ? 'playing' : ''}`
+        }
+        // The server can only stream what the library holds. A row that exists
+        // solely on the device has nothing to play from — the file is on the
+        // iPod — so the double-click does nothing rather than failing later.
+        onRowDoubleClick={(t) => {
+          if (!t.libraryTrackId) return
+          onPlay(
+            t.libraryTrackId,
+            items.map((x) => x.libraryTrackId).filter((id): id is string => id !== null),
           )
-        })}
-      </div>
+        }}
+      />
     </div>
   )
 }
