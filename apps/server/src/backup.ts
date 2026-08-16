@@ -44,7 +44,10 @@ export type Backup = {
 
 const isDefault = (t: any) =>
   !t.rating && !t.loved && t.enabled === 1 && !t.comments && !t.grouping && !t.bpm &&
-  !t.playCount && !t.skipCount && !t.lastPlayed
+  !t.playCount && !t.skipCount && !t.lastPlayed &&
+  // A tag is the purest case of what this file is for: a human typed it, and
+  // no rescan anywhere will ever produce it again.
+  !(t.tags && t.tags.length)
 
 export function exportBackup(db: DB, opts: { secrets?: boolean } = {}): Backup {
   const secrets = Boolean(opts.secrets)
@@ -59,10 +62,24 @@ export function exportBackup(db: DB, opts: { secrets?: boolean } = {}): Backup {
 
   // Only tracks carrying something a rescan would not recover. On a fresh
   // library this is the empty list, and the backup is a few kilobytes.
+  const tagsOf = new Map<string, string[]>()
+  for (const row of db.prepare(`SELECT trackId, tag FROM track_tags`).all() as any[]) {
+    tagsOf.set(row.trackId, [...(tagsOf.get(row.trackId) ?? []), row.tag])
+  }
+
   const tracks = (db.prepare(
-    `SELECT sourceId, path, artist, albumArtist, album, name, duration, fingerprint,
+    `SELECT id, sourceId, path, artist, albumArtist, album, name, duration, fingerprint,
             ${USER_FIELDS.join(', ')}
-     FROM tracks WHERE deletedAt IS NULL`).all() as any[]).filter((t) => !isDefault(t))
+     FROM tracks WHERE deletedAt IS NULL`).all() as any[])
+    .map((t) => {
+      const tags = tagsOf.get(t.id)
+      // `id` is only used to look the tags up; it must not travel, because a
+      // library rebuilt under a new source has different ids and a restore that
+      // trusted them would match nothing.
+      const { id, ...rest } = t
+      return tags?.length ? { ...rest, tags } : rest
+    })
+    .filter((t) => !isDefault(t))
 
   // Playlist membership travels as (sourceId, path) rather than track ids: ids
   // are a hash of the source and the path, so a library rebuilt under a new
@@ -98,8 +115,18 @@ export function exportBackup(db: DB, opts: { secrets?: boolean } = {}): Backup {
     schedules: db.prepare(`SELECT * FROM schedules`).all() as any[],
     // Only the parts of a device a human set. Battery and capacity come from
     // the hardware, and restoring a stale reading would be a lie.
-    devices: db.prepare(
-      `SELECT id, name, autoSync, syncMode, syncPlaylistIds FROM devices`).all() as any[],
+    devices: (db.prepare(
+      `SELECT id, name, autoSync, syncMode, syncPlaylistIds FROM devices`).all() as any[])
+      .map((d) => ({
+        ...d,
+        // The hand-picked tracks. `device_tracks` is what is *on* the device
+        // and comes back by plugging it in; `device_wanted` is what somebody
+        // chose to put there, which is curation and comes back from nowhere.
+        wanted: db.prepare(
+          `SELECT t.sourceId, t.path, t.artist, t.name, t.duration
+           FROM device_wanted w JOIN tracks t ON t.id = w.trackId
+           WHERE w.deviceId = ? AND t.deletedAt IS NULL`).all(d.id) as any[],
+      })),
   }
 }
 
@@ -148,10 +175,16 @@ export function importBackup(db: DB, backup: Backup): RestoreReport {
   const setUser = db.prepare(
     `UPDATE tracks SET ${USER_FIELDS.map((f) => `${f} = ?`).join(', ')}, rev = ? WHERE id = ?`)
 
+  const addTag = db.prepare(
+    `INSERT OR IGNORE INTO track_tags (trackId, tag, addedAt) VALUES (?, ?, ?)`)
+
   for (const t of backup.tracks ?? []) {
     const id = find(t)
     if (!id) { report.tracks.missing++; continue }
     setUser.run(...([...USER_FIELDS.map((f) => t[f] ?? null), rev, id] as never[]))
+    // Added, never replaced: a restore onto a library that has been tagged
+    // since should not throw away the newer tags to reinstate the older set.
+    for (const tag of t.tags ?? []) addTag.run(id, String(tag), Date.now())
     report.tracks.matched++
   }
 
@@ -220,7 +253,14 @@ export function importBackup(db: DB, backup: Backup): RestoreReport {
     report.schedules.created++
   }
 
+  const want = db.prepare(
+    `INSERT OR IGNORE INTO device_wanted (deviceId, trackId, addedAt) VALUES (?, ?, ?)`)
+
   for (const d of backup.devices ?? []) {
+    for (const entry of d.wanted ?? []) {
+      const id = find(entry)
+      if (id) want.run(d.id, id, Date.now())
+    }
     const r = db.prepare(`UPDATE devices SET name = ?, autoSync = ?, syncMode = ?, syncPlaylistIds = ?, rev = ?
                           WHERE id = ?`)
       .run(d.name, d.autoSync, d.syncMode, d.syncPlaylistIds, rev, d.id)

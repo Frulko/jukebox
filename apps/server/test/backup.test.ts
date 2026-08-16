@@ -205,3 +205,75 @@ test('the totals are computed over the library, not over a page', { skip }, asyn
     assert.ok(stats.tracks > 2, 'this is exactly what the front end cannot work out for itself')
   } finally { await h.cleanup() }
 })
+
+test('tags survive the round trip, and a track carrying only tags is kept', { skip }, async () => {
+  const h = await harness()
+  try {
+    const items = (await h.call('GET', '/tracks?limit=50')).body.items
+    const tagged = items[0]
+    await h.call('POST', '/tracks/tags', { ids: [tagged.id], add: ['workout', 'loud'] })
+
+    const backup = (await h.call('GET', '/backup')).body
+    const row = backup.tracks.find((t: any) => t.path === tagged.path)
+    assert.deepEqual(row?.tags?.slice().sort(), ['loud', 'workout'])
+
+    // No rating, no plays -- by the old rule this row looked like untouched
+    // library and was dropped from the backup entirely. A tag is the purest
+    // case of what a backup is for: a human typed it, and no rescan anywhere
+    // produces it again.
+    assert.equal(row.rating, 0)
+
+    // The internal id must not travel: a library rebuilt under a different
+    // source has different ids, and a restore trusting them matches nothing.
+    assert.equal(row.id, undefined)
+
+    // Wiped, then restored.
+    await h.call('POST', '/tracks/tags', { ids: [tagged.id], remove: ['workout', 'loud'] })
+    assert.deepEqual((await h.call('GET', `/tracks/${tagged.id}`)).body.tags, [])
+
+    await h.call('POST', '/restore', backup)
+    const back = (await h.call('GET', `/tracks/${tagged.id}`)).body
+    assert.deepEqual(back.tags.slice().sort(), ['loud', 'workout'])
+  } finally { await h.cleanup() }
+})
+
+test('restoring tags adds to what is there rather than replacing it', { skip }, async () => {
+  const h = await harness()
+  try {
+    const t = (await h.call('GET', '/tracks?limit=5')).body.items[0]
+    await h.call('POST', '/tracks/tags', { ids: [t.id], add: ['workout'] })
+    const backup = (await h.call('GET', '/backup')).body
+
+    // Tagged differently since the backup was taken: `workout` removed,
+    // `summer` added. A restore that did nothing at all would leave only
+    // `summer`, so this cannot pass vacuously.
+    await h.call('POST', '/tracks/tags', { ids: [t.id], add: ['summer'], remove: ['workout'] })
+    await h.call('POST', '/restore', backup)
+
+    // Reinstating the older set by wiping the newer one would be a restore
+    // that destroys work, which is the opposite of the point.
+    assert.deepEqual((await h.call('GET', `/tracks/${t.id}`)).body.tags.slice().sort(),
+      ['summer', 'workout'])
+  } finally { await h.cleanup() }
+})
+
+test('the tracks hand-picked for a device come back', { skip }, async () => {
+  const h = await harness()
+  try {
+    const items = (await h.call('GET', '/tracks?limit=5')).body.items
+    await h.call('POST', '/devices', { id: 'ipod', name: 'iPod', kind: 'ipod-classic' })
+    await h.call('POST', '/devices/ipod/wanted', { trackIds: [items[0].id, items[1].id] })
+
+    const backup = (await h.call('GET', '/backup')).body
+    assert.equal(backup.devices.find((d: any) => d.id === 'ipod')?.wanted?.length, 2)
+
+    h.db.prepare(`DELETE FROM device_wanted WHERE deviceId = 'ipod'`).run()
+    await h.call('POST', '/restore', backup)
+
+    // What is *on* a device comes back by plugging it in. What somebody chose
+    // to put there comes back from nowhere, so it is curation and belongs in a
+    // backup.
+    const wanted = h.db.prepare(`SELECT trackId FROM device_wanted WHERE deviceId = 'ipod'`).all() as any[]
+    assert.equal(wanted.length, 2)
+  } finally { await h.cleanup() }
+})
