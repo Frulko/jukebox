@@ -347,7 +347,13 @@ export function createClient(opts: ClientOptions = {}) {
 
     sources: {
       list: () => request<{ items: Source[] }>('/sources', {}, true),
-      create: (s: { id?: string; name: string; root: string; kind?: string; writable?: boolean }) =>
+      // `config` is what a source needs beyond its root — an rclone daemon URL,
+      // a Jellyfin API key. The route has always taken it; leaving it out of the
+      // client meant no remote source could be created except by hand.
+      create: (s: {
+        id?: string; name: string; root: string; kind?: string
+        writable?: boolean; config?: Record<string, unknown>
+      }) =>
         request<Source>('/sources', { method: 'POST', body: JSON.stringify(s) }),
       /** `full` re-reads every file instead of trusting mtime and size. */
       scan: (id: string, full = false) =>

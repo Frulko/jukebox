@@ -4,20 +4,12 @@ import type { Source } from '@jukebox/client-sdk'
 import { api, useSources, useTrackCount } from './api'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
+import { AddSource, kindIcon, kindLabel } from './AddSource'
 import { getLocale } from './i18n'
 
 /** The mount the sources route adds for a local source; api-types does not name it yet. */
 type Mounted = Source & {
   mount?: { device: string; type: string; network: boolean; readOnly: boolean; point: string } | null
-}
-
-/** What each kind is, in one line, and what it needs beyond a name and a root. */
-const KINDS: Record<string, { label: string; needs: string }> = {
-  local: { label: 'Folder on this machine', needs: 'A path the server can read.' },
-  rclone: { label: 'rclone remote', needs: 'A daemon URL and a remote name, in the source’s config.' },
-  plex: { label: 'Plex library', needs: 'A server URL and a token, in the source’s config.' },
-  emby: { label: 'Emby library', needs: 'A server URL and an API key, in the source’s config.' },
-  jellyfin: { label: 'Jellyfin library', needs: 'A server URL and an API key, in the source’s config.' },
 }
 
 const when = (ms: number | null) =>
@@ -36,7 +28,6 @@ const when = (ms: number | null) =>
 function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolean) => void }) {
   const [probe, setProbe] = useState<'asking' | { ok: boolean; text: string } | null>(null)
   const tracks = useTrackCount({ sourceId: source.id, limit: 1 })
-  const kind = KINDS[source.kind] ?? { label: source.kind, needs: '' }
 
   const test = async () => {
     setProbe('asking')
@@ -55,9 +46,9 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
   return (
     <div className="source-card">
       <div className="sc-head">
-        <Icon name={source.kind === 'local' ? 'music' : 'cloud'} size={14} />
+        <Icon name={kindIcon(source.kind)} size={14} />
         <b>{source.name}</b>
-        <em className="dim">{kind.label}</em>
+        <em className="dim">{kindLabel(source.kind)}</em>
         <span className="spacer" />
         {/* Write capability is denied by default and is the difference between
             a library the server reads and one it may rewrite, so it is stated
@@ -137,8 +128,6 @@ export function SourcesView({ onNotice }: { onNotice: (message: string) => void 
   const pane = useScrollMemory<HTMLDivElement>('sources')
   const sources = (useSources().data?.items ?? []) as Mounted[]
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ name: '', root: '' })
-  const [error, setError] = useState<string | null>(null)
 
   const jobs = useQuery({ queryKey: ['jobs'], queryFn: () => api.jobs.list({ limit: 20 }), enabled: false })
 
@@ -154,59 +143,22 @@ export function SourcesView({ onNotice }: { onNotice: (message: string) => void 
     void jobs
   }
 
-  const add = async () => {
-    if (!form.name.trim() || !form.root.trim()) return
-    setError(null)
-    try {
-      await api.sources.create({ name: form.name.trim(), root: form.root.trim(), kind: 'local' })
-      qc.invalidateQueries({ queryKey: ['sources'] })
-      setForm({ name: '', root: '' })
-      setAdding(false)
-      onNotice(`Added ${form.name.trim()} — scan it to bring its music in`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'the server refused it')
-    }
-  }
-
   return (
     <div className="media sources" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="view-head">
         <h2>Sources</h2>
         <span className="spacer" />
-        <button className="prim" onClick={() => setAdding((v) => !v)}>
-          {adding ? 'Cancel' : 'Add a folder'}
+        <button className="prim" onClick={() => setAdding(true)}>
+          Add a source
         </button>
       </div>
 
       {adding && (
-        <form
-          className="source-add"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void add()
-          }}
-        >
-          <input
-            placeholder="Name — “Vinyl rips”"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-          <input
-            placeholder="/path/the/server/can/read"
-            value={form.root}
-            onChange={(e) => setForm((f) => ({ ...f, root: e.target.value }))}
-          />
-          <button type="submit" disabled={!form.name.trim() || !form.root.trim()}>Add</button>
-          {error && <span className="sc-probe bad">{error}</span>}
-          {/* A path on *the server's* machine, which is not this one when the
-              server is a Pi in a cupboard — the single most common way to add a
-              source that scans nothing. */}
-          <p className="dim">
-            The path is read on the machine running the server, not on this one. Nothing is written
-            there: a source is read-only until it is made writable, and only a writable source can
-            receive an import or a tag written back to a file.
-          </p>
-        </form>
+        <AddSource
+          onClose={() => setAdding(false)}
+          onNotice={onNotice}
+          onAdded={() => qc.invalidateQueries({ queryKey: ['sources'] })}
+        />
       )}
 
       {sources.length === 0 && !adding && (
@@ -222,8 +174,8 @@ export function SourcesView({ onNotice }: { onNotice: (message: string) => void 
         is deliberate rather than missing: the tracks of a source carry ratings, play counts, tags and
         places in playlists, so “forget where this came from” and “delete this music” are two different
         requests and the server should not quietly pick one. Remote kinds — rclone, Plex, Emby,
-        Jellyfin — can be created through the API with their own config; this page adds folders, which
-        is what a first library is.
+        Jellyfin — are added here with the settings each of them needs, and are read-only: everything
+        write capability gates acts on files on a disk.
       </p>
     </div>
   )

@@ -2250,6 +2250,37 @@ input[type="range"]::-webkit-slider-thumb {
 .seg button:last-child { border-radius: 0 var(--radius) var(--radius) 0; margin-left: -1px; }
 .seg button.on { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }
 
+/* Adding a source: the kind is chosen first, because it decides what the rest
+   of the dialog asks for. */
+.add-source { width: 560px; max-width: 94vw; }
+.add-source .modal-body { max-height: 62vh; overflow-y: auto; }
+.as-kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; margin-bottom: 14px; }
+.as-kind {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 1px 8px;
+  padding: 7px 9px;
+  text-align: left;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.as-kind .icon { grid-row: span 2; color: var(--dim); }
+.as-kind b { font-size: 11px; }
+.as-kind em { font-style: normal; font-size: 10px; color: var(--dim); line-height: 1.35; }
+.as-kind.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.as-kind.on .icon { color: var(--accent); }
+.as-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.as-row > span:first-child { flex: none; width: 84px; text-align: right; color: var(--dim); }
+.as-row input { flex: 1; min-width: 0; font: inherit; padding: 3px 6px; }
+.as-input { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.as-input em { font-style: normal; font-size: 10px; }
+.as-check { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; line-height: 1.5; }
+.as-check input { margin-top: 2px; }
+.as-note { margin: 12px 0 0; line-height: 1.5; }
+
 /* Adding a podcast: two ways, so a dialog rather than a field with a button. */
 .add-podcast { width: 520px; max-width: 92vw; }
 .add-podcast .modal-body { max-height: 46vh; overflow-y: auto; }

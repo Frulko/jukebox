@@ -52,6 +52,15 @@ const PATHS: Record<string, string> = {
   artists: 'M8 1.8a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6zM2.6 14.2c0-3 2.4-5.4 5.4-5.4s5.4 2.4 5.4 5.4z',
   // A list with the playing item marked: what is coming, in order.
   queue: 'M1.6 3h9.2v1.7H1.6zm0 4.2h9.2v1.7H1.6zm0 4.2h6v1.7h-6zM13.4 9.2 9.6 11.8V6.6z',
+  // One mark per kind of source. Not brand logos — a chevron, a badge and a
+  // pair of drops that sit at the same weight as the rest of the set: what they
+  // have to do is tell five rows apart at 18px, which colour and a wordmark
+  // would do worse.
+  folder: 'M1.2 2.6h4.4l1.4 1.7h7.8a.8.8 0 0 1 .8.8v8.1a.8.8 0 0 1-.8.8H1.2a.8.8 0 0 1-.8-.8V3.4a.8.8 0 0 1 .8-.8z',
+  rclone: 'M4.8 10.6A3.4 3.4 0 0 1 4.5 3.7a4.3 4.3 0 0 1 8 1.3 2.9 2.9 0 0 1-.6 5.6zM6.3 12h3.4L8 14.8z',
+  plex: 'M3.6 1.6h4L12.4 8l-4.8 6.4h-4L8.4 8z',
+  emby: 'M8 1.2 14.4 4.8v6.4L8 14.8 1.6 11.2V4.8zm-1.4 4v5.6L11 8z',
+  jellyfin: 'M8 1.8c2.4 1.6 3.9 4.2 3.9 6.6 0 2-1.7 3.4-3.9 3.4S4.1 10.4 4.1 8.4c0-2.4 1.5-5 3.9-6.6zm0 3.4c-1 1-1.6 2.2-1.6 3.2 0 .8.7 1.4 1.6 1.4s1.6-.6 1.6-1.4c0-1-.6-2.2-1.6-3.2z',
   // A file the scanner could not find: a warning, not an error — nothing was lost.
   alert: 'M8 1.6 15 14H1zm-.9 4.4h1.8v4.4H7.1zm0 5.4h1.8v1.8H7.1z',
 }

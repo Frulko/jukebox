@@ -785,16 +785,23 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     const src = SOURCES.find((x) => x.id === srcTest[1])
     // Answers 200 either way, like the server: "the share is down" is an answer
     // about the source, not a failure of the request.
-    return src
+    if (!src) return { ok: false, reason: 'unknown source' }
+    // A remote kind answers with a server name and a version, as a real Plex or
+    // Jellyfin does; a folder answers with its path.
+    return src.kind === 'local'
       ? { ok: true, kind: src.kind, name: src.root, version: null }
-      : { ok: false, reason: 'unknown source' }
+      : { ok: true, kind: src.kind, name: `${src.kind} at ${src.root}`, version: '10.9.0' }
   }
   if (path === '/sources' && method === 'POST') {
-    const b = JSON.parse(body ?? '{}') as { name?: string; root?: string }
+    // The kind and the write capability come from the body, as the real route
+    // takes them: a demo that filed every source under "local" could not show
+    // the one thing the dialog is for.
+    const b = JSON.parse(body ?? '{}') as
+      { name?: string; root?: string; kind?: Source['kind']; writable?: boolean }
     if (!b.name || !b.root) throw new DemoError(400, 'bad_body', 'expected { name, root }')
     const added: Source = {
-      id: `src-${SOURCES.length + 1}`, kind: 'local', name: b.name, root: b.root,
-      writable: 0, lastScanAt: null, rev: 1,
+      id: `src-${SOURCES.length + 1}`, kind: b.kind ?? 'local', name: b.name, root: b.root,
+      writable: b.writable ? 1 : 0, lastScanAt: null, rev: 1,
     }
     SOURCES.push(added)
     return added
