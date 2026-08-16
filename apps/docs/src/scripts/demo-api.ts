@@ -9,7 +9,9 @@
 // ponytail: one page per query, no cursor. The demo library is ~250 tracks; the
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
-import type { Device, DeviceTrack, Job, MissingTrack, Playlist, Source, Stats, Track, TrackQuery } from '@jukebox/api-types'
+import type {
+  Device, DeviceTrack, Job, MissingTrack, Playlist, Source, Stats, SyncPlan, Track, TrackQuery,
+} from '@jukebox/api-types'
 
 const all = makeLibrary()
 
@@ -197,6 +199,38 @@ for (const t of onDevice) {
   if (track) track.devices = [DEVICE.id]
 }
 
+/**
+ * What a sync would do, computed once from the fixture.
+ *
+ * The device holds forty tracks and the playlist it syncs holds twenty-five, so
+ * a real plan has both halves: what has to go on, and what no longer belongs
+ * there. A demo that only ever added would hide the half people are nervous
+ * about.
+ */
+const PLAN: SyncPlan = (() => {
+  const present = new Set(onDevice.map((t) => t.libraryTrackId))
+  const add = tracks.filter((t) => !present.has(t.id)).slice(0, 14).map((t) => ({
+    trackId: t.id,
+    name: t.name,
+    artist: t.artist,
+    size: t.size,
+    // The iPod takes mp3, aac, alac and wav; anything else is converted on the
+    // way, and saying so beforehand is the point of a plan.
+    transcode: ['mp3', 'aac', 'alac', 'wav'].includes(t.format) ? null : 'aac',
+  }))
+  const remove = onDevice.slice(30, 33).map((t) => ({
+    deviceLocalId: t.deviceLocalId, name: t.name, size: t.size,
+  }))
+  const bytesAdded = add.reduce((a, t) => a + t.size, 0)
+  const bytesFreed = remove.reduce((a, t) => a + t.size, 0)
+  const used = Object.values(DEVICE.used).reduce((a, b) => a + b, 0)
+  return {
+    add, remove, keep: onDevice.length - remove.length, bytesAdded, bytesFreed,
+    free: DEVICE.capacity - used,
+    shortBy: null,
+  }
+})()
+
 const SOURCES: Source[] = [
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
     lastScanAt: Date.UTC(2026, 7, 16), rev: 1 },
@@ -219,6 +253,41 @@ function scanning(): Job {
     createdAt: openedAt,
     startedAt: openedAt,
     finishedAt: null,
+  }
+}
+
+/**
+ * A sync in flight, when one has been started.
+ *
+ * The scan above is scenery — it runs for ever so the display has something to
+ * cycle to. This one is the opposite: it exists only because somebody pressed
+ * the button, it takes about as long as a real transfer looks like it should,
+ * and it ends. Without it the demo would show a task list that never changes
+ * whatever you do to it, which is the sort of thing that reads as broken.
+ */
+let syncStartedAt: number | null = null
+
+function syncing(): Job | null {
+  if (syncStartedAt === null) return null
+  const total = PLAN.add.length + PLAN.remove.length
+  const elapsed = (Date.now() - syncStartedAt) / 1000
+  const done = Math.min(total, Math.floor(elapsed * 1.4))
+  const finished = done >= total
+  // Kept for a few seconds after the last track so the panel can say it
+  // finished; a job that vanishes at 100 % looks like one that was cancelled.
+  if (finished && elapsed > total / 1.4 + 4) {
+    syncStartedAt = null
+    return null
+  }
+  return {
+    id: 'job-sync',
+    kind: 'sync',
+    state: finished ? 'done' : 'running',
+    progress: { done, total, bytes: PLAN.bytesAdded * (total ? done / total : 0) },
+    error: null,
+    createdAt: syncStartedAt,
+    startedAt: syncStartedAt,
+    finishedAt: finished ? syncStartedAt + (total / 1.4) * 1000 : null,
   }
 }
 
@@ -527,7 +596,14 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   // would have started and the scan job already on display keeps running.
   if (path.startsWith('/sources/') && path.endsWith('/scan') && method === 'POST') return scanning()
   if (path === '/devices') return { items: [DEVICE] }
-  if (path === '/jobs') return { items: [scanning()] }
+  if (path === '/jobs') return { items: [syncing(), scanning()].filter(Boolean) }
+  if (path === `/devices/${DEVICE.id}/sync` && method === 'POST') {
+    const b = JSON.parse(body ?? '{}') as { dryRun?: boolean }
+    // Asking is free and acting is not: the plan is what the first click gets.
+    if (b.dryRun) return PLAN
+    syncStartedAt = Date.now()
+    return syncing()
+  }
   if (path === `/devices/${DEVICE.id}/tracks`) {
     const items = params.get('orphansOnly') === 'true' ? onDevice.filter((t) => !t.libraryTrackId) : onDevice
     return { items, next: null }

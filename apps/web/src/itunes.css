@@ -1994,3 +1994,18 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .td.tags { color: var(--dim); }
 .tr.sel .td.tags { color: var(--sel-text); }
+
+/* A sync that was refused, or one that failed halfway. Stays until dismissed:
+   the job list moves on, and a failure nobody read is a failure repeated. */
+.dev-failed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--danger, #d4342c) 12%, transparent);
+  color: var(--danger, #d4342c);
+}
+.dev-failed span { flex: 1; min-width: 0; }
+.dev-failed button { flex: none; }

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { SyncPlan } from '@jukebox/client-sdk'
 import { CAPACITY_SEGMENTS, DEVICE_ICON, type Device } from './devices'
-import { api, useSources } from './api'
+import { api, useJobs, useSources } from './api'
 import { DeviceTracks } from './DeviceTracks'
 import { Icon } from './Icon'
 import type { Playlist } from './data'
@@ -21,6 +21,10 @@ const when = (ms: number | null) =>
     ? new Date(ms).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'Never'
 
+/** Percent done, and 0 rather than NaN for a job that has not counted yet. */
+const pct = (j: { progress: { done: number; total: number } }) =>
+  j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0
+
 export function DeviceView({
   device,
   playlists,
@@ -36,7 +40,23 @@ export function DeviceView({
   nowPlaying: string | null
   onPlay: Play
 }) {
-  const [job, setJob] = useState<{ kind: 'sync' | 'backup'; progress: number } | null>(null)
+  /**
+   * The job this view started, watched through the job list rather than
+   * guessed at.
+   *
+   * It used to be a local flag cleared as soon as the POST answered — and the
+   * POST answers `202` immediately, because the transfer is the satellite's
+   * work and takes hours. So the bar filled to nothing and vanished, and a
+   * sync that *failed* — no satellite, or a plan that does not fit — did so in
+   * silence. Now the id comes back from the server and the progress comes from
+   * the same stream the display cycles through, which is the only way the two
+   * can agree.
+   */
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  const jobs = useJobs().data?.items ?? []
+  const job = jobs.find((j) => j.id === jobId) ?? null
+  const busy = job ? job.state === 'running' || job.state === 'queued' : false
   const [tab, setTab] = useState<'settings' | 'contents'>('settings')
   const [plan, setPlan] = useState<SyncPlan | 'loading' | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -58,13 +78,19 @@ export function DeviceView({
    * change when it lands.
    */
   const start = (kind: 'sync' | 'backup') => {
-    if (job) return
-    setJob({ kind, progress: 0 })
+    if (busy) return
+    setFailure(null)
     const call = kind === 'sync' ? api.devices.sync(device.id) : api.devices.backup(device.id)
     call
-      .then(() => { setPlan(null); onDevices() })
-      .catch(() => {})
-      .finally(() => setJob(null))
+      .then((started) => {
+        setJobId(started.id)
+        setPlan(null)
+        onDevices()
+      })
+      // Refused before it started — the usual reason is that no satellite is
+      // serving this device, and a button that quietly does nothing is worse
+      // than one that says why.
+      .catch((err) => setFailure(err instanceof Error ? err.message : 'the server refused'))
   }
 
   /**
@@ -237,13 +263,34 @@ export function DeviceView({
             )}
           </div>
         )}
-        {job && (
+        {/* A failed job has its own line below; leaving this one up would have
+            the panel saying "Syncing…" underneath the reason it is not. */}
+        {job && job.state !== 'failed' && (
           <div className="dev-progress">
-            <span>{job.kind === 'sync' ? 'Syncing…' : 'Backing up…'}</span>
+            <span>
+              {job.state === 'done'
+                ? job.kind === 'sync' ? 'Synced' : 'Backed up'
+                : job.kind === 'sync' ? 'Syncing…' : 'Backing up…'}
+            </span>
             <div className="bar">
-              <div style={{ width: `${Math.round(job.progress * 100)}%` }} />
+              {/* A job with no total yet is starting, not empty: it would show
+                  a full bar on a division by zero, which is the wrong lie. */}
+              <div style={{ width: `${pct(job)}%` }} />
             </div>
-            <span className="num">{Math.round(job.progress * 100)}%</span>
+            <span className="num">
+              {job.progress.total
+                ? `${job.progress.done} of ${job.progress.total}`
+                : 'starting…'}
+            </span>
+          </div>
+        )}
+        {/* Its own line, and it stays: a failure that disappears with the next
+            job list is a failure nobody read. */}
+        {(failure || job?.error) && (
+          <div className="dev-failed">
+            <Icon name="alert" size={11} />
+            <span>{failure ?? job?.error}</span>
+            <button onClick={() => (setFailure(null), setJobId(null))}>Dismiss</button>
           </div>
         )}
       </div>
@@ -274,10 +321,10 @@ export function DeviceView({
           </div>
         </div>
         <div className="dev-actions">
-          <button onClick={() => api.devices.eject(device.id).then(() => (onDevices(), onEject()))} disabled={!!job}>
+          <button onClick={() => api.devices.eject(device.id).then(() => (onDevices(), onEject()))} disabled={busy}>
             <Icon name="eject" size={11} /> Eject
           </button>
-          <button onClick={() => start('backup')} disabled={!!job}>
+          <button onClick={() => start('backup')} disabled={busy}>
             <Icon name="backup" size={11} /> Back Up
           </button>
           {plan && plan !== 'loading' ? (
@@ -286,13 +333,13 @@ export function DeviceView({
               <button
                 className="default"
                 onClick={() => start('sync')}
-                disabled={!!job || !!plan.shortBy || plan.add.length + plan.remove.length === 0}
+                disabled={busy || !!plan.shortBy || plan.add.length + plan.remove.length === 0}
               >
                 <Icon name="sync" size={11} /> Start Sync
               </button>
             </>
           ) : (
-            <button className="default" onClick={review} disabled={!!job || plan === 'loading'}>
+            <button className="default" onClick={review} disabled={busy || plan === 'loading'}>
               <Icon name="sync" size={11} /> Sync…
             </button>
           )}
