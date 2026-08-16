@@ -5,7 +5,7 @@ import {
   addTracks, createPlaylist, deletePlaylist, listPlaylists, removeTracks,
   renamePlaylist, reorder, seedPresets, smartQuery,
 } from '../src/playlists.ts'
-import { playlistTracks, smartTracks } from '../src/library.ts'
+import { membershipsOf, playlistTracks, smartTracks } from '../src/library.ts'
 
 function fixture() {
   const db = open(':memory:')
@@ -121,4 +121,62 @@ test('the iTunes presets are seeded only once', () => {
   assert.ok(n >= 5)
   seedPresets(db)
   assert.equal(listPlaylists(db).length, n, 'a restart does not duplicate the presets')
+})
+
+test('a smart playlist can ask about tags, which are not a column', () => {
+  const db = open(':memory:')
+  db.exec(`INSERT INTO sources (id, kind, name, root, rev) VALUES ('s','local','S','/m',1)`)
+  const ins = db.prepare(
+    `INSERT INTO tracks (id, sourceId, path, kind, name, artist, albumArtist, album, rating, dateAdded, rev)
+     VALUES (?, 's', ?, 'music', ?, 'A', 'A', 'Album', ?, 1700000000000, 1)`)
+  ins.run('t1', '/m/1.mp3', 'Warm Up', 5)
+  ins.run('t2', '/m/2.mp3', 'Cool Down', 3)
+  ins.run('t3', '/m/3.mp3', 'Untagged', 5)
+
+  const tag = db.prepare(`INSERT INTO track_tags (trackId, tag, addedAt) VALUES (?, ?, 1700000000000)`)
+  tag.run('t1', 'workout')
+  tag.run('t1', 'loud')
+  tag.run('t2', 'workout')
+
+  const ids = (rules: any) => smartTracks(db, smartQuery(rules)).items.map((t: any) => t.id).sort()
+
+  assert.deepEqual(ids({ all: [{ field: 'tag', op: 'is', value: 'workout' }] }), ['t1', 't2'])
+
+  // The thing someone will actually type first.
+  assert.deepEqual(
+    ids({ all: [{ field: 'tag', op: 'is', value: 'workout' }, { field: 'rating', op: 'gte', value: 4 }] }),
+    ['t1'])
+
+  // `isNot` has to be NOT EXISTS, not `<> ?`. As a comparison, t1 would match
+  // "not tagged loud" through its *other* tag, which is the opposite answer.
+  assert.deepEqual(ids({ all: [{ field: 'tag', op: 'isNot', value: 'loud' }] }), ['t2', 't3'])
+
+  assert.deepEqual(ids({ all: [{ field: 'tag', op: 'isNotSet' }] }), ['t3'])
+  assert.deepEqual(ids({ all: [{ field: 'tag', op: 'isSet' }] }), ['t1', 't2'])
+  assert.deepEqual(ids({ all: [{ field: 'tag', op: 'contains', value: 'work' }] }), ['t1', 't2'])
+
+  // Case and padding are normalised the same way the tagging route does it, or
+  // a rule typed "Workout" would silently match nothing.
+  assert.deepEqual(ids({ all: [{ field: 'tag', op: 'is', value: '  WORKOUT ' }] }), ['t1', 't2'])
+
+  // And `any` still ORs, with a tag rule inside it.
+  assert.deepEqual(
+    ids({ any: [{ field: 'tag', op: 'is', value: 'loud' }, { field: 'rating', op: 'lte', value: 3 }] }),
+    ['t1', 't2'])
+})
+
+test('asking a smart playlist whether it holds a track works for tag rules too', () => {
+  const db = open(':memory:')
+  db.exec(`INSERT INTO sources (id, kind, name, root, rev) VALUES ('s','local','S','/m',1)`)
+  db.prepare(
+    `INSERT INTO tracks (id, sourceId, path, kind, name, artist, albumArtist, album, dateAdded, rev)
+     VALUES (?, 's', ?, 'music', ?, 'A', 'A', 'Album', 1700000000000, 1)`).run('t1', '/m/1.mp3', 'Warm Up')
+  db.prepare(`INSERT INTO track_tags (trackId, tag, addedAt) VALUES ('t1','workout',1)`).run()
+
+  createPlaylist(db, { name: 'Workout', smart: 'tagged', rules: { all: [{ field: 'tag', op: 'is', value: 'workout' }] } })
+
+  // membershipsOf embeds the same SQL in a different query -- over `tracks`
+  // rather than `tracks t` -- which is why the correlation is a bare `id`.
+  const m = membershipsOf(db, 't1', smartQuery)!
+  assert.deepEqual(m.playlists.map((p) => p.name), ['Workout'])
 })

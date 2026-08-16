@@ -364,8 +364,10 @@ export const SCHEMAS: Record<string, any> = {
           "lastPlayed",
           "kind",
           "duration",
-          "bpm"
-        ]
+          "bpm",
+          "tag"
+        ],
+        "description": "`tag` is the only one that is not a column: tags live one row per pair, so a tag rule is an EXISTS. `isNot` on it means \"not tagged this\", never \"tagged something else\" — a track with two tags is not the second answer."
       },
       "op": {
         "type": "string",

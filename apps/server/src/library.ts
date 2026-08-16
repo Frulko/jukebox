@@ -547,7 +547,7 @@ export function playlistTracks(db: DB, playlistId: string, opts: { cursor?: stri
 /** A smart playlist's contents: its query, evaluated in SQL. */
 export function smartTracks(db: DB, q: { where: string; params: unknown[]; order: string; limit: number }) {
   const rows = db
-    .prepare(`SELECT ${COLUMNS} FROM tracks t WHERE ${q.where.replace(/\b(deletedAt|rating|playCount|year|genre|albumArtist|album|dateAdded|lastPlayed|kind|duration|bpm)\b/g, 't.$1')}
+    .prepare(`SELECT ${COLUMNS} FROM tracks t WHERE ${q.where.replace(/\b(deletedAt|rating|playCount|year|genre|albumArtist|album|dateAdded|lastPlayed|kind|duration|bpm|id)\b/g, 't.$1')}
               ORDER BY ${q.order.replace(/\b(playCount|dateAdded|lastPlayed|rating|albumArtist|album|discNumber|trackNumber|id)\b/g, 't.$1')}
               LIMIT ?`)
     .all(...([...q.params, q.limit] as never[])) as any[]

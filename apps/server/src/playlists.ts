@@ -12,7 +12,7 @@ import { nextRev } from './db.ts'
 
 export type Rule = {
   field: 'rating' | 'playCount' | 'year' | 'genre' | 'artist' | 'albumArtist' | 'album'
-       | 'dateAdded' | 'lastPlayed' | 'kind' | 'duration' | 'bpm'
+       | 'dateAdded' | 'lastPlayed' | 'kind' | 'duration' | 'bpm' | 'tag'
   op: 'is' | 'isNot' | 'contains' | 'gte' | 'lte' | 'inLastDays' | 'isSet' | 'isNotSet'
   value?: string | number
 }
@@ -26,14 +26,47 @@ export type SmartRules = {
 
 const FIELDS = new Set<Rule['field']>([
   'rating', 'playCount', 'year', 'genre', 'artist', 'albumArtist', 'album',
-  'dateAdded', 'lastPlayed', 'kind', 'duration', 'bpm',
+  'dateAdded', 'lastPlayed', 'kind', 'duration', 'bpm', 'tag',
 ])
+
+/**
+ * A rule about tags, which is the one field that is not a column.
+ *
+ * Tags live one row per pair, so every operator here is an `EXISTS` rather than
+ * a comparison — and `isNot` is `NOT EXISTS` rather than `<> ?`, which is the
+ * distinction that matters: a track with the tags `live` and `acoustic` is not
+ * "tagged something other than live", it simply is not tagged live. Written as
+ * a negated comparison it would match itself through its other tag.
+ *
+ * The correlation is on a bare `id` on purpose. This SQL is embedded in two
+ * different queries — one over `tracks`, one over `tracks t` — and the bare
+ * name resolves correctly in both, where naming either would break the other.
+ */
+function tagRule(r: Rule): { sql: string; params: unknown[] } | null {
+  const exists = (inner: string, params: unknown[]) =>
+    ({ sql: `EXISTS (SELECT 1 FROM track_tags tt WHERE tt.trackId = id AND ${inner})`, params })
+
+  switch (r.op) {
+    case 'is': return exists(`tt.tag = ?`, [String(r.value).trim().toLowerCase()])
+    case 'contains': return exists(`tt.tag LIKE ?`, [`%${String(r.value).trim().toLowerCase()}%`])
+    case 'isNot': {
+      const e = exists(`tt.tag = ?`, [String(r.value).trim().toLowerCase()])
+      return { sql: `NOT ${e.sql}`, params: e.params }
+    }
+    // "Tagged at all" and "never tagged", which is how anyone finds the ones
+    // they have not got round to yet.
+    case 'isSet': return exists(`1`, [])
+    case 'isNotSet': return { sql: `NOT ${exists(`1`, []).sql}`, params: [] }
+    default: return null
+  }
+}
 
 /** Translates a rule into SQL. Returns `null` if it is not recognised. */
 function ruleToSql(r: Rule): { sql: string; params: unknown[] } | null {
   // The field is checked against a closed list: it enters the SQL by
   // concatenation, so this is the only place an injection could happen.
   if (!FIELDS.has(r.field)) return null
+  if (r.field === 'tag') return tagRule(r)
   const col = r.field === 'artist' ? 'albumArtist' : r.field
 
   switch (r.op) {

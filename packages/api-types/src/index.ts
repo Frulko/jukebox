@@ -113,8 +113,13 @@ export type TrackPatch = Partial<
 >
 
 export type SmartRule = {
+  /**
+   * `tag` is the only one that is not a column: tags live one row per pair, so
+   * a tag rule is an EXISTS. `isNot` on it means "not tagged this", never
+   * "tagged something else" — a track with two tags is not the second answer.
+   */
   field: 'rating' | 'playCount' | 'year' | 'genre' | 'artist' | 'albumArtist' | 'album'
-       | 'dateAdded' | 'lastPlayed' | 'kind' | 'duration' | 'bpm'
+       | 'dateAdded' | 'lastPlayed' | 'kind' | 'duration' | 'bpm' | 'tag'
   op: 'is' | 'isNot' | 'contains' | 'gte' | 'lte' | 'inLastDays' | 'isSet' | 'isNotSet'
   value?: string | number
 }
