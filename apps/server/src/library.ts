@@ -113,11 +113,18 @@ export function pickRendition(
   db: DB,
   trackId: string,
   opts: { rendition?: string; format?: string; accept?: string } = {},
-): (Rendition & { root: string; kind: string; config: string }) | null {
+): (Rendition & { root: string; kind: string; config: string; externalId: string | null }) | null {
+  // `externalId` comes from the track rather than the rendition: it is the
+  // upstream server's id for the song, and it is what a Jellyfin or Plex stream
+  // URL is keyed on. Without it here the stream falls back to the file path,
+  // which those servers do not answer to -- a 404 that only shows up against a
+  // real server.
   const rows = db.prepare(
     `SELECT r.id, r.format, r.bitRate, r.sampleRate, r.channels, r.size, r.lossless,
-            r.preferred, r.path, r.sourceId, s.root, s.kind, s.config
-     FROM renditions r JOIN sources s ON s.id = r.sourceId
+            r.preferred, r.path, r.sourceId, s.root, s.kind, s.config, t.externalId
+     FROM renditions r
+     JOIN sources s ON s.id = r.sourceId
+     JOIN tracks t ON t.id = r.trackId
      WHERE r.trackId = ? ORDER BY r.preferred DESC`).all(trackId) as any[]
   if (!rows.length) return null
 

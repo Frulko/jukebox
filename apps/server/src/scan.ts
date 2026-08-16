@@ -8,6 +8,7 @@ import type { JobContext } from './jobs.ts'
 import { shortFormat } from './tags.ts'
 import { configOf, open as rcOpen, walk as rcWalk } from './rclone.ts'
 import { configOf as jfConfig, items as jfItems } from './jellyfin.ts'
+import { configOf as plexConfig, items as plexItems } from './plex.ts'
 
 const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.flac', '.alac', '.ogg', '.opus', '.wav', '.aiff', '.aif', '.wma', '.m4b'])
 
@@ -80,6 +81,26 @@ async function* entries(source: any): AsyncGenerator<Entry> {
         // Jellyfin does not expose a file mtime, so the scan cannot skip on it.
         // Zero means "always re-read", which costs nothing here because
         // re-reading is one field copy rather than a download.
+        mtime: 0,
+        externalId: item.itemId,
+        meta: {
+          title: item.name, artist: item.artist, albumartist: item.albumArtist,
+          album: item.album, genre: [item.genre], year: item.year,
+          track: { no: item.trackNumber }, disk: { no: item.discNumber },
+          duration: item.duration, bitrate: item.bitRate * 1000,
+          container: item.format, codec: item.format,
+        },
+      }
+    }
+    return
+  }
+
+  if (source.kind === 'plex') {
+    const cfg = plexConfig(source)
+    for await (const item of plexItems(cfg)) {
+      yield {
+        path: item.path,
+        size: item.size,
         mtime: 0,
         externalId: item.itemId,
         meta: {

@@ -23,6 +23,7 @@ import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
 import { configOf, open as rcOpen, RcloneError, version as rcVersion } from './rclone.ts'
 import { configOf as jfConfigOf, info as jfInfo, open as jfOpen } from './jellyfin.ts'
+import { configOf as plexConfigOf, info as plexInfo, open as plexOpen } from './plex.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
@@ -93,17 +94,26 @@ async function streamRemote(c: any, t: any): Promise<Response> {
  * which only the remote knows.
  */
 /**
- * Serves a track that lives on a Jellyfin or Emby server.
+ * Serves a track that lives on another media server.
  *
- * `Static=true` in the upstream URL is what stops Jellyfin transcoding on its
- * own initiative: a server asked for a file it already has should send that
- * file, not spend CPU converting one that was already playable.
+ * Jellyfin, Emby and Plex all reduce to the same thing here: ask them for the
+ * bytes, pass the range through, hand back what they send. Only the opener
+ * differs, so only the opener is a parameter — the error handling, the range
+ * translation and the header copying are one implementation because they are
+ * one problem.
+ *
+ * `externalId` is their id for the item, which is what the stream URL is keyed
+ * on; `path` is the fallback for a source indexed before that column existed.
  */
-async function streamJellyfin(c: any, t: any): Promise<Response> {
+async function streamUpstream(
+  c: any,
+  t: any,
+  open: (t: any, id: string, range?: { start: number; end?: number }) => Promise<Response>,
+): Promise<Response> {
   const range = c.req.header('range')
   let upstream: Response
   try {
-    upstream = await jfOpen(jfConfigOf(t), t.externalId ?? t.path, range ? parseUpstreamRange(range) : undefined)
+    upstream = await open(t, t.externalId ?? t.path, range ? parseUpstreamRange(range) : undefined)
   } catch (err) {
     return c.json(
       { error: { code: 'gone', message: err instanceof Error ? err.message : 'unreachable' } }, 502)
@@ -986,6 +996,10 @@ export function createApp(dbFile: string) {
         const server = await jfInfo(jfConfigOf(src))
         return c.json({ ok: true, kind: src.kind, name: server.ServerName, version: server.Version })
       }
+      if (src.kind === 'plex') {
+        const server = await plexInfo(plexConfigOf(src))
+        return c.json({ ok: true, kind: src.kind, name: server.name, version: server.version })
+      }
       if (src.kind === 'rclone') {
         const v = await rcVersion(configOf(src))
         return c.json({ ok: true, kind: src.kind, name: 'rclone', version: v.version })
@@ -1467,7 +1481,7 @@ export function createApp(dbFile: string) {
    */
   async function serveStream(c: any, id: string, q: { rendition?: string; format?: string; accept?: string }) {
     const flat = db.prepare(
-      `SELECT t.path, t.format, t.size, t.mtime, s.root, s.kind, s.config FROM tracks t
+      `SELECT t.path, t.format, t.size, t.mtime, t.externalId, s.root, s.kind, s.config FROM tracks t
        JOIN sources s ON s.id = t.sourceId
        WHERE t.id = ? AND t.deletedAt IS NULL`).get(id) as any
     if (!flat) return fail(c, 404, 'not_found', 'unknown track')
@@ -1489,7 +1503,12 @@ export function createApp(dbFile: string) {
     // the body flows straight back out. Nothing is copied to local disk, which
     // is the whole reason the source is userspace in the first place.
     if (t.kind === 'rclone') return streamRemote(c, t)
-    if (t.kind === 'jellyfin' || t.kind === 'emby') return streamJellyfin(c, t)
+    if (t.kind === 'jellyfin' || t.kind === 'emby') {
+      return streamUpstream(c, t, (src, id, range) => jfOpen(jfConfigOf(src), id, range))
+    }
+    if (t.kind === 'plex') {
+      return streamUpstream(c, t, (src, id, range) => plexOpen(plexConfigOf(src), id, range))
+    }
 
     const abs = join(t.root, t.path)
     let size: number

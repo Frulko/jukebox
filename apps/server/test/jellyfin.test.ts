@@ -204,6 +204,11 @@ test('and it plays, ranges included', async () => {
     const id = (await h.call('GET', '/tracks?limit=1')).body.items[0].id
 
     const whole = await h.raw('GET', `/stream/${id}`)
+    // Their item id, not our file path. Asserting only that the stream answered
+    // let this pass while the handler was asking for `/Audio//music/.../01.flac`,
+    // which a real Jellyfin answers with a 404.
+    assert.ok(jf.requests.some((r) => r.startsWith('/Audio/jf-1/stream')),
+      `asked for ${jf.requests.filter((r) => r.includes('/stream')).join(' ')}`)
     assert.equal(whole.status, 200)
     assert.match(whole.headers.get('content-type') ?? '', /^audio\//)
     await whole.body?.cancel()
