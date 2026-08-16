@@ -1895,3 +1895,23 @@ input[type="range"]::-webkit-slider-thumb {
 .view-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
 /* In the artist column it is the header of the list rather than a corner control. */
 .artist-list .view-search { width: auto; margin: 6px 6px 8px; }
+
+/* "Where is this track" — a lookup, so a popover rather than a modal: it
+   answers and gets out of the way. */
+.ctx.where { min-width: 224px; padding-bottom: 6px; }
+.ctx.where .ctx-title { display: flex; align-items: center; }
+.where-close { margin-left: auto; border: 0; background: none; color: var(--dim); padding: 0 2px; }
+.ctx.where h5 {
+  margin: 8px 0 2px;
+  padding: 0 10px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--dim);
+  font-weight: 600;
+}
+.where-row { display: flex; align-items: center; gap: 6px; padding: 2px 10px; }
+.where-row .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where-row em { font-style: normal; font-size: 10px; color: var(--accent); }
+.where-row em.dim { color: var(--dim); }
+.where-empty { padding: 2px 10px 4px; color: var(--dim); font-size: 11px; }

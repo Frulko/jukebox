@@ -11,6 +11,7 @@ import { isUnavailable } from './trackBadges'
 import type { PluginEntry } from './pluginMenu'
 import { useMenuPosition } from './useMenuPosition'
 import { titleIfClipped } from './Tooltip'
+import { MembershipsPopover } from './MembershipsPopover'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -76,6 +77,8 @@ export function TrackList(p: Props) {
   const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('jukebox.sizes', {})
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'row' | 'header' | 'format' } | null>(null)
   const menuPosition = useMenuPosition(menu)
+  /** "Where is this?" — opened from the menu, at the same point. */
+  const [where, setWhere] = useState<{ id: string; x: number; y: number } | null>(null)
   const [dropRow, setDropRow] = useState<number | null>(null)
   const [dragCol, setDragCol] = useState<string | null>(null)
   const anchor = useRef<string | null>(null)
@@ -301,7 +304,15 @@ export function TrackList(p: Props) {
   const headers = table.getHeaderGroups()[0].headers
 
   return (
-    <div className="tracklist" tabIndex={0} onKeyDown={onKeyDown} onMouseDown={() => setMenu(null)}>
+    <div
+      className="tracklist"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onMouseDown={() => {
+        setMenu(null)
+        setWhere(null)
+      }}
+    >
       <div className="thead" ref={headRef} onContextMenu={(e) => openMenu(e, 'header')}>
         {headers.map((header) => {
           const sorted = header.column.getIsSorted()
@@ -421,6 +432,10 @@ export function TrackList(p: Props) {
         {!rows.length && <div className="list-empty">No songs</div>}
       </div>
 
+      {where && (
+        <MembershipsPopover trackId={where.id} point={{ x: where.x, y: where.y }} onClose={() => setWhere(null)} />
+      )}
+
       {menu && (
         <div
           className="ctx"
@@ -479,6 +494,14 @@ export function TrackList(p: Props) {
               </button>
               <button onClick={() => (p.onGetInfo(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Get Info (${selectedIds.length} items)` : 'Get Info'}
+              </button>
+              <button
+                onClick={() => {
+                  setWhere({ id: selectedIds[0], x: menu.x, y: menu.y })
+                  setMenu(null)
+                }}
+              >
+                Where is this track…
               </button>
               <button onClick={() => (p.onConvert(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Convert ${selectedIds.length} Tracks…` : 'Convert…'}

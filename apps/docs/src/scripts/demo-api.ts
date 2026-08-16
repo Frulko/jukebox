@@ -258,6 +258,23 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   }
   // Before the single-track lookup below, which would otherwise swallow it.
   if (path === '/tracks/missing') return { items: MISSING }
+  // Where a track lives. The smart playlists are evaluated here the same way
+  // they are evaluated when opened, so the two cannot disagree.
+  const member = path.match(/^\/tracks\/([^/]+)\/memberships$/)
+  if (member) {
+    const id = member[1]
+    const inPlaylists = PLAYLISTS.filter(([, pick]) => pick().some((t) => t.id === id)).map(([pl, pick]) => ({
+      id: pl.id,
+      name: pl.name,
+      smart: pl.smart,
+      position: pl.smart ? null : pick().findIndex((t) => t.id === id),
+    }))
+    const onIt = onDevice.some((t) => t.libraryTrackId === id)
+    return {
+      playlists: inPlaylists,
+      devices: onIt ? [{ id: DEVICE.id, name: DEVICE.name, wanted: true, present: true }] : [],
+    }
+  }
   if (path === '/stats') return stats()
   // The demo claims ffmpeg the way it claims a library: so the dialog can be
   // opened and read. The conversion itself answers with the job it would have
