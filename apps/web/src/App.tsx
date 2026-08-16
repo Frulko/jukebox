@@ -137,6 +137,21 @@ export default function App() {
       if (repeat === 'one') return audio.seek(0), audio.resume()
       stepRef.current(1)
     },
+    // The server decides whether this counts — half the track or four minutes,
+    // whichever comes first, never under thirty seconds. The front only reports
+    // what was heard; a play count that the client could set is not a fact.
+    onPlayed: (id, seconds, startedAt) => {
+      api.tracks
+        .play(id, seconds, startedAt)
+        .then((r) => {
+          if (!r.counted) return
+          qc.invalidateQueries({ queryKey: ['tracks'] })
+          qc.invalidateQueries({ queryKey: ['playlists'] })
+        })
+        // A play that could not be reported is not worth interrupting anyone
+        // over: the music is still playing and nothing on screen is wrong.
+        .catch(() => {})
+    },
   })
 
   const playTrack = useCallback(

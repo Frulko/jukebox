@@ -39,11 +39,20 @@ export function useAudio({
   base,
   volume,
   onEnded,
+  onPlayed,
 }: {
   base: string
   /** 0–100, as the UI slider reports it. */
   volume: number
   onEnded: () => void
+  /**
+   * How long a track was actually listened to, once it ends or is replaced.
+   *
+   * Seconds listened, not the position reached: seeking forward through a song
+   * is not listening to it, and the server's counting rule would be wrong from
+   * the first argument if we sent `currentTime`.
+   */
+  onPlayed: (id: string, seconds: number, startedAt: number) => void
 }): Audio {
   const el = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -57,6 +66,20 @@ export function useAudio({
   // `ended` event entirely, which is how a queue stops after one song.
   const ended = useRef(onEnded)
   ended.current = onEnded
+  const played = useRef(onPlayed)
+  played.current = onPlayed
+
+  // What is on the element right now, and how much of it has gone past the
+  // speakers. `last` is the previous `timeupdate` position, which is how a seek
+  // is told apart from listening: a jump is not time spent.
+  const current = useRef<{ id: string; listened: number; startedAt: number; last: number } | null>(null)
+
+  const report = useCallback(() => {
+    const c = current.current
+    current.current = null
+    // Under a second is a mis-click, and the server would refuse it anyway.
+    if (c && c.listened >= 1) played.current(c.id, Math.round(c.listened), c.startedAt)
+  }, [])
 
   if (el.current === null && typeof Audio !== 'undefined') {
     el.current = new Audio()
@@ -71,9 +94,22 @@ export function useAudio({
   useEffect(() => {
     const a = el.current
     if (!a) return
-    const time = () => setPosition(a.currentTime)
+    const time = () => {
+      const c = current.current
+      if (c) {
+        const step = a.currentTime - c.last
+        // A normal tick is a quarter second. Anything larger is a seek, and
+        // anything negative is a seek backwards; neither is listening.
+        if (step > 0 && step < 2) c.listened += step
+        c.last = a.currentTime
+      }
+      setPosition(a.currentTime)
+    }
     const meta = () => setDuration(a.duration || 0)
-    const done = () => ended.current()
+    const done = () => {
+      report()
+      ended.current()
+    }
     // The tag's duration is what the list shows; the decoder's is the truth, and
     // they disagree on VBR files whose header lies.
     const fail = () => { setError('This file could not be played'); setPlaying(false) }
@@ -93,7 +129,7 @@ export function useAudio({
       a.removeEventListener('ended', done)
       a.removeEventListener('error', fail)
     }
-  }, [])
+  }, [report])
 
   useEffect(() => {
     if (el.current) el.current.volume = Math.min(1, Math.max(0, volume / 100))
@@ -102,6 +138,9 @@ export function useAudio({
   const play = useCallback((id: string) => {
     const a = el.current
     if (!a) return
+    // Whatever was playing is over as far as counting goes, however far it got.
+    report()
+    current.current = { id, listened: 0, startedAt: Date.now(), last: 0 }
     setError(null)
     setPosition(0)
     a.src = streamUrl(base, id)
@@ -109,7 +148,7 @@ export function useAudio({
     // a track replaced while it was still loading. Neither deserves an error in
     // the UI, and an unhandled rejection here would be noise in the console.
     void a.play().catch(() => {})
-  }, [base])
+  }, [base, report])
 
   const resume = useCallback(() => { void el.current?.play().catch(() => {}) }, [])
   const pause = useCallback(() => el.current?.pause(), [])

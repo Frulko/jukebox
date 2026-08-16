@@ -217,6 +217,20 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     return { updated, revision, job: null }
   }
   if (path === '/tracks/count') return { count: select(q).length }
+  // The same rule the server applies, so the demo does not teach a lie: half the
+  // track or four minutes, whichever comes first, and never under thirty seconds.
+  const play = path.match(/^\/tracks\/([^/]+)\/play$/)
+  if (play && method === 'POST') {
+    const t = tracks.find((x) => x.id === play[1])
+    const { played } = JSON.parse(body ?? '{}') as { played: number }
+    if (!t) return { counted: false, reason: 'unknown track' }
+    const enough = played >= 30 && played >= Math.min(t.duration / 2, 240)
+    if (!enough) return { counted: false, reason: 'not listened to for long enough' }
+    t.playCount += 1
+    t.lastPlayed = Date.now()
+    t.rev = ++revision
+    return { counted: true, playCount: t.playCount }
+  }
   // Before the single-track lookup below, which would otherwise swallow it.
   if (path === '/tracks/missing') return { items: MISSING }
   if (path === '/stats') return stats()
