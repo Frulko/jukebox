@@ -89,7 +89,8 @@ hands out a URL.
       PATH, not a dependency; `GET /transcode/capabilities` says whether it is there
 - [x] **4b.4** Streaming picks a rendition — `?rendition=`, `?format=`, or `?accept=mp3,aac`
       as a renderer profile. That is also the per-renderer half of 3.1
-- [ ] **4b.5** Duplicate detection — merge two scanned files of the same song into renditions
+- [x] **4b.5** Duplicate detection — fingerprint or artist+title+duration, proposed never
+      applied; merging repoints playlists, devices and picks, and adds up the history
 
 ## M4 · Sources and file organization
 

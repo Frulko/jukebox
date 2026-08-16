@@ -1,7 +1,8 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule, Source, Stats,
+  DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule,
+  Source, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
@@ -114,6 +115,16 @@ export function createClient(opts: ClientOptions = {}) {
         request<{ updated: number; revision: number; job: Job | null }>('/tracks', {
           method: 'PATCH',
           body: JSON.stringify({ ids, patch, writeToFiles }),
+        }),
+    },
+
+    duplicates: {
+      /** Proposes groups. Nothing merges until asked. */
+      find: (limit = 200) => request<{ groups: DuplicateGroup[] }>(`/duplicates?limit=${limit}`),
+      /** Folds `ids` into `keeperId`, moving their files across as renditions. */
+      merge: (keeperId: string, ids: string[]) =>
+        request<{ keeperId: string; merged: number; renditions: number }>('/duplicates/merge', {
+          method: 'POST', body: JSON.stringify({ keeperId, ids }),
         }),
     },
 
@@ -345,7 +356,8 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule, Source, Stats,
+  DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule,
+  Source, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,

@@ -337,6 +337,31 @@ export type StoreEntry = {
   reason?: string
 }
 
+/**
+ * Rows that look like one song. Proposed, never merged automatically — two
+ * different songs sharing a title is ordinary, and a wrong merge loses a
+ * recording.
+ */
+export type DuplicateGroup = {
+  /** Suggested keeper: the copy carrying plays and a rating, which cannot be recovered. */
+  keeperId: string
+  /** `fingerprint` compared the audio; `metadata` compared tags and length. */
+  reason: 'fingerprint' | 'metadata'
+  tracks: {
+    id: string
+    name: string
+    artist: string
+    album: string
+    duration: number
+    format: string
+    size: number
+    bitRate: number
+    rating: number
+    playCount: number
+    renditions: number
+  }[]
+}
+
 export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
 
 /**

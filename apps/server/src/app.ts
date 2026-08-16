@@ -29,6 +29,7 @@ import { Events, recordPlay } from './plays.ts'
 import { compatible, fetchIndex, install, uninstall } from './store.ts'
 import { FORMATS, tools } from './ffmpeg.ts'
 import { makeConvertHandler } from './convert.ts'
+import { findDuplicates, mergeTracks } from './duplicates.ts'
 import {
   advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
   setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
@@ -252,6 +253,27 @@ export function createApp(dbFile: string) {
     jobs: db.prepare(`SELECT state, COUNT(*) AS n FROM jobs GROUP BY state`).all()
       .reduce((acc: any, r: any) => ({ ...acc, [r.state]: r.n }), {}),
   }))
+
+  /* ---------------- duplicates ---------------- */
+
+  /**
+   * Proposes. Never merges.
+   *
+   * Grouping is the dangerous half — two different songs sharing a title is
+   * ordinary — so this returns candidates with the evidence, and each merge has
+   * to name the track to keep.
+   */
+  api.get('/duplicates', (c) =>
+    c.json({ groups: findDuplicates(db, { limit: Number(c.req.query('limit')) || 200 }) }))
+
+  api.post('/duplicates/merge', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.keeperId || !Array.isArray(b?.ids)) {
+      return fail(c, 400, 'bad_body', 'expected { keeperId, ids: [] }')
+    }
+    const result = mergeTracks(db, b.keeperId, b.ids)
+    return result ? c.json(result) : fail(c, 404, 'not_found', 'unknown keeper track')
+  })
 
   /* ---------------- conversion ---------------- */
 
