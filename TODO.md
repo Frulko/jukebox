@@ -157,7 +157,10 @@ hands out a URL.
 - [ ] **7.1** Keyboard shortcuts + shortcut sheet (carried over from `trieur`)
 - [ ] **7.2** Astro site — docs + playable demo on a fake backend
 - [ ] **7.3** Published OpenAPI reference
-- [ ] **7.4** Multi-arch Docker images `amd64` / `arm64` / `arm/v7`
+- [x] **7.4** Docker image + compose — `node:22-bookworm-slim` because the alpine images do
+      not publish `linux/arm/v7`, which is the platform the Node 22 ceiling exists for.
+      Built locally for this arch; the multi-arch push is a CI step (7.5)
+- [ ] **7.5** CI job that builds and pushes `amd64` / `arm64` / `arm/v7` with buildx
 
 ## Frontend leftovers
 

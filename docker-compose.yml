@@ -1,0 +1,33 @@
+# The smallest thing that runs jukebox.
+#
+# One container, two volumes: the music you already have, and the state this
+# server creates. Nothing else is required — no database server, no cache, no
+# message broker. That is a deliberate constraint, not an omission.
+
+services:
+  jukebox:
+    image: ghcr.io/frulko/jukebox:latest
+    # Or build it yourself:
+    # build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      # Read-only, and the default on purpose: nothing writes to your library
+      # until you say a source is writable. Drop `:ro` if you want tag writing,
+      # conversion or the reorganiser to work.
+      - /path/to/your/music:/music:ro
+      # The database, plugins and anything downloaded. Back this up; it holds
+      # the ratings, playlists and play counts a rescan cannot rebuild.
+      - ./data:/data
+    environment:
+      # Speakers fetch the stream themselves, so they need an address that
+      # means something to them. Inside a container the guess is usually wrong;
+      # set this to where the server is reachable on your network.
+      # JUKEBOX_ADVERTISE: http://192.168.1.10:8787
+      #
+      # Encrypts the recoverable passwords used only by Subsonic clients.
+      # Without it a key is derived from the database path, which protects a
+      # stolen file and not a stolen machine.
+      # JUKEBOX_SECRET: change-me
+      TZ: Europe/Paris

@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.fixtures
+data
+apps/docs
+apps/satellite/device
+*.log
