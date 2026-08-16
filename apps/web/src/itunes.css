@@ -1867,3 +1867,6 @@ input[type="range"]::-webkit-slider-thumb {
 .np-file em { margin-left: auto; font-style: normal; font-size: 10px; }
 .np-file.on em { color: var(--accent); }
 .lcd-eye.on { color: var(--accent); }
+.file-where { margin: 16px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); font-weight: 600; }
+/* Paths are long and their ends are the informative half. */
+.file-info dd.path { direction: rtl; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

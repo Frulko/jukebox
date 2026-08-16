@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { fmtDate, fmtSize, fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
+import { useSources } from './api'
 
 type Field = {
   key: keyof Track
@@ -52,6 +53,9 @@ export function InfoModal({
 }) {
   const multi = tracks.length > 1
   const [tab, setTab] = useState<'details' | 'options' | 'artwork' | 'file'>('details')
+  // Named, not just an id: "Demo library" answers "where is this?", `src-3` does not.
+  const sources = useSources().data?.items ?? []
+  const source = sources.find((x) => x.id === tracks[0]?.sourceId)
   const [patch, setPatch] = useState<Partial<Track>>({})
   const [on, setOn] = useState<Set<string>>(new Set())
 
@@ -123,24 +127,68 @@ export function InfoModal({
 
         <div className="modal-body">
           {tab === 'file' ? (
-            <dl className="file-info">
-              {[
-                ['Kind', t.format],
-                ['Size', fmtSize(t.size)],
-                ['Bit Rate', `${t.bitRate} kbps`],
-                ['Sample Rate', `${(t.sampleRate / 1000).toFixed(3)} kHz`],
-                ['Duration', fmtTime(t.duration)],
-                ['Date Added', fmtDate(t.dateAdded)],
-                ['Last Played', fmtDate(t.lastPlayed) || 'Never'],
-                ['Plays', String(t.playCount)],
-                ['Skips', String(t.skipCount)],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <dt>{k}</dt>
-                  <dd>{v}</dd>
+            <>
+              <dl className="file-info">
+                {[
+                  ['Kind', t.format],
+                  ['Size', fmtSize(t.size)],
+                  ['Bit Rate', `${t.bitRate} kbps`],
+                  ['Sample Rate', `${(t.sampleRate / 1000).toFixed(3)} kHz`],
+                  ['Duration', fmtTime(t.duration)],
+                  ['Date Added', fmtDate(t.dateAdded)],
+                  ['Last Played', fmtDate(t.lastPlayed) || 'Never'],
+                  ['Plays', String(t.playCount)],
+                  ['Skips', String(t.skipCount)],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              {/* Where this came from. The rest of the tab describes the audio;
+                  this says which disk to plug in when it stops playing, which
+                  is the question the tab gets opened for half the time. */}
+              <h4 className="file-where">Where it came from</h4>
+              <dl className="file-info">
+                <div>
+                  <dt>Source</dt>
+                  <dd>
+                    {source ? (
+                      <>
+                        {source.name} <span className="dim">({source.kind})</span>
+                      </>
+                    ) : (
+                      // A track whose source the server no longer lists: the
+                      // drive was removed, or the source was deleted from under it.
+                      <span className="dim">{t.sourceId} — not connected</span>
+                    )}
+                  </dd>
                 </div>
-              ))}
-            </dl>
+                {source && (
+                  <div>
+                    <dt>Root</dt>
+                    <dd className="path">{source.root}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Path</dt>
+                  <dd className="path" title={t.path}>{t.path}</dd>
+                </div>
+                {t.renditions.length > 1 && (
+                  <div>
+                    <dt>Other files</dt>
+                    <dd>
+                      {t.renditions
+                        .filter((r) => !r.preferred)
+                        .map((r) => `${r.format.toUpperCase()} · ${fmtSize(r.size)}`)
+                        .join(', ')}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </>
           ) : (
             <div className="fields">
               {visible.map((f) => {
