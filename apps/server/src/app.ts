@@ -1513,10 +1513,29 @@ export function createApp(dbFile: string) {
           const enc = new TextEncoder()
           const send = (event: string, data: unknown) =>
             ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
-          send('hello', { revision: revision(db) })
+          // The current state on connect, not just future changes: a client
+          // that reconnects mid-song would otherwise show nothing until the
+          // next thing happened, which on a paused player is never.
+          send('hello', { revision: revision(db), player: player.withTrack() })
+
           const off = jobs.onChange((j) => send('job.progress', publicJob(j)))
+
+          // The shared queue is only shared if a second controller hears about
+          // it. Without this the player would have to be polled, which is the
+          // one thing this API set out not to make anyone do.
+          const onPlayer = (state: unknown) => send('player', state)
+          const onPlay = (e: unknown) => send('play', e)
+          events.on('player', onPlayer)
+          events.on('play', onPlay)
+
           const beat = setInterval(() => ctrl.enqueue(enc.encode(': ping\n\n')), 25000)
-          c.req.raw.signal.addEventListener('abort', () => { off(); clearInterval(beat); ctrl.close() })
+          c.req.raw.signal.addEventListener('abort', () => {
+            off()
+            events.off('player', onPlayer)
+            events.off('play', onPlay)
+            clearInterval(beat)
+            ctrl.close()
+          })
         },
       }),
       200,
