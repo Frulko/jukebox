@@ -9,7 +9,7 @@
 // ponytail: one page per query, no cursor. The demo library is ~250 tracks; the
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
-import type { Playlist, Source, Track, TrackQuery } from '@jukebox/api-types'
+import type { Device, DeviceTrack, Playlist, Source, Track, TrackQuery } from '@jukebox/api-types'
 
 const tracks = makeLibrary()
 let revision = tracks.length
@@ -80,6 +80,43 @@ const PLAYLISTS: Array<[Playlist, () => Track[]]> = [
   ],
 ]
 
+// One iPod, connected, so the demo shows the device half of the app: presence
+// column, contents, and the tracks it holds that the library no longer does.
+const DEVICE: Device = {
+  id: 'dev-classic',
+  satelliteId: 'sat-pi',
+  name: 'iPod Classic',
+  kind: 'ipod-classic',
+  model: 'MB147',
+  serial: '5K84 2GA',
+  firmware: '1.1.2',
+  capacity: 160 * 1024 ** 3,
+  used: { audio: 41 * 1024 ** 3, video: 0, photos: 2 * 1024 ** 3, apps: 0, other: 1024 ** 3 },
+  battery: 72,
+  acceptedFormats: ['mp3', 'aac', 'alac', 'wav'],
+  autoSync: 1,
+  syncMode: 'playlists',
+  syncPlaylistIds: ['p-top'],
+  charging: false,
+  connected: 1,
+  lastSync: Date.UTC(2026, 7, 14),
+  lastBackup: Date.UTC(2026, 6, 2),
+}
+
+/** What the satellite reports off the device: some matched, some orphaned. */
+const onDevice: DeviceTrack[] = tracks.slice(0, 40).map((t, i) => ({
+  deviceLocalId: `F${String(i).padStart(3, '0')}`,
+  libraryTrackId: i % 9 === 0 ? null : t.id,
+  name: t.name,
+  artist: t.artist,
+  album: t.album,
+  duration: t.duration,
+  size: t.size,
+  format: 'mp3',
+  sourceUrl: i % 9 === 0 ? `http://sat-pi.local/ipod/F${String(i).padStart(3, '0')}.mp3` : null,
+  syncedAt: Date.UTC(2026, 7, 14),
+}))
+
 const SOURCES: Source[] = [
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
     lastScanAt: Date.UTC(2026, 7, 16), rev: 1 },
@@ -109,7 +146,20 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   if (path.startsWith('/tracks/')) return tracks.find((t) => t.id === path.slice(8))
   if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }
   if (path === '/sources') return { items: SOURCES }
-  if (path === '/devices' || path === '/jobs') return { items: [] }
+  if (path === '/devices') return { items: [DEVICE] }
+  if (path === '/jobs') return { items: [] }
+  if (path === `/devices/${DEVICE.id}/tracks`) {
+    const items = params.get('orphansOnly') === 'true' ? onDevice.filter((t) => !t.libraryTrackId) : onDevice
+    return { items, next: null }
+  }
+  if (path === `/devices/${DEVICE.id}/stats`) {
+    return {
+      tracks: onDevice.length,
+      orphans: onDevice.filter((t) => !t.libraryTrackId).length,
+      bytes: onDevice.reduce((a, t) => a + t.size, 0),
+      seconds: onDevice.reduce((a, t) => a + t.duration, 0),
+    }
+  }
 
   const pl = path.match(/^\/playlists\/([^/]+)\/tracks$/)
   if (pl) {

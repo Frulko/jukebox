@@ -6,6 +6,7 @@ import { api, useSources } from './api'
 import { DeviceTracks } from './DeviceTracks'
 import { Icon } from './Icon'
 import type { Playlist } from './data'
+import type { Play } from './App'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -25,11 +26,15 @@ export function DeviceView({
   playlists,
   onDevices,
   onEject,
+  nowPlaying,
+  onPlay,
 }: {
   device: Device
   playlists: Playlist[]
   onDevices: () => void
   onEject: () => void
+  nowPlaying: string | null
+  onPlay: Play
 }) {
   const [job, setJob] = useState<{ kind: 'sync' | 'backup'; progress: number } | null>(null)
   const [tab, setTab] = useState<'settings' | 'contents'>('settings')
@@ -136,7 +141,7 @@ export function DeviceView({
       </div>
 
       {tab === 'contents' && (
-        <DeviceTracks deviceId={device.id} deviceName={device.name} sources={sources} />
+        <DeviceTracks deviceId={device.id} deviceName={device.name} sources={sources} nowPlaying={nowPlaying} onPlay={onPlay} />
       )}
 
       {tab === 'settings' && <>

@@ -3,6 +3,7 @@
 // grid-first, which is the whole point of the redesign.
 
 import { useMemo } from 'react'
+import type { Play } from './App'
 import { useRemembered, useScrollMemory } from './viewState'
 import { albumSeed, Cover } from './Artwork'
 import { Icon } from './Icon'
@@ -34,14 +35,14 @@ export function groupAlbums(tracks: Track[]): Album[] {
   return [...by.values()].sort((x, y) => x.artist.localeCompare(y.artist) || x.year - y.year)
 }
 
-function AlbumTracks({ album, nowPlaying, onPlay }: { album: Album; nowPlaying: string | null; onPlay: (id: string) => void }) {
+function AlbumTracks({ album, nowPlaying, onPlay }: { album: Album; nowPlaying: string | null; onPlay: Play }) {
   return (
     <ol className="album-tracks">
       {album.tracks.map((t) => (
         <li
           key={t.id}
           className={t.id === nowPlaying ? 'playing' : ''}
-          onDoubleClick={() => onPlay(t.id)}
+          onDoubleClick={() => onPlay(t.id, album.tracks.map((x) => x.id))}
         >
           <span className="n">{t.id === nowPlaying ? <Icon name="volumeHigh" size={10} /> : t.trackNumber}</span>
           <span className="t">{t.name}</span>
@@ -60,7 +61,7 @@ export function AlbumsView({
 }: {
   tracks: Track[]
   nowPlaying: string | null
-  onPlay: (id: string) => void
+  onPlay: Play
   onGetInfo: (ids: string[]) => void
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
@@ -79,7 +80,7 @@ export function AlbumsView({
                 className="hover-play"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onPlay(a.tracks[0].id)
+                  onPlay(a.tracks[0].id, a.tracks.map((t) => t.id))
                 }}
               >
                 <Icon name="play" size={13} />
@@ -101,7 +102,7 @@ export function AlbumsView({
               {fmtTime(current.tracks.reduce((s, t) => s + t.duration, 0))}
             </p>
             <div className="album-actions">
-              <button className="prim" onClick={() => onPlay(current.tracks[0].id)}>
+              <button className="prim" onClick={() => onPlay(current.tracks[0].id, current.tracks.map((t) => t.id))}>
                 <Icon name="play" size={10} /> Play
               </button>
               <button onClick={() => onGetInfo(current.tracks.map((t) => t.id))}>Get Info</button>
@@ -121,7 +122,7 @@ export function ArtistsView({
 }: {
   tracks: Track[]
   nowPlaying: string | null
-  onPlay: (id: string) => void
+  onPlay: Play
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const artists = useMemo(() => {

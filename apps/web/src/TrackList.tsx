@@ -27,7 +27,8 @@ type Props = {
   devices: { id: string; name: string }[]
   playlists: Playlist[]
   nowPlaying: string | null
-  onPlay: (id: string) => void
+  /** The second argument is the queue this play starts from, in the order shown. */
+  onPlay: (id: string, queue?: string[]) => void
   onUpdate: (ids: string[], patch: Partial<Track>) => void
   onDelete: (ids: string[]) => void
   onAddToPlaylist: (playlistId: string, ids: string[]) => void
@@ -193,7 +194,7 @@ export function TrackList(p: Props) {
       e.preventDefault()
       move(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey)
     } else if (e.key === 'Enter' && selectedIds[0]) {
-      p.onPlay(selectedIds[0])
+      p.onPlay(selectedIds[0], rows.map((r) => r.id))
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
       e.preventDefault()
       table.setRowSelection(Object.fromEntries(rows.map((r) => [r.id, true])))
@@ -326,7 +327,7 @@ export function TrackList(p: Props) {
                   if (!sel) table.setRowSelection({ [row.id]: true })
                   openMenu(e, 'row')
                 }}
-                onDoubleClick={() => p.onPlay(row.id)}
+                onDoubleClick={() => p.onPlay(row.id, rows.map((r) => r.id))}
               >
                 {row.getVisibleCells().map((cell) => (
                   <div
@@ -373,7 +374,7 @@ export function TrackList(p: Props) {
             </>
           ) : (
             <>
-              <button onClick={() => (p.onPlay(selectedIds[0]), setMenu(null))}>Play</button>
+              <button onClick={() => (p.onPlay(selectedIds[0], rows.map((r) => r.id)), setMenu(null))}>Play</button>
               <button onClick={() => (p.onGetInfo(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Get Info (${selectedIds.length} items)` : 'Get Info'}
               </button>

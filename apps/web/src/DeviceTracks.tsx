@@ -4,6 +4,7 @@ import { api } from './api'
 import { Icon } from './Icon'
 import type { Source } from '@jukebox/client-sdk'
 import { fmtTime } from './data'
+import type { Play } from './App'
 
 /**
  * What is actually on the device.
@@ -17,10 +18,14 @@ export function DeviceTracks({
   deviceId,
   deviceName,
   sources,
+  nowPlaying,
+  onPlay,
 }: {
   deviceId: string
   deviceName: string
   sources: Source[]
+  nowPlaying: string | null
+  onPlay: Play
 }) {
   const [orphansOnly, setOrphansOnly] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -107,7 +112,22 @@ export function DeviceTracks({
         {items.map((t, i) => {
           const orphan = t.libraryTrackId === null
           return (
-            <div key={t.deviceLocalId} className={`ep devtracks-row ${i % 2 ? 'odd' : ''} ${orphan ? 'orphan' : ''}`}>
+            <div
+              key={t.deviceLocalId}
+              className={`ep devtracks-row ${i % 2 ? 'odd' : ''} ${orphan ? 'orphan' : ''} ${t.libraryTrackId && t.libraryTrackId === nowPlaying ? 'playing' : ''}`}
+              // The server can only stream what the library holds. A row that
+              // exists solely on the device has no source to play from — the
+              // file is on the iPod, not here — so it says so rather than
+              // failing silently on a double-click.
+              title={orphan ? 'Only on the device — import it to play it' : 'Double-click to play'}
+              onDoubleClick={() => {
+                if (!t.libraryTrackId) return
+                onPlay(
+                  t.libraryTrackId,
+                  items.map((x) => x.libraryTrackId).filter((id): id is string => id !== null),
+                )
+              }}
+            >
               <span>
                 {orphan && t.sourceUrl && (
                   <input

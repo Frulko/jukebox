@@ -19,6 +19,14 @@ import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
 
+/**
+ * Start playing a track. The second argument is the list it is being played out
+ * of, in the order shown — every view that lists tracks passes its own, so what
+ * comes next is decided by where you pressed play, not by where you have since
+ * navigated.
+ */
+export type Play = (id: string, queue?: string[]) => void
+
 export type Theme = 'classic' | 'itunes12' | 'music' | 'studio'
 const THEMES: Array<[Theme, string]> = [
   ['classic', 'iTunes 8'],
@@ -59,6 +67,16 @@ export default function App() {
   }, [theme])
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
+  /**
+   * What is playing *through*, which is not what the screen is showing.
+   *
+   * Deriving the next track from the current view meant that walking off to the
+   * podcasts — where the track list is not even mounted — silenced the end of
+   * the album: the list was empty, so there was nothing to step into. Ids
+   * rather than tracks, because the device view can queue what it holds without
+   * having to invent Track objects for rows that are only on the iPod.
+   */
+  const [queue, setQueue] = useState<string[]>([])
   // The playing track can fall outside the current view, so keep it separately.
   const [nowPlayingTrack, setNowPlayingTrack] = useState<Track | null>(null)
   const [shuffle, setShuffle] = useState(false)
@@ -112,7 +130,10 @@ export default function App() {
   })
 
   const playTrack = useCallback(
-    (id: string) => {
+    (id: string, from?: string[]) => {
+      // A view that knows what it is playing out of says so; the queue only
+      // changes when playback starts somewhere new.
+      if (from) setQueue(from)
       setNowPlaying(id)
       // No "playing" flag to set: the element raises `play` when it actually
       // starts, and that is what the button reads.
@@ -124,17 +145,17 @@ export default function App() {
 
   const step = useCallback(
     (dir: 1 | -1) => {
-      if (!tracks.length) return
-      if (shuffle && dir === 1) return playTrack(tracks[Math.floor(Math.random() * tracks.length)].id)
-      const i = tracks.findIndex((t) => t.id === nowPlaying)
+      if (!queue.length) return
+      if (shuffle && dir === 1) return playTrack(queue[Math.floor(Math.random() * queue.length)])
+      const i = queue.indexOf(nowPlaying ?? '')
       // Falling off the end only wraps when repeat is on. Otherwise the list
       // finishes and stops, which is what "repeat: off" means -- wrapping
       // regardless would leave a playlist looping all night.
-      if (repeat === 'off' && i === tracks.length - 1 && dir === 1) return audio.pause()
-      const next = tracks[(i + dir + tracks.length) % tracks.length]
-      if (next) playTrack(next.id)
+      if (repeat === 'off' && i === queue.length - 1 && dir === 1) return audio.pause()
+      const next = queue[(i + dir + queue.length) % queue.length]
+      if (next) playTrack(next)
     },
-    [tracks, nowPlaying, shuffle, repeat, playTrack, audio],
+    [queue, nowPlaying, shuffle, repeat, playTrack, audio],
   )
 
   const current = tracks.find((t) => t.id === nowPlaying) ?? nowPlayingTrack
@@ -146,7 +167,7 @@ export default function App() {
   // the point where the browser still counts the click as the gesture that
   // authorises playback.
   const toggle = useCallback(() => {
-    if (!current) return tracks[0] && playTrack(tracks[0].id)
+    if (!current) return tracks[0] && playTrack(tracks[0].id, tracks.map((t) => t.id))
     audio.playing ? audio.pause() : audio.resume()
   }, [current, tracks, playTrack, audio])
 
@@ -282,6 +303,8 @@ export default function App() {
               playlists={playlists}
               onDevices={() => qc.invalidateQueries({ queryKey: ['devices'] })}
               onEject={() => setView({ kind: 'library', id: 'music' })}
+              nowPlaying={nowPlaying}
+              onPlay={playTrack}
             />
           ) : media ? (
             media
