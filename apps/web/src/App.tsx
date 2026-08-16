@@ -150,6 +150,23 @@ export default function App() {
     [audio],
   )
 
+  /**
+   * Put tracks at the end of what is playing.
+   *
+   * With nothing playing there is nothing to queue *behind*, so this becomes
+   * the queue and starts it — an "add to queue" that silently does nothing on
+   * an idle player is the kind of button people press three times.
+   */
+  const enqueue = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return
+      if (!nowPlaying) return playTrack(ids[0], ids)
+      setQueue((q) => [...q, ...ids])
+      setNotice(`${ids.length} track${ids.length > 1 ? 's' : ''} added to the queue`)
+    },
+    [nowPlaying, playTrack],
+  )
+
   const step = useCallback(
     (dir: 1 | -1) => {
       if (!queue.length) return
@@ -366,9 +383,15 @@ export default function App() {
                 <ColumnBrowser value={browse} onChange={setBrowse} query={query} />
               )}
               {theme !== 'classic' && mode === 'albums' ? (
-                <AlbumsView tracks={tracks} nowPlaying={nowPlaying} onPlay={playTrack} onGetInfo={setInfoIds} />
+                <AlbumsView
+                  tracks={tracks}
+                  nowPlaying={nowPlaying}
+                  onPlay={playTrack}
+                  onEnqueue={enqueue}
+                  onGetInfo={setInfoIds}
+                />
               ) : theme !== 'classic' && mode === 'artists' ? (
-                <ArtistsView tracks={tracks} nowPlaying={nowPlaying} onPlay={playTrack} />
+                <ArtistsView tracks={tracks} nowPlaying={nowPlaying} onPlay={playTrack} onEnqueue={enqueue} />
               ) : (
               <TrackList
                 key={viewKey}
@@ -381,6 +404,7 @@ export default function App() {
                 playlists={playlists}
                 nowPlaying={nowPlaying}
                 onPlay={playTrack}
+                onEnqueue={enqueue}
                 onUpdate={update}
                 onDelete={remove}
                 onAddToPlaylist={addToPlaylist}

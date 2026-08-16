@@ -29,6 +29,8 @@ type Props = {
   nowPlaying: string | null
   /** The second argument is the queue this play starts from, in the order shown. */
   onPlay: (id: string, queue?: string[]) => void
+  /** Appends to what is already playing rather than replacing it. */
+  onEnqueue: (ids: string[]) => void
   onUpdate: (ids: string[], patch: Partial<Track>) => void
   onDelete: (ids: string[]) => void
   onAddToPlaylist: (playlistId: string, ids: string[]) => void
@@ -375,6 +377,9 @@ export function TrackList(p: Props) {
           ) : (
             <>
               <button onClick={() => (p.onPlay(selectedIds[0], rows.map((r) => r.id)), setMenu(null))}>Play</button>
+              <button onClick={() => (p.onEnqueue(selectedIds), setMenu(null))}>
+                {selectedIds.length > 1 ? `Add ${selectedIds.length} to Queue` : 'Add to Queue'}
+              </button>
               <button onClick={() => (p.onGetInfo(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Get Info (${selectedIds.length} items)` : 'Get Info'}
               </button>
