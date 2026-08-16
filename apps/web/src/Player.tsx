@@ -1,10 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Job } from '@jukebox/client-sdk'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
 
 export type Repeat = 'off' | 'all' | 'one'
+
+/**
+ * A title that scrolls only if it has to.
+ *
+ * The panel is 420 px wide and track names are not. Ellipsis loses the end of
+ * the name, which is exactly where "(Live at Montreux)" and "feat. …" live —
+ * the part that distinguishes two rows that otherwise read the same.
+ *
+ * It moves back and forth rather than looping around: a title that wraps from
+ * its end to its start reads as two different titles for a moment. The speed is
+ * per pixel of overflow, so a slightly long name creeps and a very long one
+ * does not take a minute to get to its end.
+ */
+function Marquee({ text, className }: { text: string; className: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [overflow, setOverflow] = useState(0)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => setOverflow(Math.max(0, el.scrollWidth - el.clientWidth))
+    measure()
+    // The panel is not a fixed width: it shrinks with the window and with the
+    // theme. A title measured once would keep scrolling after it started
+    // fitting, or sit still after it stopped.
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text])
+
+  const scrolls = overflow > 2
+  return (
+    <div
+      ref={ref}
+      className={`${className} ${scrolls ? 'marquee' : ''}`}
+      // Not a tooltip: the whole text is the point, and it is already here.
+      title={scrolls ? text : undefined}
+      style={scrolls ? ({ '--shift': `${-overflow}px`, '--dur': `${Math.max(5, overflow / 18)}s` } as React.CSSProperties) : undefined}
+    >
+      <span>{text}</span>
+    </div>
+  )
+}
 
 /** What a job is called while it runs, in the display's own voice. */
 /** Where a search applies. Not a filter over one list — a different list. */
@@ -153,7 +196,7 @@ export function Player({
           <>
             <Cover seed={albumSeed(track)} size={34} className="lcd-art" />
             <div className="lcd-main">
-              <div className="lcd-title">{track.name}</div>
+              <Marquee className="lcd-title" text={track.name} />
               <div className="lcd-sub">
                 {track.artist} — {track.album}
               </div>
