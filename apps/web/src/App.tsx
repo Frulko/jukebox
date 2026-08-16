@@ -15,6 +15,7 @@ import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
 import { AppsView, AudiobooksView, mediaSummary, PodcastsView, RadioView, StoreView } from './MediaViews'
 import { MissingView } from './MissingView'
+import { QueueView } from './QueueView'
 import { AlbumsView, ArtistsView, type LibraryMode } from './LibraryViews'
 import './itunes.css'
 
@@ -46,6 +47,7 @@ export default function App() {
   const [browse, setBrowse] = useState<Browse>({ genre: null, artist: null, album: null })
   const [browserOpen, setBrowserOpen] = useState(true)
   const [format, setFormat] = useState<string | null>(null)
+  const [queueOpen, setQueueOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
@@ -79,6 +81,14 @@ export default function App() {
    * having to invent Track objects for rows that are only on the iPod.
    */
   const [queue, setQueue] = useState<string[]>([])
+  /**
+   * Every track the app has had in its hands this session.
+   *
+   * The queue is ids; the panel that shows it needs names. Rather than one
+   * request per queued track, whatever has already been rendered is kept here —
+   * a queue built from a list you were looking at costs nothing to display.
+   */
+  const known = useRef(new Map<string, Track>())
   // The playing track can fall outside the current view, so keep it separately.
   const [nowPlayingTrack, setNowPlayingTrack] = useState<Track | null>(null)
   const [shuffle, setShuffle] = useState(false)
@@ -127,6 +137,8 @@ export default function App() {
   // sit on the loading screen for good. `isLoading` is pending *and* fetching,
   // which is what "we are actually waiting" means.
   const loading = libraryPage.isLoading || playlistPage.isLoading
+
+  for (const t of tracks) known.current.set(t.id, t)
 
   const patchTracks = useUpdateTracks()
   const update = useCallback(
@@ -320,6 +332,9 @@ export default function App() {
         onScope={(id) => setView({ kind: 'library', id })}
         browserOpen={browserOpen}
         jobs={jobs}
+        queueLength={queue.length}
+        queueOpen={queueOpen}
+        onToggleQueue={() => setQueueOpen((v) => !v)}
         onToggle={toggle}
         onPrev={() => (audio.position > 3 ? audio.seek(0) : step(-1))}
         onNext={() => step(1)}
@@ -330,6 +345,18 @@ export default function App() {
         onSearch={setSearch}
         onToggleBrowser={() => setBrowserOpen((v) => !v)}
       />
+
+      {queueOpen && (
+        <QueueView
+          queue={queue}
+          nowPlaying={nowPlaying}
+          known={known.current}
+          onPlay={(id) => playTrack(id)}
+          onRemove={(id) => setQueue((q) => q.filter((x) => x !== id))}
+          onClear={() => setQueue(nowPlaying ? [nowPlaying] : [])}
+          onClose={() => setQueueOpen(false)}
+        />
+      )}
 
       <div className="main">
         <Sidebar

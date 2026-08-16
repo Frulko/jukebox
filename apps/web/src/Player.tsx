@@ -42,6 +42,9 @@ export function Player({
   scope,
   browserOpen,
   jobs,
+  queueLength,
+  queueOpen,
+  onToggleQueue,
   onToggle,
   onPrev,
   onNext,
@@ -67,6 +70,9 @@ export function Player({
   browserOpen: boolean
   /** Everything else the server is doing. The display cycles through them. */
   jobs: Job[]
+  queueLength: number
+  queueOpen: boolean
+  onToggleQueue: () => void
   onToggle: () => void
   onPrev: () => void
   onNext: () => void
@@ -202,6 +208,13 @@ export function Player({
         </button>
         <button className={browserOpen ? 'on' : ''} onClick={onToggleBrowser} title="Column Browser">
           <Icon name="columns" size={13} />
+        </button>
+        <button
+          className={queueOpen ? 'on' : ''}
+          onClick={onToggleQueue}
+          title={queueLength ? `${queueLength} in the queue` : 'The queue'}
+        >
+          <Icon name="queue" size={13} />
         </button>
         <div className="search">
           <button
