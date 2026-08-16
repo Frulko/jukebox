@@ -1,7 +1,8 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule,
+  CommandResult, DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition,
+  RestoreReport, Schedule,
   Source, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
@@ -192,6 +193,14 @@ export function createClient(opts: ClientOptions = {}) {
       scan: () => request<{ items: Plugin[] }>('/plugins/scan', { method: 'POST' }),
       setEnabled: (id: string, enabled: boolean) =>
         request<Plugin>(`/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+      /**
+       * Runs something a plugin contributed. Failures are 4xx with a reason:
+       * 409 disabled, 404 unknown command, 504 timed out, 400 it threw.
+       */
+      command: (id: string, command: string, trackIds?: string[]) =>
+        request<CommandResult>(`/plugins/${id}/command`, {
+          method: 'POST', body: JSON.stringify({ command, trackIds }),
+        }),
       configure: (id: string, config: Record<string, unknown>) =>
         request<Plugin>(`/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ config }) }),
     },
@@ -378,7 +387,8 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition, RestoreReport, Schedule,
+  CommandResult, DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition,
+  RestoreReport, Schedule,
   Source, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,

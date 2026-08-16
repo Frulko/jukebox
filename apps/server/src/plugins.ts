@@ -5,6 +5,7 @@ import type { DB } from './db.ts'
 import type { JobQueue } from './jobs.ts'
 import { Resources, type Transports } from './transports.ts'
 import type { Events, PlayEvent } from './plays.ts'
+import { createPlaylist as makePlaylist } from './playlists.ts'
 
 /**
  * The plugin host.
@@ -114,6 +115,30 @@ export function readManifest(raw: unknown): { manifest: Manifest } | { error: st
   return { manifest: m }
 }
 
+/** What a command receives. The tracks come with it so a plugin need not query. */
+export type CommandContext = {
+  trackIds: string[]
+  tracks: {
+    id: string; name: string; artist: string; albumArtist: string; album: string
+    genre: string; year: number; duration: number; rating: number; playCount: number
+  }[]
+}
+
+/**
+ * What a command may answer.
+ *
+ * A closed set, so a menu can do the right thing without knowing the plugin.
+ * `tracks` exists separately from `playlist` because "find me more like this"
+ * produces a selection, and forcing that into a playlist litters the sidebar
+ * with something the user then has to delete — saving it should be their
+ * choice, not the plugin's.
+ */
+export type CommandResult =
+  | { kind: 'done'; message?: string }
+  | { kind: 'job'; job: unknown }
+  | { kind: 'playlist'; id: string; name: string }
+  | { kind: 'tracks'; ids: string[] }
+
 /** What a plugin is handed on activation. The surface `hostApi` is versioning. */
 export type Host = {
   apiVersion: string
@@ -126,6 +151,15 @@ export type Host = {
   setConfig: (next: Record<string, unknown>) => void
   /** Registers a job kind, namespaced to the plugin so two cannot collide. */
   registerJob: (name: string, handler: (ctx: any) => Promise<void>) => void
+  /**
+   * Registers something the user can invoke — a context menu entry, a button.
+   *
+   * The plugin declares where it appears in `contributes`; this is what runs
+   * when it is chosen.
+   */
+  registerCommand: (name: string, handler: (ctx: CommandContext) => Promise<CommandResult> | CommandResult) => void
+  /** Creates a playlist, so a command can return one it just built. */
+  createPlaylist: (name: string, trackIds: string[]) => { id: string; name: string }
   /**
    * Sockets, requests and timers that the host closes when the plugin stops.
    *
@@ -150,6 +184,7 @@ type Loaded = {
   resources: Resources
   /** Unsubscribers for every listener the plugin registered. */
   off: (() => void)[]
+  commands: Map<string, (ctx: CommandContext) => Promise<CommandResult> | CommandResult>
 }
 
 const hydrate = (r: any): Plugin => ({
@@ -279,11 +314,12 @@ export class PluginHost {
       const module = await import(`${pathToFileURL(entry).href}?v=${row.version}-${Date.now()}`)
       const resources = new Resources()
       const off: (() => void)[] = []
+      const commands = new Map<string, (ctx: CommandContext) => Promise<CommandResult> | CommandResult>()
       // Registered before activation, not after: a plugin whose `activate`
       // throws halfway may already have opened a socket, and that socket still
       // has to be closable.
-      this.#loaded.set(id, { manifest: read.manifest, module, resources, off })
-      await module.activate?.(this.#hostFor(read.manifest, resources, off))
+      this.#loaded.set(id, { manifest: read.manifest, module, resources, off, commands })
+      await module.activate?.(this.#hostFor(read.manifest, resources, off, commands))
       this.#db.prepare(`UPDATE plugins SET state = 'active', error = NULL WHERE id = ?`).run(id)
     } catch (err) {
       // Whatever it opened before throwing goes too, or a plugin that fails on
@@ -329,7 +365,58 @@ export class PluginHost {
     return getPlugin(this.#db, id)
   }
 
-  #hostFor(manifest: Manifest, resources: Resources, off: (() => void)[]): Host {
+  /** The commands a running plugin registered. Empty for one that is not running. */
+  commandsOf(id: string): string[] {
+    return [...(this.#loaded.get(id)?.commands.keys() ?? [])]
+  }
+
+  /**
+   * Runs one command.
+   *
+   * Bounded by a timeout, because a plugin that hangs would otherwise hang the
+   * request and the menu with it. A plugin reaching a slow third party should
+   * fail visibly rather than leave a spinner for ever.
+   */
+  async run(id: string, command: string, ctx: CommandContext, timeoutMs = 30_000): Promise<CommandResult> {
+    const loaded = this.#loaded.get(id)
+    if (!loaded) throw Object.assign(new Error(`${id} is not running`), { code: 'plugin_disabled' })
+
+    const handler = loaded.commands.get(command)
+    if (!handler) throw Object.assign(new Error(`${id} has no command ${command}`), { code: 'unknown_command' })
+
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        Promise.resolve(handler(ctx)),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(Object.assign(new Error(`${loaded.manifest.name} did not answer in ${timeoutMs / 1000}s`),
+              { code: 'command_timeout' })),
+            timeoutMs)
+          timer.unref?.()
+        }),
+      ])
+    } catch (err: any) {
+      // A plugin that throws is marked failed, so the settings pane agrees with
+      // whatever the status line just said. A timeout is not: the plugin may
+      // well be fine and merely slow.
+      if (err?.code !== 'command_timeout') {
+        this.#db.prepare(`UPDATE plugins SET state = 'failed', error = ? WHERE id = ?`)
+          .run(err instanceof Error ? err.message : String(err), id)
+      }
+      throw Object.assign(err instanceof Error ? err : new Error(String(err)),
+        { code: err?.code ?? 'command_failed' })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  #hostFor(
+    manifest: Manifest,
+    resources: Resources,
+    off: (() => void)[],
+    commands: Map<string, (ctx: CommandContext) => Promise<CommandResult> | CommandResult>,
+  ): Host {
     const db = this.#db
     const jobs = this.#jobs
     return {
@@ -346,6 +433,13 @@ export class PluginHost {
         const unsubscribe = () => this.#events.off(event, handler)
         off.push(unsubscribe)
         return unsubscribe
+      },
+      registerCommand: (name, handler) => commands.set(name, handler),
+      createPlaylist: (name, trackIds) => {
+        // Through the same function the API uses, so a plugin's playlist is
+        // indistinguishable from a hand-made one.
+        const pl = makePlaylist(db, { name, trackIds })
+        return { id: pl.id, name: pl.name }
       },
       registerJob: (name, handler) => {
         // Namespaced: two plugins registering "sync" must not fight over it, and

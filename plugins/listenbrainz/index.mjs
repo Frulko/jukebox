@@ -91,6 +91,22 @@ export function activate(host) {
   // the plugin does.
   host.net.setInterval(() => void flush(), 60_000)
 
+  // Waiting up to a minute for the retry is fine for a background queue and
+  // maddening when you are looking at it, so it is also a command.
+  host.registerCommand('flush', async () => {
+    if (!cfg().token) return { kind: 'done', message: 'No ListenBrainz token is set.' }
+    if (!pending.length) return { kind: 'done', message: 'Nothing waiting to send.' }
+
+    const waiting = pending.length
+    await flush()
+    return {
+      kind: 'done',
+      message: pending.length
+        ? `${waiting - pending.length} sent, ${pending.length} still waiting.`
+        : `${waiting} listens sent.`,
+    }
+  })
+
   host.log(cfg().token ? 'ready' : 'waiting for a user token')
 }
 

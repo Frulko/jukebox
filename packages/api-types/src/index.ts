@@ -362,6 +362,20 @@ export type DuplicateGroup = {
   }[]
 }
 
+/**
+ * What a plugin command answers. A closed set, so a menu can act on the result
+ * without knowing anything about the plugin.
+ *
+ * `tracks` is separate from `playlist` because "find me more like this"
+ * produces a selection: forcing it into a playlist litters the sidebar with
+ * something the user then has to delete, and saving it should be their choice.
+ */
+export type CommandResult =
+  | { kind: 'done'; message?: string }
+  | { kind: 'job'; job: Job }
+  | { kind: 'playlist'; id: string; name: string }
+  | { kind: 'tracks'; ids: string[] }
+
 export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
 
 /**
@@ -386,6 +400,12 @@ export type Plugin = {
   /** Why it is not running. */
   error: string | null
   config: Record<string, unknown>
+  /**
+   * What can be invoked right now — not the same as what `contributes`
+   * declares. An installed but stopped plugin contributes menu entries that
+   * cannot run, and the UI should be able to tell those apart.
+   */
+  commands?: string[]
 }
 
 /** Library totals, computed in SQL over the whole library rather than a page. */

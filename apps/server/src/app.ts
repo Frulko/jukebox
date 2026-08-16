@@ -477,7 +477,11 @@ export function createApp(dbFile: string) {
   /* ---------------- plugins ---------------- */
 
   api.get('/plugins', (c) => withETag(c, {
-    items: listPlugins(db),
+    // `commands` is what is registered *now*, which is not the same as what the
+    // manifest contributes: a plugin that is installed but not running
+    // contributes menu entries that cannot be invoked, and the UI should be
+    // able to tell those apart.
+    items: listPlugins(db).map((p) => ({ ...p, commands: plugins.commandsOf(p.id) })),
     // The host version a plugin has to declare compatibility with. Published so
     // an author can check before installing rather than after failing.
     hostApi: HOST_API_VERSION,
@@ -549,6 +553,40 @@ export function createApp(dbFile: string) {
     await uninstall(id, plugins.root)
     db.prepare(`DELETE FROM plugins WHERE id = ?`).run(id)
     return c.body(null, 204)
+  })
+
+  /**
+   * Runs something a plugin contributed.
+   *
+   * The errors are split so a status line can say something true. A plugin
+   * failing is ordinary and the user's mental model should be "that plugin is
+   * broken", never "the server is broken" — so a 500 stays reserved for the
+   * second case.
+   */
+  api.post('/plugins/:id/command', async (c) => {
+    const id = c.req.param('id')
+    if (!getPlugin(db, id)) return fail(c, 404, 'not_found', 'unknown plugin')
+
+    const b = await c.req.json().catch(() => null)
+    if (!b?.command) return fail(c, 400, 'bad_body', 'expected { command, trackIds? }')
+
+    const trackIds: string[] = Array.isArray(b.trackIds) ? b.trackIds : []
+    // The tracks travel with the call so a plugin never has to reach into the
+    // database, which is the difference between a contract and a convention.
+    const tracks = trackIds.length
+      ? db.prepare(
+          `SELECT id, name, artist, albumArtist, album, genre, year, duration, rating, playCount
+           FROM tracks WHERE deletedAt IS NULL AND id IN (${trackIds.map(() => '?').join(',')})`)
+          .all(...(trackIds as never[])) as any[]
+      : []
+
+    try {
+      return c.json(await plugins.run(id, b.command, { trackIds, tracks }))
+    } catch (err: any) {
+      const status = { plugin_disabled: 409, unknown_command: 404, command_timeout: 504 }[err?.code as string] ?? 400
+      return fail(c, status, err?.code ?? 'command_failed',
+        err instanceof Error ? err.message : 'the command failed')
+    }
   })
 
   /* ---------------- file organisation ---------------- */

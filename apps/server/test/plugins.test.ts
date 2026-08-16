@@ -300,3 +300,132 @@ test('requests in flight are cancelled when the plugin stops', async () => {
     await h.cleanup()
   }
 })
+
+/* ---- commands ---- */
+
+const commandPlugin = `
+  export function activate(host) {
+    host.registerCommand('nothing', () => ({ kind: 'done', message: 'did it' }))
+    host.registerCommand('echo', (ctx) => ({ kind: 'tracks', ids: ctx.trackIds }))
+    host.registerCommand('sees', (ctx) => ({ kind: 'done', message: ctx.tracks.map((t) => t.name).join(',') }))
+    host.registerCommand('makes', (ctx) => {
+      const pl = host.createPlaylist('From a plugin', ctx.trackIds)
+      return { kind: 'playlist', id: pl.id, name: pl.name }
+    })
+    host.registerCommand('breaks', () => { throw new Error('the third party said no') })
+    host.registerCommand('hangs', () => new Promise(() => {}))
+  }
+`
+
+test('a command returns one of the shapes a menu can act on', async () => {
+  const h = await harness({ cmd: { manifest: manifest('cmd'), code: commandPlugin } })
+  try {
+    await h.host.discover()
+    await h.host.activate('cmd')
+
+    // What the listing says can be invoked right now, which is not the same as
+    // what the manifest contributes.
+    const listed = (await h.call('GET', '/plugins')).body.items.find((p: any) => p.id === 'cmd')
+    assert.deepEqual(listed.commands.sort(), ['breaks', 'echo', 'hangs', 'makes', 'nothing', 'sees'])
+
+    const done = await h.call('POST', '/plugins/cmd/command', { command: 'nothing' })
+    assert.deepEqual(done.body, { kind: 'done', message: 'did it' })
+
+    // A selection, not a playlist: "more like this" should not litter the
+    // sidebar with something the user then deletes.
+    const echoed = await h.call('POST', '/plugins/cmd/command', { command: 'echo', trackIds: ['a', 'b'] })
+    assert.deepEqual(echoed.body, { kind: 'tracks', ids: ['a', 'b'] })
+  } finally { await h.cleanup() }
+})
+
+test('a command is handed the tracks, so it never touches the database', async () => {
+  const h = await harness({ cmd: { manifest: manifest('cmd'), code: commandPlugin } })
+  try {
+    await h.host.discover()
+    await h.host.activate('cmd')
+    h.db.prepare(`INSERT INTO sources (id,kind,name,root,rev) VALUES ('s','local','S','/',1)`).run()
+    h.db.prepare(`INSERT INTO tracks (id,sourceId,path,name,dateAdded,rev)
+                  VALUES ('t1','s','/a.mp3','Dreams',1,1)`).run()
+
+    const res = await h.call('POST', '/plugins/cmd/command', { command: 'sees', trackIds: ['t1'] })
+    assert.equal(res.body.message, 'Dreams')
+  } finally { await h.cleanup() }
+})
+
+test('a command can build a playlist, and it is an ordinary one', async () => {
+  const h = await harness({ cmd: { manifest: manifest('cmd'), code: commandPlugin } })
+  try {
+    await h.host.discover()
+    await h.host.activate('cmd')
+    h.db.prepare(`INSERT INTO sources (id,kind,name,root,rev) VALUES ('s','local','S','/',1)`).run()
+    h.db.prepare(`INSERT INTO tracks (id,sourceId,path,name,dateAdded,rev)
+                  VALUES ('t1','s','/a.mp3','Dreams',1,1)`).run()
+
+    const res = await h.call('POST', '/plugins/cmd/command', { command: 'makes', trackIds: ['t1'] })
+    assert.equal(res.body.kind, 'playlist')
+
+    // Indistinguishable from a hand-made one, because it went through the same
+    // function the API uses.
+    const pl = (await h.call('GET', '/playlists')).body.items.find((p: any) => p.id === res.body.id)
+    assert.equal(pl.name, 'From a plugin')
+    assert.equal(pl.trackCount, 1)
+  } finally { await h.cleanup() }
+})
+
+test('a failing command says which plugin broke, not that the server did', async () => {
+  const h = await harness({ cmd: { manifest: manifest('cmd'), code: commandPlugin } })
+  try {
+    await h.host.discover()
+    await h.host.activate('cmd')
+
+    const broke = await h.call('POST', '/plugins/cmd/command', { command: 'breaks' })
+    // 4xx, not 500: "that plugin is broken" and "the server is broken" must
+    // never look the same.
+    assert.equal(broke.status, 400)
+    assert.equal(broke.body.error.code, 'command_failed')
+    assert.match(broke.body.error.message, /the third party said no/)
+
+    // And the settings pane now agrees with whatever the status line said.
+    assert.equal((await h.call('GET', '/plugins/cmd')).body.state, 'failed')
+
+    assert.equal((await h.call('POST', '/plugins/cmd/command', { command: 'nope' })).status, 404)
+    assert.equal((await h.call('POST', '/plugins/nope/command', { command: 'x' })).status, 404)
+    assert.equal((await h.call('POST', '/plugins/cmd/command', {})).status, 400)
+  } finally { await h.cleanup() }
+})
+
+test('a disabled plugin refuses its commands with a reason worth showing', async () => {
+  const h = await harness({ cmd: { manifest: manifest('cmd'), code: commandPlugin } })
+  try {
+    await h.host.discover()
+    await h.host.activate('cmd')
+    await h.host.setEnabled('cmd', false)
+
+    const res = await h.call('POST', '/plugins/cmd/command', { command: 'nothing' })
+    // 409 rather than 404: the plugin exists, it is off, and the UI can offer
+    // to turn it on.
+    assert.equal(res.status, 409)
+    assert.equal(res.body.error.code, 'plugin_disabled')
+    assert.deepEqual((await h.call('GET', '/plugins')).body.items.find((p: any) => p.id === 'cmd').commands, [])
+  } finally { await h.cleanup() }
+})
+
+test('a command that hangs gives up instead of holding the menu open', async () => {
+  const h = await harness({ cmd: { manifest: manifest('cmd'), code: commandPlugin } })
+  try {
+    await h.host.discover()
+    await h.host.activate('cmd')
+
+    await assert.rejects(
+      () => h.host.run('cmd', 'hangs', { trackIds: [], tracks: [] }, 120),
+      (err: any) => {
+        assert.equal(err.code, 'command_timeout')
+        assert.match(err.message, /did not answer/)
+        return true
+      })
+
+    // A timeout does not mark the plugin failed: it may be perfectly fine and
+    // merely reaching something slow.
+    assert.equal((await h.call('GET', '/plugins/cmd')).body.state, 'active')
+  } finally { await h.cleanup() }
+})

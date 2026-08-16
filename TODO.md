@@ -125,7 +125,9 @@ hands out a URL.
       when the plugin stops. No `mqtt`: it would be the first runtime dependency added for
       something nothing uses, and a plugin can carry its own client. The host takes it over
       when several plugins want to share one broker connection
-- [ ] **5.3** Declarative settings (`ui.json`) + UI extension zones
+- [~] **5.3** Declarative settings and UI zones — `contributes` carries both, and
+      `POST /plugins/:id/command` runs what a zone offers. The zones themselves are drawn
+      by the front session
 - [x] **5.4** Store — a JSON index at a URL the user chooses (no default: installing runs
       someone else's code). sha256 checked, the archive read by an extractor that refuses
       links and climbing paths, and the manifest's own id matched against the index's
