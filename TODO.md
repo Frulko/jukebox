@@ -68,8 +68,9 @@ hands out a URL.
 
 ## M3 · Audio output
 
-- [~] **3.1** `GET /stream/:id` — `Range` done. Left: per-renderer profile, transcode cache,
-      and the token (nothing is authenticated yet, so it would guard nothing)
+- [~] **3.1** `GET /stream/:id` — `Range` and the per-renderer profile (`?accept=`) are done.
+      Left: transcoding on the fly for a format the library does not hold, and the token
+      (nothing is authenticated yet, so it would guard nothing)
 - [~] **3.2** Browser renderer done — one `<audio>` on `/stream/:id`, state read from the
       element. Left: the `output` contract that lets a renderer live elsewhere
 - [x] **3.3** UPnP/DLNA — SSDP discovery, description parsing, `SetAVTransportURI`, play,
@@ -86,7 +87,8 @@ hands out a URL.
 - [x] **4b.2** Sync picks a rendition the device already plays before deciding to convert
 - [x] **4b.3** `POST /transcode` — { ids, format, quality?, replace }. ffmpeg is a binary on
       PATH, not a dependency; `GET /transcode/capabilities` says whether it is there
-- [ ] **4b.4** Streaming picks a rendition, and can be asked for a specific one
+- [x] **4b.4** Streaming picks a rendition — `?rendition=`, `?format=`, or `?accept=mp3,aac`
+      as a renderer profile. That is also the per-renderer half of 3.1
 - [ ] **4b.5** Duplicate detection — merge two scanned files of the same song into renditions
 
 ## M4 · Sources and file organization

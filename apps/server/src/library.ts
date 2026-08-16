@@ -43,6 +43,50 @@ export type Rendition = {
 }
 
 /**
+ * Which file to serve for a track.
+ *
+ * Order of preference: an explicitly named rendition, then one whose format the
+ * caller said it accepts, then the preferred one. That middle case is what a
+ * renderer profile is: a speaker that only plays mp3 should be handed the mp3
+ * this library already holds rather than the FLAC it cannot decode.
+ *
+ * Returns `null` only when the track has no renditions at all, which callers
+ * must handle by falling back to the track's own flat columns -- those are the
+ * preferred rendition's copy and always present.
+ */
+export function pickRendition(
+  db: DB,
+  trackId: string,
+  opts: { rendition?: string; format?: string; accept?: string } = {},
+): (Rendition & { root: string; kind: string; config: string }) | null {
+  const rows = db.prepare(
+    `SELECT r.id, r.format, r.bitRate, r.sampleRate, r.channels, r.size, r.lossless,
+            r.preferred, r.path, r.sourceId, s.root, s.kind, s.config
+     FROM renditions r JOIN sources s ON s.id = r.sourceId
+     WHERE r.trackId = ? ORDER BY r.preferred DESC`).all(trackId) as any[]
+  if (!rows.length) return null
+
+  if (opts.rendition) return rows.find((r) => r.id === opts.rendition) ?? null
+  if (opts.format) {
+    const want = opts.format.toLowerCase()
+    return rows.find((r) => String(r.format).toLowerCase() === want) ?? null
+  }
+  if (opts.accept) {
+    const accepted = opts.accept.split(',').map((f) => f.trim().toLowerCase()).filter(Boolean)
+    // Lossless first among the acceptable ones: if a device takes both ALAC and
+    // AAC, it should get the better file, not whichever was scanned first.
+    const playable = rows.filter((r) => accepted.includes(String(r.format).toLowerCase()))
+    if (playable.length) {
+      return playable.find((r) => r.lossless) ?? playable[0]
+    }
+    // Nothing it accepts. The preferred one is returned rather than nothing:
+    // transcoding on the fly is the streaming endpoint's business, and it needs
+    // a source file to work from.
+  }
+  return rows[0]
+}
+
+/**
  * The renditions of a page of tracks, in one query.
  *
  * One query for the page rather than one per track: a 300-row page would

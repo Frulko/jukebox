@@ -195,3 +195,62 @@ test('converting to what it already is, is refused per track not per job', { ski
     assert.equal((await h.call('GET', `/jobs/${job.id}`)).body.state, 'done')
   } finally { await h.cleanup() }
 })
+
+test('streaming serves the rendition it is asked for', { skip }, async () => {
+  const h = await harness()
+  try {
+    const flac = (await h.call('GET', '/tracks?limit=100')).body.items.find((t: any) => t.format === 'flac')
+    await h.call('POST', '/transcode', { ids: [flac.id], format: 'aac', replace: false })
+    await h.settle()
+
+    const track = (await h.call('GET', `/tracks/${flac.id}`)).body
+    const aac = track.renditions.find((r: any) => r.format === 'aac')
+
+    // No hint: the preferred one, which is still the original.
+    const plain = await h.raw('GET', `/stream/${flac.id}`)
+    assert.equal(plain.headers.get('content-type'), 'audio/flac')
+    assert.equal(Number(plain.headers.get('content-length')), track.size)
+    await plain.body?.cancel()
+
+    // By format, and by rendition id: same file, two ways of asking.
+    for (const q of [`format=aac`, `rendition=${aac.id}`]) {
+      const res = await h.raw('GET', `/stream/${flac.id}?${q}`)
+      assert.equal(res.headers.get('content-type'), 'audio/mp4', q)
+      assert.equal(Number(res.headers.get('content-length')), aac.size, q)
+      await res.body?.cancel()
+    }
+
+    // A renderer profile: a speaker that only plays aac must not be handed the
+    // FLAC it cannot decode.
+    const profiled = await h.raw('GET', `/stream/${flac.id}?accept=mp3,aac`)
+    assert.equal(Number(profiled.headers.get('content-length')), aac.size)
+    await profiled.body?.cancel()
+
+    // Asking for one that does not exist is a 404, not a quiet fallback: a
+    // client that named a file should hear that it is gone.
+    assert.equal((await h.raw('GET', `/stream/${flac.id}?format=opus`)).status, 404)
+
+    // A profile nothing satisfies still plays something -- converting on the
+    // fly needs a source file, and silence is the wrong answer.
+    const unmatched = await h.raw('GET', `/stream/${flac.id}?accept=wma`)
+    assert.equal(unmatched.status, 200)
+    await unmatched.body?.cancel()
+  } finally { await h.cleanup() }
+})
+
+test('a range against a chosen rendition is that file s range', { skip }, async () => {
+  const h = await harness()
+  try {
+    const flac = (await h.call('GET', '/tracks?limit=100')).body.items.find((t: any) => t.format === 'flac')
+    await h.call('POST', '/transcode', { ids: [flac.id], format: 'aac', replace: false })
+    await h.settle()
+    const aac = (await h.call('GET', `/tracks/${flac.id}`)).body.renditions.find((r: any) => r.format === 'aac')
+
+    // The total in Content-Range has to be the served file's size, not the
+    // preferred one's, or every seek lands in the wrong place.
+    const res = await h.raw('GET', `/stream/${flac.id}?format=aac`, { range: 'bytes=0-99' })
+    assert.equal(res.status, 206)
+    assert.equal(res.headers.get('content-range'), `bytes 0-99/${aac.size}`)
+    assert.equal((await res.arrayBuffer()).byteLength, 100)
+  } finally { await h.cleanup() }
+})

@@ -47,12 +47,23 @@ test('only the first range of a multi-range request is honoured', () => {
   assert.deepEqual(parseRange('bytes=0-99,200-299', SIZE), { start: 0, end: 99 })
 })
 
-test('the content type is one a browser will play', () => {
+test('the content type names the container, not the codec', () => {
+  // The distinction that matters: AAC inside an .m4a is audio/mp4, and a
+  // browser handed audio/aac for it refuses to decode a perfectly good file.
+  assert.equal(mimeFor('aac', 'a/b.m4a'), 'audio/mp4')
+  assert.equal(mimeFor('alac', 'a/b.m4a'), 'audio/mp4')
+  assert.equal(mimeFor('aac', 'a/b.aac'), 'audio/aac', 'raw ADTS really is audio/aac')
+  assert.equal(mimeFor('opus', 'a/b.opus'), 'audio/ogg')
+
+  // The filename wins over the stored codec, because it is the one that knows
+  // what the bytes are wrapped in.
+  assert.equal(mimeFor('flac', 'a/b.m4a'), 'audio/mp4')
+
+  // Without a path, the codec's usual container is the best guess available.
   assert.equal(mimeFor('mp3'), 'audio/mpeg')
   assert.equal(mimeFor('flac'), 'audio/flac')
-  // ALAC lives in an MP4 container; audio/mp4 is what makes Safari play it.
   assert.equal(mimeFor('alac'), 'audio/mp4')
-  assert.equal(mimeFor('aac'), 'audio/aac')
   assert.equal(mimeFor('MP3'), 'audio/mpeg', 'case does not matter')
   assert.equal(mimeFor('nonsense'), 'application/octet-stream')
+  assert.equal(mimeFor('nonsense', 'a/b.unknown'), 'application/octet-stream')
 })

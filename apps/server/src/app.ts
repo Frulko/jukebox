@@ -16,7 +16,8 @@ import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
 import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandler } from './podcasts.ts'
 import { createRadio, deleteRadio, discover, getRadio, listRadios, updateRadio } from './radio.ts'
 import {
-  countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
+  countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, pickRendition,
+  playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
 import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
@@ -64,7 +65,7 @@ async function streamRemote(c: any, t: any): Promise<Response> {
   }
 
   const headers: Record<string, string> = {
-    'Content-Type': mimeFor(t.format),
+    'Content-Type': mimeFor(t.format, t.path),
     'Accept-Ranges': 'bytes',
     'Cache-Control': 'private, max-age=3600',
   }
@@ -1057,11 +1058,29 @@ export function createApp(dbFile: string) {
    * already has room for it.
    */
   api.get('/stream/:id', async (c) => {
-    const t = db.prepare(
+    const id = c.req.param('id')
+    const flat = db.prepare(
       `SELECT t.path, t.format, t.size, t.mtime, s.root, s.kind, s.config FROM tracks t
        JOIN sources s ON s.id = t.sourceId
-       WHERE t.id = ? AND t.deletedAt IS NULL`).get(c.req.param('id')) as any
-    if (!t) return fail(c, 404, 'not_found', 'unknown track')
+       WHERE t.id = ? AND t.deletedAt IS NULL`).get(id) as any
+    if (!flat) return fail(c, 404, 'not_found', 'unknown track')
+
+    // Which file, of possibly several. `accept` is a renderer profile: a
+    // speaker that only plays mp3 gets the mp3 this library already holds
+    // rather than the FLAC it cannot decode. A named rendition that does not
+    // exist is a 404 rather than a silent fallback -- a client that asked for
+    // one specific file should hear that it is gone.
+    const wanted = c.req.query('rendition') ?? c.req.query('format')
+    const chosen = pickRendition(db, id, {
+      rendition: c.req.query('rendition'),
+      format: c.req.query('format'),
+      accept: c.req.query('accept'),
+    })
+    if (wanted && !chosen) return fail(c, 404, 'not_found', `this track has no ${wanted} rendition`)
+
+    // The flat columns are the preferred rendition's copy and always present,
+    // so a track whose rendition rows are missing still plays.
+    const t = chosen ?? flat
 
     // A remote source is proxied rather than read: the range goes to rclone and
     // the body flows straight back out. Nothing is copied to local disk, which
@@ -1079,7 +1098,7 @@ export function createApp(dbFile: string) {
       return fail(c, 410, 'gone', 'the file behind this track is no longer readable')
     }
 
-    const type = mimeFor(t.format)
+    const type = mimeFor(t.format, t.path)
     const etag = `"s-${t.mtime}-${size}"`
     const base = {
       'Content-Type': type,

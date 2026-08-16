@@ -10,22 +10,42 @@
  * that was asked for, so a 100 MB track and a 3 MB one cost the server the same.
  */
 
-/** The types browsers actually match on. Not a full IANA table — the formats we index. */
-const MIME: Record<string, string> = {
+/**
+ * A MIME type names a **container**, not a codec.
+ *
+ * That distinction is the whole reason this takes a path. AAC inside an `.m4a`
+ * is `audio/mp4`; AAC as a raw ADTS stream is `audio/aac`, and a browser handed
+ * the wrong one refuses to decode a perfectly good file. Since the library
+ * stores codecs, the extension is the only thing that knows which container the
+ * bytes are actually in.
+ */
+const BY_EXTENSION: Record<string, string> = {
   mp3: 'audio/mpeg',
-  aac: 'audio/aac',
   m4a: 'audio/mp4',
-  alac: 'audio/mp4',
+  m4b: 'audio/mp4',
+  mp4: 'audio/mp4',
+  aac: 'audio/aac',
   flac: 'audio/flac',
   ogg: 'audio/ogg',
   opus: 'audio/ogg',
-  vorbis: 'audio/ogg',
+  oga: 'audio/ogg',
   wav: 'audio/wav',
   aiff: 'audio/aiff',
+  aif: 'audio/aiff',
   wma: 'audio/x-ms-wma',
 }
 
-export const mimeFor = (format: string) => MIME[format.toLowerCase()] ?? 'application/octet-stream'
+/** Fallback for when there is no filename: the codec's usual container. */
+const BY_FORMAT: Record<string, string> = {
+  ...BY_EXTENSION,
+  alac: 'audio/mp4',
+  vorbis: 'audio/ogg',
+}
+
+export function mimeFor(format: string, path?: string): string {
+  const ext = path ? /\.([^.]+)$/.exec(path)?.[1]?.toLowerCase() : undefined
+  return (ext && BY_EXTENSION[ext]) || BY_FORMAT[format.toLowerCase()] || 'application/octet-stream'
+}
 
 export type Range = { start: number; end: number }
 
