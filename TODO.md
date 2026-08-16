@@ -19,8 +19,16 @@ hands out a URL.
 
 - [x] **1.1** Monorepo `apps/{server,web}` + `packages/{api-types,client-sdk}` *(`plugin-kit` comes with M5)*
 - [x] **1.2** Hono server + stable error format *(the generated OpenAPI is 1.8b, not done)*
-- [~] **1.3** **The five network rules, in place from the very first route** — cursor, `delta?since=`,
-      `ETag`, a full page in one round trip, SSE. Retrofitting this costs ten times as much.
+- [x] **1.3** **The five network rules** — cursor and never OFFSET, `delta?since=`, collection
+      `ETag`, a full page in one round trip, SSE. Audited rather than asserted, and the audit
+      found a real one: every ETag was keyed on the *library* revision, including for
+      collections the revision does not describe. Adding a schedule bumped no counter it
+      tracks, so the server answered 304 and a client went on showing a list without the row
+      it had just created — stale not by a second but until something unrelated happened.
+      Those collections now key on the answer itself. `apps/server/test/etag.test.ts` asks the
+      only version of the question worth asking — *does the ETag change when the answer does* —
+      and reads the collection list off the router, so one added later is covered without
+      anyone remembering
 - [x] **1.4** Raw SQL schema on `node:sqlite` — WAL, covering indexes, FTS5. Drizzle evaluated
       then dropped (see `docs/stack.md`)
 - [x] **1.4b** Migration runner — an ordered array + `PRAGMA user_version`, one transaction each.

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { compress } from 'hono/compress'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { Readable } from 'node:stream'
@@ -278,11 +278,40 @@ export function createApp(dbFile: string) {
    * nearly all refresh traffic: a client coming back to an unchanged library
    * gets a 304 and zero bytes of body.
    */
+  /**
+   * An ETag keyed on the library revision.
+   *
+   * Cheap, and correct *only* for collections the revision actually covers —
+   * tracks, playlists, sources, devices, whatever bumps it when it changes.
+   * For anything else this is a promise the server cannot keep: see
+   * `withBodyETag` below, and the test named after the bug.
+   */
   const withETag = (c: any, body: unknown) => {
     const etag = `"rev-${revision(db)}"`
     if (c.req.header('if-none-match') === etag) return c.body(null, 304, { ETag: etag })
     c.header('ETag', etag)
     return c.json(body)
+  }
+
+  /**
+   * An ETag keyed on the answer itself.
+   *
+   * For the collections the library revision does not describe — schedules,
+   * plugins, jobs, accounts. Adding a schedule changes none of the counters the
+   * revision tracks, so a revision ETag told a client "nothing changed" and it
+   * went on showing a list without the row it had just created. That is the
+   * worst shape of caching bug: the client is not stale by a second, it is
+   * stale until something unrelated happens.
+   *
+   * The cost is serialising the body before knowing whether it will be sent,
+   * which is why it is not the default: on a 300-row page of tracks the
+   * revision is free and right.
+   */
+  const withBodyETag = (c: any, body: unknown) => {
+    const json = JSON.stringify(body)
+    const etag = `"b-${createHash('sha1').update(json).digest('base64url').slice(0, 22)}"`
+    if (c.req.header('if-none-match') === etag) return c.body(null, 304, { ETag: etag })
+    return c.body(json, 200, { ETag: etag, 'Content-Type': 'application/json' })
   }
 
   /**
@@ -381,7 +410,10 @@ export function createApp(dbFile: string) {
    * reason a README is: a third party deciding whether to write a client should
    * not need an account first.
    */
-  api.get('/openapi.json', (c) => c.json(buildOpenApi(app)))
+  // ETagged because it is a large document that cannot change while this
+  // process is running: a docs site or a client generator polling it should
+  // pay for it once.
+  api.get('/openapi.json', (c) => withBodyETag(c, buildOpenApi(app)))
 
   /** Whether this install has been claimed yet. Always answerable. */
   api.get('/auth/state', (c) => c.json({ open: isOpen(db), users: listUsers(db).length }))
@@ -429,7 +461,7 @@ export function createApp(dbFile: string) {
    * Everyone with an account. Admin only, and no secrets: `listUsers` returns
    * the hydrated shape, which has never carried a hash.
    */
-  api.get('/users', (c) => c.json({ items: listUsers(db) }))
+  api.get('/users', (c) => withBodyETag(c, { items: listUsers(db) }))
 
   api.post('/users', async (c) => {
     const b = await c.req.json().catch(() => null)
@@ -565,7 +597,7 @@ export function createApp(dbFile: string) {
    */
   api.get('/tracks/missing', (c) => {
     const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 1000)
-    return c.json({
+    return withBodyETag(c, {
       items: db.prepare(
         `SELECT t.id, t.sourceId, t.path, t.name, t.artist, t.album, t.duration,
                 t.rating, t.playCount, t.deletedAt, s.name AS sourceName
@@ -691,8 +723,10 @@ export function createApp(dbFile: string) {
    * ordinary — so this returns candidates with the evidence, and each merge has
    * to name the track to keep.
    */
+  // Expensive to compute and rarely different, which is exactly what an ETag
+  // is for.
   api.get('/duplicates', (c) =>
-    c.json({ groups: findDuplicates(db, { limit: Number(c.req.query('limit')) || 200 }) }))
+    withBodyETag(c, { groups: findDuplicates(db, { limit: Number(c.req.query('limit')) || 200 }) }))
 
   api.post('/duplicates/merge', async (c) => {
     const b = await c.req.json().catch(() => null)
@@ -1098,7 +1132,7 @@ export function createApp(dbFile: string) {
 
   /* ---------------- plugins ---------------- */
 
-  api.get('/plugins', (c) => withETag(c, {
+  api.get('/plugins', (c) => withBodyETag(c, {
     // `commands` is what is registered *now*, which is not the same as what the
     // manifest contributes: a plugin that is installed but not running
     // contributes menu entries that cannot be invoked, and the UI should be
@@ -1255,7 +1289,7 @@ export function createApp(dbFile: string) {
   /** The move log, newest first. */
   api.get('/organize/log', (c) => {
     const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 1000)
-    return c.json({
+    return withBodyETag(c, {
       items: db.prepare(
         `SELECT id, jobId, trackId, sourceId, fromPath, toPath, movedAt, undoneAt
          FROM moves ORDER BY id DESC LIMIT ?`).all(limit),
@@ -1450,8 +1484,11 @@ export function createApp(dbFile: string) {
 
   /* ---------------- jobs ---------------- */
 
+  // The most polled list in the server, and the one where a revision ETag
+  // would have been most wrong: job progress moves constantly and touches no
+  // library counter at all.
   api.get('/jobs', (c) =>
-    c.json({
+    withBodyETag(c, {
       items: jobs
         .list({ state: c.req.query('state') as any, kind: c.req.query('kind') as JobKind, limit: Number(c.req.query('limit') ?? 50) })
         .map(publicJob),
@@ -1619,7 +1656,7 @@ export function createApp(dbFile: string) {
 
   /* ---------------- schedules ---------------- */
 
-  api.get('/schedules', (c) => withETag(c, { items: listSchedules(db) }))
+  api.get('/schedules', (c) => withBodyETag(c, { items: listSchedules(db) }))
 
   api.post('/schedules', async (c) => {
     const b = await c.req.json().catch(() => null)
