@@ -1947,7 +1947,14 @@ input[type="range"]::-webkit-slider-thumb {
    Missing page. A table that owns its pane says so instead; see .device.contents,
    where 46vh left the last row sliced in half by the capacity bar. */
 .data-table .tbody { max-height: 46vh; }
-.data-table .tr.orphan .td { opacity: .72; }
+/* No dimming for an orphan.
+   Opacity means "unavailable" everywhere else in this app — an unreachable
+   source, a track that cannot play — and a row that exists only on the iPod is
+   the opposite of unavailable: it is the one worth acting on, and often the
+   last copy of that music anywhere. The "Where else" column says which it is,
+   in words. This is the same mistake the track list made with unticked rows,
+   in the one place where it also hid the interesting half. */
+.data-table .tr.orphan .td.name { font-weight: 600; }
 .data-table .tr.playing .td.name { color: var(--accent); font-weight: 600; }
 
 /* ---------------- filter chips ----------------

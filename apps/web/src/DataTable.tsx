@@ -28,8 +28,8 @@ export function DataTable<T extends RowData>({
   rowHeight = 26,
   rowClass,
   empty,
-  selectedId,
-  onRowClick,
+  selected,
+  onSelectedChange,
   onRowDoubleClick,
   onRowContextMenu,
 }: {
@@ -42,17 +42,20 @@ export function DataTable<T extends RowData>({
   rowClass?: (row: T) => string
   empty?: React.ReactNode
   /**
-   * Single selection, when a view wants one. Deliberately not the track list's
-   * multi-selection: that exists because a library row is something you act on
-   * in bulk, and these tables are things you point at one at a time.
+   * Selection, when a view wants one — the same gestures as the track list,
+   * because a table that looks like it and selects differently is worse than
+   * one that looks different. Plain click replaces, cmd toggles, shift extends
+   * from the last row clicked.
    */
-  selectedId?: string | null
-  onRowClick?: (row: T, e: React.MouseEvent) => void
+  selected?: Set<string>
+  onSelectedChange?: (next: Set<string>) => void
   onRowDoubleClick?: (row: T) => void
   onRowContextMenu?: (row: T, e: React.MouseEvent) => void
 }) {
   const { ref: bodyRef, onScroll: rememberScroll } = useScrollMemory<HTMLDivElement>(`table:${memoryKey}`)
   const headRef = useRef<HTMLDivElement>(null)
+  /** Where a shift-range starts. The last row clicked without shift. */
+  const anchor = useRef<string | null>(null)
 
   const table = useTable<typeof features, T>({
     features,
@@ -120,8 +123,25 @@ export function DataTable<T extends RowData>({
                 key={row.id}
                 data-rowid={row.id}
                 style={{ transform: `translateY(${v.start}px)` }}
-                className={`tr ${v.index % 2 ? 'odd' : ''} ${row.id === selectedId ? 'sel' : ''} ${rowClass?.(row.original) ?? ''}`}
-                onMouseDown={(e) => e.button === 0 && onRowClick?.(row.original, e)}
+                className={`tr ${v.index % 2 ? 'odd' : ''} ${selected?.has(row.id) ? 'sel' : ''} ${rowClass?.(row.original) ?? ''}`}
+                onMouseDown={(e) => {
+                  if (e.button !== 0 || !onSelectedChange) return
+                  const ids = rows.map((r) => r.id)
+                  if (e.shiftKey && anchor.current) {
+                    const a = ids.indexOf(anchor.current)
+                    const b = ids.indexOf(row.id)
+                    if (a > -1 && b > -1) {
+                      return onSelectedChange(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)))
+                    }
+                  }
+                  anchor.current = row.id
+                  if (e.metaKey || e.ctrlKey) {
+                    const next = new Set(selected ?? [])
+                    next.has(row.id) ? next.delete(row.id) : next.add(row.id)
+                    return onSelectedChange(next)
+                  }
+                  onSelectedChange(new Set([row.id]))
+                }}
                 onDoubleClick={() => onRowDoubleClick?.(row.original)}
                 onContextMenu={(e) => onRowContextMenu?.(row.original, e)}
               >

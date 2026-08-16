@@ -37,10 +37,17 @@ export function DeviceTracks({
   onReveal: (trackId: string) => void
 }) {
   const [orphansOnly, setOrphansOnly] = useState(false)
+  /**
+   * One channel, not two.
+   *
+   * There used to be a tick column *and* a selection, which meant a row could
+   * be selected and not ticked, or ticked and not selected, and the import took
+   * the ticks — so the obvious gesture, selecting the rows you want, imported
+   * nothing. Selecting *is* choosing now, exactly as it is in the track list,
+   * and the button says how much of the selection it can actually take.
+   */
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [importing, setImporting] = useState<string | null>(null)
-  /** The row being pointed at, which is what a right-click acts on. */
-  const [current, setCurrent] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; track: DeviceTrack } | null>(null)
   const menuPosition = useMenuPosition(menu)
 
@@ -53,13 +60,6 @@ export function DeviceTracks({
   const items = data?.items ?? []
   // Only a writable source can receive imported files, so only those are offered.
   const targets = useMemo(() => sources.filter((s) => s.writable === 1), [sources])
-
-  const toggle = (id: string) =>
-    setSelected((old) => {
-      const next = new Set(old)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
 
   // The same chips over a list the page holds entirely — which is what makes
   // filtering it here honest, where doing so in the library would not be.
@@ -75,25 +75,6 @@ export function DeviceTracks({
 
   const columns = useMemo(
     () => [
-      h.display({
-        id: 'pick',
-        // Headed, because an empty column with a box on four rows out of forty
-        // reads as something failing to render rather than as a choice.
-        header: 'Import',
-        size: 46,
-        enableResizing: false,
-        // Only an orphan the satellite can serve is importable; the rest have
-        // nothing to tick, so they get no box rather than a disabled one.
-        cell: ({ row }) =>
-          row.original.libraryTrackId === null && row.original.sourceUrl ? (
-            <input
-              type="checkbox"
-              checked={selected.has(row.original.deviceLocalId)}
-              onMouseDown={(e) => e.stopPropagation()}
-              onChange={() => toggle(row.original.deviceLocalId)}
-            />
-          ) : null,
-      }),
       h.accessor('name', {
         header: 'Name',
         size: 240,
@@ -129,7 +110,7 @@ export function DeviceTracks({
           ),
       }),
     ],
-    [selected],
+    [],
   )
 
   const importable = items.filter((t) => t.libraryTrackId === null && t.sourceUrl)
@@ -186,11 +167,11 @@ export function DeviceTracks({
           disabled={inLibrary || !t.sourceUrl || targets.length === 0}
           title={targets.length === 0 ? 'No writable source to import into' : undefined}
           onClick={() => {
-            setSelected((old) => new Set(old).add(t.deviceLocalId))
+            void runImport()
             setMenu(null)
           }}
         >
-          Tick for import
+          Import {chosen.length > 1 ? `${chosen.length} selected` : 'this one'}
         </button>
       </div>
     )
@@ -215,7 +196,14 @@ export function DeviceTracks({
         ) : (
           <button className="prim" disabled={chosen.length === 0 || importing === 'running'} onClick={runImport}>
             <Icon name="backup" size={11} />
-            {chosen.length ? `Import ${chosen.length}` : 'Import'}
+            {/* "3 of 5" rather than "3": a selection that holds tracks the
+                library already has is normal, and silently importing fewer than
+                were selected is the kind of small lie nobody forgives twice. */}
+            {chosen.length === 0
+              ? 'Import'
+              : chosen.length === selected.size
+                ? `Import ${chosen.length}`
+                : `Import ${chosen.length} of ${selected.size}`}
           </button>
         )}
       </div>
@@ -239,11 +227,13 @@ export function DeviceTracks({
               ? 'Everything on this device is in the library'
               : 'Nothing on this device'
         }
-        selectedId={current}
-        onRowClick={(t) => setCurrent(t.deviceLocalId)}
+        selected={selected}
+        onSelectedChange={setSelected}
         onRowContextMenu={(t, e) => {
           e.preventDefault()
-          setCurrent(t.deviceLocalId)
+          // Right-clicking outside the selection makes that row the selection,
+          // the way it does everywhere else; inside it, the selection stands.
+          if (!selected.has(t.deviceLocalId)) setSelected(new Set([t.deviceLocalId]))
           setMenu({ x: e.clientX, y: e.clientY, track: t })
         }}
         rowClass={(t) =>

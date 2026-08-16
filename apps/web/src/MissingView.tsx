@@ -195,7 +195,7 @@ export function MissingView() {
   const [scanning, setScanning] = useState<string | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   /** Pointed at, right-clicked, and opened: three states of the same row. */
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [menu, setMenu] = useState<{ x: number; y: number; track: MissingTrack } | null>(null)
   const [asking, setAsking] = useState<MissingTrack | null>(null)
   const menuPosition = useMenuPosition(menu)
@@ -280,15 +280,15 @@ export function MissingView() {
               memoryKey={`missing:${sourceId}`}
               rowHeight={22}
               empty="Nothing matches."
-              selectedId={selected}
-              onRowClick={(t) => setSelected(t.id)}
+              selected={selected}
+              onSelectedChange={setSelected}
               // Double-click plays a track everywhere else in the app; here
               // there is nothing to play, and the question the row raises is
               // "where did it go" — so that is what it opens.
               onRowDoubleClick={(t) => setAsking(t)}
               onRowContextMenu={(t, e) => {
                 e.preventDefault()
-                setSelected(t.id)
+                if (!selected.has(t.id)) setSelected(new Set([t.id]))
                 setMenu({ x: e.clientX, y: e.clientY, track: t })
               }}
             />
