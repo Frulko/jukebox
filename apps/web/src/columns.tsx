@@ -2,6 +2,7 @@ import { createColumnHelper } from '@tanstack/react-table'
 import { fmtDate, fmtSize, fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { badgesFor, type BadgeContext } from './trackBadges'
+import { Tooltip } from './Tooltip'
 import type { features } from './tableFeatures'
 
 const h = createColumnHelper<typeof features, Track>()
@@ -50,9 +51,11 @@ function Status({ track, ctx }: { track: Track; ctx: BadgeContext }) {
   return (
     <span className="badges">
       {badges.map((b) => (
-        <i key={b.id} className={`badge ${b.tone}`} title={b.title}>
-          <Icon name={b.icon} size={9} />
-        </i>
+        <Tooltip key={b.id} label={b.title}>
+          <i className={`badge ${b.tone}`}>
+            <Icon name={b.icon} size={9} />
+          </i>
+        </Tooltip>
       ))}
     </span>
   )

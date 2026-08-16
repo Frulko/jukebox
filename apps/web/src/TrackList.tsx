@@ -10,6 +10,7 @@ import type { View } from './App'
 import { isUnavailable } from './trackBadges'
 import type { PluginEntry } from './pluginMenu'
 import { useMenuPosition } from './useMenuPosition'
+import { titleIfClipped } from './Tooltip'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -400,6 +401,9 @@ export function TrackList(p: Props) {
                     key={cell.id}
                     className={`td ${NUMERIC.has(cell.column.id) ? 'r' : ''} ${cell.column.id}`}
                     style={{ width: cell.column.getSize() }}
+                    // A column narrowed until its text is cut off should still
+                    // be readable; a column that fits needs no tooltip at all.
+                    onMouseEnter={titleIfClipped}
                   >
                     {cell.column.id === 'name' && p.showArtwork && (
                       <Cover seed={albumSeed(row.original)} size={p.rowHeight - 5} className="thumb" />

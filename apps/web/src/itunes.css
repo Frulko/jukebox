@@ -1801,3 +1801,18 @@ input[type="range"]::-webkit-slider-thumb {
    back to the thing that grew it. */
 .ctx-from { margin-left: auto; padding-left: 14px; font-style: normal; font-size: 10px; color: var(--dim); }
 .ctx button:disabled { opacity: .45; }
+
+/* The tooltip. Dark on every theme on purpose: it is chrome above the app, not
+   part of it, and one appearance means one thing wherever it shows up. */
+.tip {
+  z-index: 80;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #1c1f27;
+  color: #f2f5f9;
+  font-size: 11.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
+  pointer-events: none;
+}
