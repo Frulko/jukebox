@@ -34,6 +34,7 @@ import {
   authenticate, createToken, createUser, isOpen, listTokens, listUsers,
   revokeToken, userForToken, type User,
 } from './auth.ts'
+import { subsonicRouter } from './subsonic.ts'
 import {
   advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
   setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
@@ -1159,8 +1160,15 @@ export function createApp(dbFile: string) {
    * would guard nothing. It goes in with the rest of auth, and the URL shape
    * already has room for it.
    */
-  api.get('/stream/:id', async (c) => {
-    const id = c.req.param('id')
+  /**
+   * Serving a track, shared by the public API and the Subsonic router.
+   *
+   * A function rather than one route calling the other over HTTP: an internal
+   * request would pass back through the auth middleware without a token, and a
+   * Subsonic client that has already authenticated would be refused its own
+   * music.
+   */
+  async function serveStream(c: any, id: string, q: { rendition?: string; format?: string; accept?: string }) {
     const flat = db.prepare(
       `SELECT t.path, t.format, t.size, t.mtime, s.root, s.kind, s.config FROM tracks t
        JOIN sources s ON s.id = t.sourceId
@@ -1172,12 +1180,8 @@ export function createApp(dbFile: string) {
     // rather than the FLAC it cannot decode. A named rendition that does not
     // exist is a 404 rather than a silent fallback -- a client that asked for
     // one specific file should hear that it is gone.
-    const wanted = c.req.query('rendition') ?? c.req.query('format')
-    const chosen = pickRendition(db, id, {
-      rendition: c.req.query('rendition'),
-      format: c.req.query('format'),
-      accept: c.req.query('accept'),
-    })
+    const wanted = q.rendition ?? q.format
+    const chosen = pickRendition(db, id, q)
     if (wanted && !chosen) return fail(c, 404, 'not_found', `this track has no ${wanted} rendition`)
 
     // The flat columns are the preferred rendition's copy and always present,
@@ -1238,7 +1242,13 @@ export function createApp(dbFile: string) {
       'Content-Length': String(length),
       'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
     })
-  })
+  }
+
+  api.get('/stream/:id', (c) => serveStream(c, c.req.param('id'), {
+    rendition: c.req.query('rendition'),
+    format: c.req.query('format'),
+    accept: c.req.query('accept'),
+  }))
 
   /* ---------------- cover art ---------------- */
 
@@ -1248,10 +1258,10 @@ export function createApp(dbFile: string) {
    * screen. The ETag comes from the source file's mtime and size, so a retagged
    * file invalidates its own cover.
    */
-  api.get('/artwork/:id', async (c) => {
+  async function serveArtwork(c: any, id: string) {
     const t = db.prepare(
       `SELECT t.path, t.mtime, t.size, s.root FROM tracks t
-       JOIN sources s ON s.id = t.sourceId WHERE t.id = ?`).get(c.req.param('id')) as any
+       JOIN sources s ON s.id = t.sourceId WHERE t.id = ?`).get(id) as any
     if (!t) return fail(c, 404, 'not_found', 'unknown track')
 
     const etag = `"art-${t.mtime}-${t.size}"`
@@ -1269,7 +1279,9 @@ export function createApp(dbFile: string) {
       ETag: etag,
       'Cache-Control': 'private, max-age=86400',
     })
-  })
+  }
+
+  api.get('/artwork/:id', (c) => serveArtwork(c, c.req.param('id')))
 
   /* ---------------- events ---------------- */
 
@@ -1291,7 +1303,61 @@ export function createApp(dbFile: string) {
       { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
     ))
 
+  /**
+   * The Subsonic API, at the path two decades of clients expect.
+   *
+   * Outside `/api/v1` and outside its auth middleware on purpose: Subsonic has
+   * its own credentials scheme in the query string, and its own idea that a
+   * failure is still an HTTP 200.
+   */
+  const subsonic = subsonicRouter(db, dbFile)
+
+  /**
+   * Streaming and cover art for Subsonic clients.
+   *
+   * Delegated to the endpoints that already exist rather than reimplemented —
+   * `Range`, rendition selection and the artwork cache are all there, and a
+   * second copy would be a second set of bugs. `maxBitRate` is accepted and
+   * ignored: transcoding on the fly is not built yet, and a client asking for
+   * a lower bitrate would rather have the original than an error.
+   */
+  for (const path of ['/stream.view', '/download.view']) {
+    subsonic.app.get(path, (c) => {
+      const id = c.req.query('id')
+      if (!id) return c.body(null, 400)
+      // `maxBitRate` is accepted and ignored: transcoding on the fly is not
+      // built, and a client asking for a smaller file would rather have the
+      // original than an error.
+      return serveStream(c, id, { format: c.req.query('format') || undefined })
+    })
+  }
+
+  subsonic.app.get('/getCoverArt.view', (c) => {
+    const id = c.req.query('id')
+    if (!id) return c.body(null, 400)
+    return serveArtwork(c, id)
+  })
+
+  /** Subsonic's scrobble, mapped onto the play recording that already exists. */
+  subsonic.app.get('/scrobble.view', (c) => {
+    const id = c.req.query('id')
+    // `submission=false` is a "now playing" ping, not a listen. Recording it
+    // would count a play for every track someone skips through.
+    if (!id || c.req.query('submission') === 'false') return c.json({ 'subsonic-response': { status: 'ok', version: '1.16.1' } })
+    const t = getTrack(db, id)
+    if (t) {
+      recordPlay(db, events, id, {
+        played: t.duration,
+        startedAt: Number(c.req.query('time')) || undefined,
+      })
+    }
+    return c.json({ 'subsonic-response': { status: 'ok', version: '1.16.1' } })
+  })
+
+  // Mounted last: `app.route` copies the routes that exist when it is called,
+  // so anything added to a sub-app afterwards is silently never reachable.
   app.route('/api/v1', api)
+  app.route('/rest', subsonic.app)
   app.notFound((c) => fail(c, 404, 'not_found', 'unknown route'))
 
   return { app, db, jobs, scheduler, plugins, events }

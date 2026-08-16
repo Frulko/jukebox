@@ -113,7 +113,8 @@ hands out a URL.
 
 - [x] **5b.1** Users and bearer tokens — scrypt passwords, open until the first account
       exists, tokens stored as hashes and accepted in the query string for `<audio>`
-- [ ] **5b.2** OpenSubsonic emitter, on top of the recoverable-password path
+- [x] **5b.2** OpenSubsonic emitter — ping, browse, search, playlists, stream, cover art,
+      star, rate and scrobble. Both auth schemes, JSON and XML
 - [ ] **5b.3** Per-user libraries and roles beyond admin/user
 
 ## M5 · Plugins and store
@@ -134,7 +135,7 @@ hands out a URL.
       queue that survives an unreachable server
 - [ ] **5.6** Last.fm scrobble (same shape, plus an MD5-signed parameter dance)
 - [ ] **5.7** AudioMuse · **5.8** Home Assistant + MQTT
-- [ ] **5.9** OpenSubsonic (emitter) · **5.10** Spotify Connect · **5.11** Acquisition
+- [ ] **5.10** Spotify Connect · **5.11** Acquisition
 - [ ] **5.12** Sandboxed iframe for rich UI contributions
 - [ ] **5.13** Extism as an option once the store opens up to unknown authors
 
