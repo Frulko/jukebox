@@ -1,6 +1,6 @@
 ---
 title: UI evolution
-description: iTunes 8 → iTunes 12 → Apple Music — the spec behind the three themes.
+description: iTunes 8 → iTunes 12 → Apple Music, then Studio — the spec behind the four themes.
 ---
 
 Reference notes for the prototype's themes. A theme is not just a palette:
@@ -48,6 +48,46 @@ back-and-forth iTunes 12 had between tabs and sidebar. Density drops, and artwor
 becomes the basic visual unit: rounded grids, a thumbnail in every row, a
 generated 2×2 quilt for playlists without an image.
 
+## Studio — leaving the lineage
+
+The three above are archaeology: they reconstruct what Apple shipped. **Studio**
+is the first skin that answers to nothing but the app, and it borrows from where
+music software actually went after Catalina — Spotify's desktop client, Plexamp,
+Navidrome's newer web clients.
+
+What it takes from the current consensus, and why:
+
+- **A canvas, not a window.** The other three fill one framed rectangle. Studio
+  puts the sidebar and the content on a near-black canvas as separate rounded
+  panels with a gap between them. The panel edges do the work borders used to.
+- **An elevation ladder.** Canvas `#08090c` → sidebar `#0e1219` → content
+  `#0c1015` → popovers `#171c24`. A surface is higher because it is lighter, not
+  because it is outlined. Flat dark themes lose their hierarchy the moment two
+  panels touch; this is the fix that stuck.
+- **Depth as the only decoration.** Long, soft shadows under the panels, one
+  blurred surface — the now-playing card — and nothing else translucent.
+  Glassmorphism came back refined: applied to floating chrome, never to the page.
+- **One saturated colour.** A single green (`#2fe08a`) for selection, stars,
+  scrubber and the active mode. Everything else is a grey. Two accents in a dark
+  interface and neither means anything.
+- **Bigger targets.** 30 px rows, 30 px sidebar entries, 9 px radii, pill
+  controls. Density was iTunes 8's argument; it is not this one's.
+
+It is not a repaint. Because every structural branch is keyed off
+`theme !== 'classic'`, Studio inherits the mode tabs, the album and artist grids
+and the row artwork for free — the skin changes the *shape* of the app, not only
+its colours, which is the whole reason the theme system is not a stylesheet
+swap.
+
+| | **Music.app** | **Studio** |
+|---|---|---|
+| Ground | One window, black | Canvas, panels floating on it |
+| Hierarchy | Borders + fills | Elevation and shadow |
+| Accent | Apple red | One green |
+| Rows | 26 px, pill selection | 30 px, card selection with an accent hairline |
+| Radius | 6 px | 9 px panels, 14 px surfaces |
+| Type | SF Pro, 12 px | Inter, 12.5 px, uppercase micro-heads |
+
 ## What the prototype implements
 
 - **CSS tokens** (`itunes.css`): each theme only redefines variables — colors,
@@ -57,8 +97,11 @@ generated 2×2 quilt for playlists without an image.
   - `classic` → column browser, no mode tabs.
   - `itunes12` / `music` → Songs / Albums / Artists tab bar, no column browser,
     artwork thumbnail in the Name column.
-  - `music` → generated playlist quilt in the sidebar, tall rows, rounded
-    selection, row hover.
+  - `music` / `studio` → generated playlist quilt in the sidebar, tall rows,
+    rounded selection, row hover.
+  - `studio` → the frame itself changes: the shell becomes a canvas and the
+    sidebar and content become floating panels. `THEME_ROW_H` must track
+    `--row-h` (30 px here) or the virtualiser drifts as you scroll.
 - **Generated artwork** (`Artwork.tsx`): FNV-1a hash of the artist—album pair →
   hue, angle and one of six geometric patterns. Deterministic, so an album keeps
   its artwork from one reload to the next. Playlists reuse iTunes' 2×2 quilt,

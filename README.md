@@ -28,7 +28,7 @@ queue resumable after a crash, cursor pagination, differential sync by revision,
 
 **Interface** — the full iTunes prototype: virtualized TanStack v9 table,
 multi-selection, drag and drop, single and bulk editing with an adaptive modal,
-three themes (iTunes 8, iTunes 12, Apple Music), generated artwork. It still runs
+four themes (iTunes 8, iTunes 12, Apple Music, Studio), generated artwork. It still runs
 on fabricated data; wiring it to the API is in progress.
 
 ## Layout
