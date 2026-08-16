@@ -162,7 +162,12 @@ export class Player {
   }
 
   set(patch: Pick<Partial<PlayerState>, 'repeat' | 'shuffle'>, by?: string): PlayerState {
-    return this.#set(patch, by)
+    // Absent keys are dropped rather than spread: `PATCH /player { shuffle }`
+    // arrives here as `{ repeat: undefined, shuffle: true }`, and spreading
+    // that erases the repeat mode. Turning shuffle on must not silently turn
+    // repeat off — they are two controls that happen to share a route.
+    const given = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
+    return this.#set(given, by)
   }
 
   /**

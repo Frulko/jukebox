@@ -81,6 +81,20 @@ test('the revision moves on every change, so a client can ignore its own echo', 
   } finally { await h.cleanup() }
 })
 
+test('one flag at a time, because they share a route and not a meaning', async () => {
+  const h = await harness()
+  try {
+    await h.call('PATCH', '/player', { repeat: 'all' })
+    // The body carries no `shuffle`, so the patch must not decide one for it.
+    const after = (await h.call('PATCH', '/player', { shuffle: true })).body
+    assert.equal(after.shuffle, true)
+    assert.equal(after.repeat, 'all', 'turning shuffle on must not clear repeat')
+
+    const back = (await h.call('PATCH', '/player', { repeat: 'off' })).body
+    assert.equal(back.shuffle, true, 'and setting repeat must not clear shuffle')
+  } finally { await h.cleanup() }
+})
+
 test('stepping off the end stops, unless repeat says otherwise', async () => {
   const h = await harness()
   try {

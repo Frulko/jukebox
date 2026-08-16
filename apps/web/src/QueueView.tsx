@@ -69,7 +69,8 @@ export function QueueView({
   /** Tracks the page can already name, so most rows cost nothing. */
   known: Map<string, Track>
   onPlay: (id: string) => void
-  onRemove: (id: string) => void
+  /** By position, not by id: a queue may legitimately hold the same track twice. */
+  onRemove: (index: number) => void
   onClear: () => void
   onClose: () => void
 }) {
@@ -110,7 +111,7 @@ export function QueueView({
               known={known.get(id)}
               current={id === nowPlaying}
               onPlay={() => onPlay(id)}
-              onRemove={() => onRemove(id)}
+              onRemove={() => onRemove((at >= 0 ? at : 0) + i)}
             />
           ))}
           {hidden > 0 && (

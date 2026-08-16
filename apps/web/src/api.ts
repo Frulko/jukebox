@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient, useMutation, type QueryClient } from '@tanstack/react-query'
-import { createClient, type Job, type Track, type TrackPatch, type TrackQuery } from '@jukebox/client-sdk'
+import {
+  createClient, type Job, type PlayerState, type Track, type TrackPatch, type TrackQuery,
+} from '@jukebox/client-sdk'
 
 /**
  * Front-end data access.
@@ -24,6 +26,7 @@ const keys = {
   sources: ['sources'] as const,
   devices: ['devices'] as const,
   jobs: ['jobs'] as const,
+  player: ['player'] as const,
 }
 
 /**
@@ -199,9 +202,66 @@ export function useServerEvents(qc: QueryClient) {
         }
       },
       'library.changed': () => qc.invalidateQueries({ queryKey: ['tracks'] }),
+      // Somebody moved the queue — this window, another window, or a phone.
+      // Written straight in rather than invalidated: the event *is* the state,
+      // and re-fetching it would be a round trip to learn what we were told.
+      player: (state: PlayerState) =>
+        qc.setQueryData(keys.player, (old: (PlayerState & { track?: unknown }) | undefined) =>
+          ({ ...old, ...state })),
       'device.connected': () => qc.invalidateQueries({ queryKey: keys.devices }),
     })
     return close
+  }, [qc])
+}
+
+/**
+ * The shared queue.
+ *
+ * The queue is the server's, not this tab's. It was local until now, which made
+ * it a lie in three directions at once: a second window disagreed with the
+ * first, a phone controlling the same server saw nothing, and closing the tab
+ * threw away what was queued. The server already held all of it — what was
+ * missing was the front asking.
+ *
+ * Cached under one key and written by both the mutations here and the `player`
+ * event, so a change made in another window lands the same way as one made in
+ * this one.
+ */
+export const usePlayer = () =>
+  useQuery({
+    queryKey: keys.player,
+    queryFn: () => api.player.get(),
+    // The SSE stream is the update path; polling would only ever race it.
+    staleTime: Infinity,
+    retry: 1,
+  })
+
+/**
+ * The queue's verbs.
+ *
+ * Every one answers with the whole new state, so the cache is written from the
+ * server's reply rather than guessed at — the queue is the one piece of state
+ * where two windows disagreeing is immediately obvious.
+ */
+export function usePlayerActions() {
+  const qc = useQueryClient()
+  return useMemo(() => {
+    const land = (p: Promise<PlayerState>) =>
+      p.then((state) => {
+        qc.setQueryData(keys.player, (old: object | undefined) => ({ ...old, ...state }))
+        return state
+      })
+    return {
+      setQueue: (ids: string[], startAt = 0) => land(api.player.setQueue(ids, startAt)),
+      enqueue: (ids: string[]) => land(api.player.enqueue(ids)),
+      playNext: (ids: string[]) => land(api.player.enqueue(ids, true)),
+      goTo: (id: string) => land(api.player.goTo(id)),
+      next: () => land(api.player.next()),
+      previous: () => land(api.player.previous()),
+      clear: () => land(api.player.clear()),
+      pause: () => land(api.player.pause()),
+      set: (patch: { repeat?: PlayerState['repeat']; shuffle?: boolean }) => land(api.player.set(patch)),
+    }
   }, [qc])
 }
 

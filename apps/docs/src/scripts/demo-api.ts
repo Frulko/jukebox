@@ -47,6 +47,20 @@ for (const t of tracks.filter((_, i) => i % 13 === 4)) {
 }
 let revision = all.length
 
+/** The demo's copy of the server's player. Same shape, same rules. */
+const player = {
+  queue: [] as string[],
+  index: -1,
+  trackId: null as string | null,
+  playing: false,
+  position: 0,
+  target: { kind: 'local' } as { kind: 'local' },
+  repeat: 'off' as 'off' | 'all' | 'one',
+  shuffle: false,
+  revision: 0,
+  by: null as string | null,
+}
+
 const norm = (s: string) => s.toLowerCase()
 
 function match(t: Track, q: TrackQuery) {
@@ -246,6 +260,83 @@ function stats(): Stats {
 /** Returns the body for a route, or `undefined` when the demo has nothing to say. */
 function route(path: string, params: URLSearchParams, method: string, body: string | null): unknown {
   const q = Object.fromEntries(params) as TrackQuery
+
+  /* ---- the shared queue ----
+     The server holds the queue; the front is one controller among several. The
+     demo therefore has to hold one too, with the same rules — otherwise the
+     demo would teach that "add to queue" is a local array, which is exactly
+     what it stopped being. Same semantics as `apps/server/src/player.ts`:
+     repeat one is the renderer's business, shuffle picks at random, and the end
+     of the list only wraps when repeat is `all`. */
+  if (path.startsWith('/player')) {
+    const b = JSON.parse(body ?? '{}') as Record<string, any>
+    const at = (i: number) => {
+      player.index = i
+      player.trackId = player.queue[i] ?? null
+      player.position = 0
+    }
+    if (path === '/player' && method === 'GET') {
+      return { ...player, track: tracks.find((t) => t.id === player.trackId) ?? null }
+    }
+    if (path === '/player' && method === 'PATCH') {
+      if (b.repeat !== undefined) player.repeat = b.repeat
+      if (b.shuffle !== undefined) player.shuffle = b.shuffle
+    }
+    if (path === '/player/queue' && method === 'PUT') {
+      player.queue = [...(b.trackIds ?? [])]
+      at(Number(b.startAt) || 0)
+      player.playing = player.queue.length > 0
+    }
+    if (path === '/player/queue' && method === 'POST') {
+      const ids: string[] = b.trackIds ?? []
+      if (player.index < 0) {
+        player.queue = [...ids]
+        at(0)
+      } else if (b.next) {
+        player.queue = [
+          ...player.queue.slice(0, player.index + 1), ...ids, ...player.queue.slice(player.index + 1),
+        ]
+      } else {
+        player.queue = [...player.queue, ...ids]
+      }
+    }
+    if (path === '/player/queue' && method === 'DELETE') {
+      player.queue = []
+      player.index = -1
+      player.trackId = null
+      player.playing = false
+    }
+    if (path === '/player/play') player.playing = player.index >= 0
+    if (path === '/player/pause') player.playing = false
+    if (path === '/player/seek') player.position = Math.max(0, Number(b.position) || 0)
+    if (path === '/player/goto') {
+      const i = player.queue.indexOf(String(b.trackId))
+      if (i >= 0) { at(i); player.playing = true }
+    }
+    if (path === '/player/next' || path === '/player/previous') {
+      const dir = path.endsWith('next') ? 1 : -1
+      if (player.queue.length) {
+        if (player.shuffle && dir === 1) {
+          at(Math.floor(Math.random() * player.queue.length))
+          player.playing = true
+        } else {
+          const next = player.index + dir
+          if (next >= player.queue.length) {
+            if (player.repeat === 'all') { at(0); player.playing = true }
+            else { player.playing = false; player.position = 0 }
+          } else if (next < 0) {
+            // Back from the first track restarts it rather than wrapping.
+            player.position = 0
+          } else {
+            at(next)
+            player.playing = true
+          }
+        }
+      }
+    }
+    player.revision++
+    return { ...player, track: tracks.find((t) => t.id === player.trackId) ?? null }
+  }
 
   if (path === '/tracks' && method === 'GET') {
     const found = select(q)

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
   api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
-  useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
+  usePlayer, usePlayerActions, useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
 import { Sidebar } from './Sidebar'
@@ -49,6 +49,7 @@ const THEMES: Array<[Theme, string]> = [
 export const THEME_ROW_H: Record<Theme, number> = { classic: 17, itunes12: 21, music: 26, studio: 30 }
 
 const NO_TRACKS: Track[] = []
+const NO_QUEUE: string[] = []
 
 export default function App() {
   const qc = useQueryClient()
@@ -110,15 +111,22 @@ export default function App() {
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
   /**
-   * What is playing *through*, which is not what the screen is showing.
+   * What is playing *through*, which is not what the screen is showing — and
+   * which belongs to the server rather than to this tab.
    *
    * Deriving the next track from the current view meant that walking off to the
-   * podcasts — where the track list is not even mounted — silenced the end of
-   * the album: the list was empty, so there was nothing to step into. Ids
-   * rather than tracks, because the device view can queue what it holds without
-   * having to invent Track objects for rows that are only on the iPod.
+   * podcasts silenced the end of the album: the list was not even mounted, so
+   * there was nothing to step into. Holding it locally instead fixed that and
+   * left three smaller lies in place — a second window disagreed with the
+   * first, a phone controlling the same server saw nothing, and closing the tab
+   * threw the queue away. The server has held the intent all along; this is the
+   * front finally asking. Playback stays here: `target: local` means this
+   * browser is the renderer, so the element plays whatever the shared state
+   * says is current.
    */
-  const [queue, setQueue] = useState<string[]>([])
+  const player = usePlayer().data
+  const queue = player?.queue ?? NO_QUEUE
+  const control = usePlayerActions()
   /**
    * Every track the app has had in its hands this session.
    *
@@ -129,8 +137,8 @@ export default function App() {
   const known = useRef(new Map<string, Track>())
   // The playing track can fall outside the current view, so keep it separately.
   const [nowPlayingTrack, setNowPlayingTrack] = useState<Track | null>(null)
-  const [shuffle, setShuffle] = useState(false)
-  const [repeat, setRepeat] = useState<Repeat>('off')
+  const shuffle = player?.shuffle ?? false
+  const repeat = (player?.repeat ?? 'off') as Repeat
   const [volume, setVolume] = useState(75)
 
   useServerEvents(qc)
@@ -321,16 +329,18 @@ export default function App() {
 
   const playTrack = useCallback(
     (id: string, from?: string[]) => {
-      // A view that knows what it is playing out of says so; the queue only
-      // changes when playback starts somewhere new.
-      if (from) setQueue(from)
       setNowPlaying(id)
-      // No "playing" flag to set: the element raises `play` when it actually
-      // starts, and that is what the button reads.
+      // Started before the round trip, and deliberately: the element must be
+      // told inside the click's own call stack or the browser stops counting it
+      // as the gesture that authorises playback.
       audio.play(id)
       api.tracks.get(id).then(setNowPlayingTrack).catch(() => setNowPlayingTrack(null))
+      // A view that knows what it is playing out of says so; the queue only
+      // changes when playback starts somewhere new.
+      if (from) void control.setQueue(from, Math.max(0, from.indexOf(id)))
+      else void control.goTo(id)
     },
-    [audio],
+    [audio, control],
   )
 
   /**
@@ -344,10 +354,10 @@ export default function App() {
     (ids: string[]) => {
       if (!ids.length) return
       if (!nowPlaying) return playTrack(ids[0], ids)
-      setQueue((q) => [...q, ...ids])
+      void control.enqueue(ids)
       setNotice(`${ids.length} track${ids.length > 1 ? 's' : ''} added to the queue`)
     },
-    [nowPlaying, playTrack],
+    [nowPlaying, playTrack, control],
   )
 
   /**
@@ -361,34 +371,60 @@ export default function App() {
     (ids: string[]) => {
       if (!ids.length) return
       if (!nowPlaying) return playTrack(ids[0], ids)
-      setQueue((q) => {
-        const at = q.indexOf(nowPlaying)
-        // Playing something that is not in the queue at all — a track from a
-        // view nobody queued — still has an "after this one", and it is the front.
-        if (at < 0) return [...ids, ...q]
-        return [...q.slice(0, at + 1), ...ids, ...q.slice(at + 1)]
-      })
+      // The insertion point is the server's `index`, not a search for the
+      // current id: a queue can hold the same track twice, and "after this one"
+      // means after *this* one.
+      void control.playNext(ids)
       setNotice(`${ids.length} track${ids.length > 1 ? 's' : ''} playing next`)
     },
-    [nowPlaying, playTrack],
+    [nowPlaying, playTrack, control],
   )
 
+  /**
+   * Move through the queue — asked of the server, which owns the rules.
+   *
+   * Shuffle, repeat and "does it wrap at the end" were duplicated here and in
+   * the server's player, which is one copy too many: the answer has to be the
+   * same whether the button pressed was in this tab, in another one, or on a
+   * phone. The server answers with the new state; if it did not advance — the
+   * end of a list with repeat off — nothing new is current and the element
+   * stops.
+   */
   const step = useCallback(
     (dir: 1 | -1) => {
       if (!queue.length) return
-      if (shuffle && dir === 1) return playTrack(queue[Math.floor(Math.random() * queue.length)])
-      const i = queue.indexOf(nowPlaying ?? '')
-      // Falling off the end only wraps when repeat is on. Otherwise the list
-      // finishes and stops, which is what "repeat: off" means -- wrapping
-      // regardless would leave a playlist looping all night.
-      if (repeat === 'off' && i === queue.length - 1 && dir === 1) return audio.pause()
-      const next = queue[(i + dir + queue.length) % queue.length]
-      if (next) playTrack(next)
+      void (dir === 1 ? control.next() : control.previous()).then((state) => {
+        if (!state.playing || !state.trackId) return audio.pause()
+        if (state.trackId !== nowPlaying) playTrack(state.trackId)
+        // Same track, moved to its start: going back from the first one.
+        else audio.seek(0)
+      })
     },
-    [queue, nowPlaying, shuffle, repeat, playTrack, audio],
+    [queue.length, nowPlaying, playTrack, audio, control],
   )
 
+  /**
+   * The shared queue moved somewhere this tab did not move it.
+   *
+   * What is current always follows — the queue moved on, so the track it is on
+   * moved on, and a window showing the old one is a window telling a small lie.
+   * What does *not* follow is the sound: the element is only started if it was
+   * already playing. A page that begins making noise because a phone did
+   * something is a page nobody asked to hear, and on load the browser would
+   * refuse it anyway.
+   */
+  useEffect(() => {
+    const id = player?.trackId ?? null
+    if (!id || id === nowPlaying) return
+    setNowPlaying(id)
+    api.tracks.get(id).then(setNowPlayingTrack).catch(() => setNowPlayingTrack(null))
+    if (audio.playing) audio.play(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player?.trackId])
+
   const current = tracks.find((t) => t.id === nowPlaying) ?? nowPlayingTrack
+  const toggleShuffle = () => void control.set({ shuffle: !shuffle })
+  const cycleRepeat = () => void control.set({ repeat: repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off' })
 
   useEffect(() => { stepRef.current = step }, [step])
 
@@ -531,8 +567,8 @@ export default function App() {
         onNext={() => step(1)}
         onSeek={audio.seek}
         onVolume={setVolume}
-        onShuffle={() => setShuffle((v) => !v)}
-        onRepeat={() => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off'))}
+        onShuffle={toggleShuffle}
+        onRepeat={cycleRepeat}
         onSearch={setSearch}
         onToggleBrowser={() => setBrowserOpen((v) => !v)}
       />
@@ -547,8 +583,20 @@ export default function App() {
           nowPlaying={nowPlaying}
           known={known.current}
           onPlay={(id) => playTrack(id)}
-          onRemove={(id) => setQueue((q) => q.filter((x) => x !== id))}
-          onClear={() => setQueue(nowPlaying ? [nowPlaying] : [])}
+          // No "remove one" route, and it does not need one: a queue minus a
+          // row is a queue, sent whole with the current track kept where it is
+          // so taking something out from under the player does not restart it.
+          onRemove={(index) => {
+            // By position: the queue can hold the same track twice, and taking
+            // out "the second one" must not take out the first as well.
+            const next = queue.filter((_, i) => i !== index)
+            const keep = nowPlaying ? next.indexOf(nowPlaying) : -1
+            void control.setQueue(next, Math.max(0, keep))
+          }}
+          onClear={() => {
+            const keep = nowPlaying ? [nowPlaying] : []
+            void control.setQueue(keep, 0)
+          }}
           onClose={() => setQueueOpen(false)}
         />
       )}
@@ -688,10 +736,10 @@ export default function App() {
         <button className="sb-btn" onClick={() => newPlaylist()} title="New playlist">
           <Icon name="plus" size={9} />
         </button>
-        <button className={`sb-btn ${shuffle ? 'on' : ''}`} onClick={() => setShuffle((v) => !v)} title="Shuffle">
+        <button className={`sb-btn ${shuffle ? 'on' : ''}`} onClick={toggleShuffle} title="Shuffle">
           <Icon name="shuffle" size={10} />
         </button>
-        <button className={`sb-btn ${repeat !== 'off' ? 'on' : ''}`} onClick={() => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off'))} title="Repeat">
+        <button className={`sb-btn ${repeat !== 'off' ? 'on' : ''}`} onClick={cycleRepeat} title="Repeat">
           <Icon name="repeat" size={10} />
         </button>
         <span className="summary">
