@@ -75,16 +75,9 @@ registerBadges((track, ctx) =>
     : null,
 )
 
-registerBadges((track) =>
-  track.enabled
-    ? null
-    : {
-        id: 'skipped',
-        icon: 'next',
-        tone: 'info',
-        title: 'Unticked: skipped when this list plays through',
-      },
-)
+// No badge for "unticked". The empty checkbox is three columns to the left,
+// saying the same thing in the same row — and a second mark for it turned a
+// handful of unticked rows into what looked like a disabled block.
 
 registerBadges((track, ctx) =>
   track.devices.some((id) => ctx.deviceIds.includes(id))

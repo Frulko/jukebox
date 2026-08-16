@@ -74,13 +74,25 @@ export const makeColumns = (a: CellActions) =>
   h.columns([
     h.display({
       id: 'checked',
-      header: () => <span className="hdr-check">✓</span>,
+      header: () => (
+        <span className="hdr-check" title="Ticked tracks play when the list plays through. Nothing to do with what is selected.">
+          ✓
+        </span>
+      ),
       size: 24,
       enableResizing: false,
       cell: ({ row }) => (
         <input
           type="checkbox"
           checked={row.original.enabled}
+          // The tick is a property of the track, stored on the server, and it
+          // survives you closing the app. Selection is what you are pointing at
+          // right now. Two different questions, so they say which they answer.
+          title={
+            row.original.enabled
+              ? 'Plays when this list plays through — untick to skip it'
+              : 'Skipped when this list plays through — tick to include it'
+          }
           onMouseDown={(e) => e.stopPropagation()}
           onChange={() => a.toggleChecked(row.original.id)}
         />

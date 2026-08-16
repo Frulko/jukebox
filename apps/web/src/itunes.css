@@ -41,7 +41,6 @@
   --head-sorted: linear-gradient(#d6e5f8, #b8d0ee);
 
   --stripe: #edf3fe;
-  --checked: rgba(61, 128, 223, .07);
   /* Flat, where iTunes 8 had a gradient. A row is the one place a vertical
      gradient cannot go: it restarts on every row, so a block of selected rows
      shows a light seam at each boundary — dark bottom against light top — which
@@ -438,19 +437,21 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: var(--row-radius);
 }
 .tr.odd { background: var(--stripe); }
-/* The checked state gets its own tint, deliberately not the blue of a
-   click-selection: one is what you ticked, the other is what you are pointing
-   at. Declared before the selection so that a row which is both reads as
-   selected — the pointer wins over the tick. */
-.tr.checked { background: var(--checked, transparent); }
 .tr.sel { background: var(--sel); color: var(--sel-text); }
 .tr.sel .dim, .tr.sel .num { color: var(--sel-text); opacity: .85; }
 .tracklist:not(:focus-within) .tr.sel { background: var(--sel-blur); }
-/* An unchecked row used to be dimmed to 45 %, which every reader took for
-   "disabled, you cannot have this" — it only means the track is skipped when
-   the list plays through. The empty checkbox says that on its own; the row
-   itself stays legible, and only its name steps back a shade. */
-.tr.unchecked .td.name { color: var(--dim); }
+/* Four states can land on one row — selected, playing, unreachable, unticked —
+   and the way to keep them legible is to let each own a different channel:
+   selection is the background, playing is the accent, unreachable is opacity,
+   unticked is nothing but its own empty box.
+
+   That last one took three tries. Dimming the row to 45 % read as "you cannot
+   have this". Tinting the ticked ones coloured 94 % of the table. Greying the
+   name plus a skip badge made six unticked rows in a row look like a disabled
+   block — and said the same thing twice, once in the box and once in a badge
+   two columns away. The box alone is enough; it is in the row, it is what you
+   click, and it is the only thing that changes when you do. */
+.tr.unchecked .td.name { /* nothing: the empty box is the signal */ }
 .tr.playing .td.name { font-weight: 600; }
 .tr.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
 .tr.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
@@ -789,7 +790,6 @@ input[type="range"]::-webkit-slider-thumb {
   --head-sorted: #efefef;
 
   --stripe: #fafafa;
-  --checked: rgba(250, 36, 60, .05);
   --sel: #e2e2e2;
   --sel-text: #1d1d1d;
   --sel-blur: #eee;
@@ -870,7 +870,6 @@ input[type="range"]::-webkit-slider-thumb {
   --head-sorted: #2a2a2d;
 
   --stripe: transparent;
-  --checked: rgba(250, 36, 60, .08);
   --sel: #3a3a3d;
   --sel-text: #fff;
   --sel-blur: #2c2c2f;
@@ -1274,7 +1273,6 @@ input[type="range"]::-webkit-slider-thumb {
   --head-sorted: rgba(255, 255, 255, .04);
 
   --stripe: transparent;
-  --checked: rgba(47, 224, 138, .06);
   --sel: #1c2029;
   --sel-text: #f2f5f9;
   --sel-blur: #16191f;
