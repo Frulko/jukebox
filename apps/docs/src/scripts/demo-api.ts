@@ -944,7 +944,22 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   // would have started and the scan job already on display keeps running.
   if (path.startsWith('/sources/') && path.endsWith('/scan') && method === 'POST') return scanning()
   if (path === '/devices') return { items: [DEVICE] }
-  if (path === '/jobs') return { items: [syncing(), scanning()].filter(Boolean) }
+  if (path === '/jobs') {
+    // What the queue has done lately, not only what is moving: the failed one
+    // is the row this tab exists for.
+    const past: Job[] = [
+      { id: 'job-writeback', kind: 'writeback', state: 'done',
+        progress: { done: 42, total: 42, bytes: 0 }, error: null,
+        createdAt: Date.now() - 3600_000, startedAt: Date.now() - 3590_000, finishedAt: Date.now() - 3300_000 },
+      { id: 'job-transcode', kind: 'transcode', state: 'failed',
+        progress: { done: 7, total: 19, bytes: 0 }, error: 'ffmpeg is not installed on this machine',
+        createdAt: Date.now() - 7200_000, startedAt: Date.now() - 7190_000, finishedAt: Date.now() - 7100_000 },
+      { id: 'job-podcast', kind: 'podcast', state: 'done',
+        progress: { done: 3, total: 3, bytes: 0 }, error: null,
+        createdAt: Date.now() - 86400_000, startedAt: Date.now() - 86390_000, finishedAt: Date.now() - 86300_000 },
+    ]
+    return { items: [syncing(), scanning(), ...past].filter(Boolean) }
+  }
   if (path === `/devices/${DEVICE.id}/import` && method === 'POST') {
     const b = JSON.parse(body ?? '{}') as { deviceLocalIds?: string[] }
     // Importing off a device is a job like any other — the satellite serves the

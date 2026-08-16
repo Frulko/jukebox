@@ -2216,3 +2216,15 @@ input[type="range"]::-webkit-slider-thumb {
 .ap-folders button.on em { color: var(--sel-text); }
 .ap-preview { margin: 10px 0 0; }
 .pod-section { padding: 10px 10px 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+
+/* The server page in tabs: it will keep growing, and a page that grows
+   downwards buries whatever was added first. */
+.admin-tabs { margin-bottom: 14px; }
+.admin-tabs .tab-badge { margin-left: 6px; padding: 0 5px; border-radius: 8px; font-style: normal; font-size: 10px; background: var(--accent); color: #fff; }
+.admin-table tr.failed .j-state, .j-state.failed { color: var(--danger, #d4342c); }
+.j-state.done { color: var(--dim); }
+.j-state.running, .j-state.queued { color: var(--accent); }
+.j-error { color: var(--danger, #d4342c); }
+.admin-table td button + button { margin-left: 5px; }
+.admin-newuser { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 12px 0 0; }
+.admin-newuser input { font: inherit; font-size: 11px; padding: 3px 6px; min-width: 170px; }
