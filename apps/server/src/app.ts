@@ -24,6 +24,20 @@ import { mimeFor, parseRange } from './stream.ts'
 import { configOf, open as rcOpen, RcloneError, version as rcVersion } from './rclone.ts'
 import { configOf as jfConfigOf, info as jfInfo, open as jfOpen } from './jellyfin.ts'
 import { configOf as plexConfigOf, info as plexInfo, open as plexOpen } from './plex.ts'
+import * as airplay from './airplay.ts'
+
+/**
+ * A renderer, whichever protocol found it.
+ *
+ * Kept as a tagged union rather than flattened into a common shape: the two
+ * protocols need genuinely different things to be told to play — a control URL
+ * and a SOAP envelope on one side, an address and a session on the other — and
+ * a lowest common denominator would only push the difference somewhere less
+ * obvious.
+ */
+type Output =
+  | { kind: 'upnp'; id: string; name: string; upnp: Renderer }
+  | { kind: 'airplay'; id: string; name: string; airplay: airplay.AirPlayDevice }
 import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
@@ -162,7 +176,7 @@ export function createApp(dbFile: string) {
   const events = new Events()
   // Cached between searches: SSDP takes seconds, and a UI that lists outputs on
   // every render would spend its life waiting for a multicast timeout.
-  let renderers: { at: number; items: Renderer[] } = { at: 0, items: [] }
+  let renderers: { at: number; items: Output[] } = { at: 0, items: [] }
   const player = new Player(db, events)
   const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events)
   seedPresets(db)
@@ -580,20 +594,49 @@ export function createApp(dbFile: string) {
     if (!t) return
     const base = advertisedBase(Number(process.env.PORT ?? 8787))
     try {
-      if (state.playing) {
-        await playUrl(renderer, {
-          name: t.name, artist: t.artist, album: t.album, duration: t.duration,
-          url: `${base}/api/v1/stream/${t.id}`,
-        })
-      } else {
-        await pauseRenderer(renderer)
-      }
+      if (state.playing) await startOn(renderer, t, `${base}/api/v1/stream/${t.id}`)
+      else await pauseOn(renderer)
     } catch (err) {
       console.warn(`[player] ${renderer.name} refused:`, err instanceof Error ? err.message : err)
     }
   }
 
   /* ---------------- outputs ---------------- */
+
+  /**
+   * Both discoveries at once.
+   *
+   * UPnP shouts over SSDP and AirPlay answers questions over multicast DNS —
+   * two protocols that share nothing but the fact that both take a second and
+   * neither can be hurried. Run in parallel because they are independent, and
+   * each is allowed to fail on its own: a network where one is blocked should
+   * still list what the other found.
+   */
+  async function discoverOutputs(): Promise<Output[]> {
+    const [upnp, air] = await Promise.all([
+      discoverRenderers().catch(() => [] as Renderer[]),
+      airplay.discover().catch(() => [] as airplay.AirPlayDevice[]),
+    ])
+    return [
+      ...upnp.map((r): Output => ({ kind: 'upnp', id: r.id, name: r.name, upnp: r })),
+      ...air.map((d): Output => ({ kind: 'airplay', id: d.id, name: d.name, airplay: d })),
+    ]
+  }
+
+  /**
+   * The four verbs, over whichever protocol the output speaks.
+   *
+   * Both are told to fetch a URL rather than being sent audio, which is why one
+   * dispatch works for both and why AirPlay is here at all: its other protocol,
+   * RAOP, would mean encoding and packetising the stream on this side.
+   */
+  const startOn = (o: Output, t: any, url: string) =>
+    o.kind === 'upnp'
+      ? playUrl(o.upnp, { name: t.name, artist: t.artist, album: t.album, duration: t.duration, url })
+      : airplay.play(o.airplay, url)
+
+  const pauseOn = (o: Output) => o.kind === 'upnp' ? pauseRenderer(o.upnp) : airplay.pause(o.airplay)
+  const stopOn = (o: Output) => o.kind === 'upnp' ? stopRenderer(o.upnp) : airplay.stop(o.airplay)
 
   /**
    * Renderers on the network.
@@ -606,7 +649,7 @@ export function createApp(dbFile: string) {
   api.get('/outputs', async (c) => {
     const now = Date.now()
     if (c.req.query('refresh') === 'true' || now - renderers.at > 30_000) {
-      renderers = { at: now, items: await discoverRenderers().catch(() => []) }
+      renderers = { at: now, items: await discoverOutputs().catch(() => []) }
     }
 
     // Two kinds, one list. A speaker found by shouting on the network and a
@@ -623,8 +666,20 @@ export function createApp(dbFile: string) {
 
     return c.json({
       items: [
-        ...renderers.items.map(({ id, name, manufacturer, model, address }) =>
-          ({ id, name, kind: 'upnp', manufacturer, model, address, formats: [], stale: false })),
+        ...renderers.items.map((o) => ({
+          id: o.id,
+          name: o.name,
+          kind: o.kind,
+          manufacturer: o.kind === 'upnp' ? o.upnp.manufacturer : 'Apple',
+          model: o.kind === 'upnp' ? o.upnp.model : o.airplay.model,
+          address: o.kind === 'upnp' ? o.upnp.address : `${o.airplay.address}:${o.airplay.port}`,
+          formats: [],
+          stale: false,
+          // Volume lives in RTSP on AirPlay, which is a protocol this does not
+          // speak. Saying so lets the UI hide the slider rather than offer one
+          // that does nothing.
+          volume: o.kind === 'upnp' ? Boolean(o.upnp.volumeUrl) : false,
+        })),
         ...registered,
       ],
       // What a renderer will be told to fetch. Shown because when it is wrong --
@@ -673,17 +728,14 @@ export function createApp(dbFile: string) {
 
     const base = advertisedBase(Number(process.env.PORT ?? 8787))
     try {
-      await playUrl(renderer, {
-        name: t.name, artist: t.artist, album: t.album, duration: t.duration,
-        url: `${base}/api/v1/stream/${t.id}`,
-      })
+      await startOn(renderer, t, `${base}/api/v1/stream/${t.id}`)
       return c.json({ playing: t.id, on: renderer.name, url: `${base}/api/v1/stream/${t.id}` })
     } catch (err) {
       return fail(c, 502, 'renderer_refused', err instanceof Error ? err.message : 'the renderer refused')
     }
   })
 
-  for (const [path, action] of [['pause', pauseRenderer], ['stop', stopRenderer]] as const) {
+  for (const [path, action] of [['pause', pauseOn], ['stop', stopOn]] as const) {
     api.post(`/outputs/:id/${path}`, async (c) => {
       const renderer = renderers.items.find((r) => r.id === c.req.param('id'))
       if (!renderer) return fail(c, 404, 'not_found', 'unknown output')
@@ -701,8 +753,13 @@ export function createApp(dbFile: string) {
     if (!renderer) return fail(c, 404, 'not_found', 'unknown output')
     const b = await c.req.json().catch(() => null)
     if (typeof b?.volume !== 'number') return fail(c, 400, 'bad_body', 'expected { volume: 0-100 }')
+    if (renderer.kind !== 'upnp') {
+      // Not a refusal and not a bug: AirPlay's volume lives in RTSP
+      // SET_PARAMETER, on the protocol this deliberately does not speak.
+      return fail(c, 501, 'not_supported', 'AirPlay volume is not available over its HTTP interface')
+    }
     try {
-      await setRendererVolume(renderer, b.volume)
+      await setRendererVolume(renderer.upnp, b.volume)
       return c.body(null, 204)
     } catch (err) {
       return fail(c, 502, 'renderer_refused', err instanceof Error ? err.message : 'the renderer refused')

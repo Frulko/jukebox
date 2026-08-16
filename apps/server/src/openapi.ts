@@ -136,13 +136,13 @@ const DOCS: Record<string, Doc> = {
   'PATCH /player': { summary: 'Changes the output, repeat or shuffle.', tag: 'player', body: '{ target?, repeat?, shuffle? }' },
   'POST /player/report': { summary: 'A renderer saying where it actually is. It may not reorder anything.', tag: 'player', body: '{ position, playing? }' },
 
-  'GET /outputs': { summary: 'Renderers on the network, found by SSDP.', tag: 'outputs', query: ['refresh'] },
+  'GET /outputs': { summary: 'Renderers on the network — UPnP by SSDP, AirPlay by multicast DNS — plus satellites that registered themselves.', tag: 'outputs', query: ['refresh'] },
   'POST /outputs/register': { summary: 'A satellite announcing it can play. Re-registering is also its heartbeat.', tag: 'outputs', body: '{ id, name, url, formats? }' },
   'DELETE /outputs/:id': { summary: 'Forgets a registered output. Discovered ones come back on their own.', tag: 'outputs' },
   'POST /outputs/:id/play': { summary: 'Points a renderer at a track and starts it.', tag: 'outputs' },
   'POST /outputs/:id/pause': { summary: 'Pauses it.', tag: 'outputs' },
   'POST /outputs/:id/stop': { summary: 'Stops it.', tag: 'outputs' },
-  'POST /outputs/:id/volume': { summary: 'Sets its volume, 0 to 100.', tag: 'outputs' },
+  'POST /outputs/:id/volume': { summary: 'Sets its volume, 0 to 100. AirPlay answers 501: its volume lives in RTSP, not this protocol.', tag: 'outputs' },
 
   'GET /podcasts': { summary: 'Subscriptions.', returns: 'Podcast[]', tag: 'podcasts' },
   'POST /podcasts': { summary: 'Subscribes and fetches straight away.', tag: 'podcasts', body: '{ feedUrl, cron?, keepLast?, autoDownload? }' },

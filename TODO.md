@@ -85,7 +85,16 @@ hands out a URL.
       executes it and reports back, and every controller sees the same queue
 - [x] **3.6** Satellite renderer — registers as an output, follows the shared queue, plays
       through mpv/ffplay/vlc and reports back. It pulls; the server never pushes audio
-- [ ] **3.5** AirPlay · **3.7** Chromecast
+- [~] **3.5** AirPlay — discovery is done and real: `mdns.ts` is a hand-written multicast DNS
+      reader (compression pointers and all, no dependency) and `airplay.ts` drives the HTTP
+      profile, so the receiver fetches the stream URL exactly as a UPnP renderer does. Both
+      protocols now dispatch through one `Output` union. Verified against the two real
+      receivers on this LAN. **The wall is pairing**: anything AirPlay 2 answers 403 to the
+      control routes until a HomeKit pairing is done (SRP6a, Curve25519, ChaCha20-Poly1305,
+      a PIN on a television) — found, named in the error, not yet performed. RAOP is
+      deliberately out: it would put an ALAC encoder and an RTP clock in the server
+- [ ] **3.7** Chromecast — `mdns.ts` already finds it at `_googlecast._tcp`; what is left is
+      the protobuf channel over TLS
 - [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)
 
 ## M4b · One song, several files
