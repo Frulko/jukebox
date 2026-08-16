@@ -20,6 +20,7 @@ import { AlbumsView, ArtistsView } from './LibraryViews'
 import { PlaylistsView } from './PlaylistsView'
 import { ConvertDialog } from './ConvertDialog'
 import { AdminView } from './AdminView'
+import { DuplicatesView } from './DuplicatesView'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -341,6 +342,7 @@ export default function App() {
     radio: <RadioView search={search} />,
     missing: <MissingView />,
     admin: <AdminView />,
+    duplicates: <DuplicatesView onNotice={setNotice} />,
     playlists: (
       <PlaylistsView
         playlists={playlists}

@@ -1737,3 +1737,29 @@ input[type="range"]::-webkit-slider-thumb {
 .p-error { color: var(--accent); }
 .p-perms em { font-style: normal; font-size: 10px; margin-right: 5px; padding: 1px 6px; border: 1px dashed var(--line); border-radius: 4px; color: var(--dim); }
 .admin-note { margin-top: 10px; font-size: 11.5px; color: var(--dim); line-height: 1.5; max-width: 68ch; }
+
+/* ---------------- duplicates ---------------- */
+.duplicates { padding: 16px 20px 28px; }
+.duplicates h2 { margin: 0 0 8px; font-size: 17px; }
+.dup-lead { max-width: 76ch; margin: 0 0 18px; color: var(--dim); line-height: 1.5; }
+.dup-group {
+  margin-bottom: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+.dup-head { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+.dup-head b { font-size: 12.5px; }
+.dup-head .dim { font-size: 11.5px; }
+.dup-why { margin-left: auto; font-size: 10px; padding: 1px 7px; border-radius: 99px; color: var(--dim); background: color-mix(in srgb, currentColor 12%, transparent); }
+.dup-why.fingerprint { color: #1f9d4d; }
+.dup-table { width: 100%; font-size: 12px; }
+.dup-table th { text-align: left; font-weight: 600; color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px 4px; }
+.dup-table td { padding: 4px 10px; border-top: 1px solid var(--line-soft); }
+.dup-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dup-table tr.on { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.dup-foot { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line-soft); }
+.dup-foot .dim { font-size: 11px; }
+.dup-foot button { margin-left: auto; }
+.dup-failed { color: var(--accent); font-size: 11px; }

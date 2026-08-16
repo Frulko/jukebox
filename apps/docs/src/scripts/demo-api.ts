@@ -247,6 +247,28 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   if (path === '/transcode' && method === 'POST') return scanning()
   // Two plugins so the admin page shows both states it has to explain: one
   // running, one that failed to load and says why.
+  // Two kinds of duplicate, because they are resolved differently: the same
+  // song in two formats (worth keeping both, as renditions) and the same file
+  // scanned twice from two folders.
+  if (path === '/duplicates') {
+    const pick = (i: number) => tracks[i * 37 + 3]
+    const groups = [0, 1, 2].map((i) => {
+      const t = pick(i)
+      const other = { ...t, id: `${t.id}-dup`, format: i === 2 ? t.format : 'mp3', bitRate: 192,
+        size: Math.round(t.size * 0.4), rating: 0, playCount: 0 }
+      const row = (x: typeof t) => ({
+        id: x.id, name: x.name, artist: x.artist, album: x.album, duration: x.duration,
+        format: x.format, size: x.size, bitRate: x.bitRate, rating: x.rating, playCount: x.playCount,
+        renditions: 1,
+      })
+      return { keeperId: t.id, reason: i === 0 ? 'fingerprint' : 'metadata', tracks: [row(t), row(other)] }
+    })
+    return { groups }
+  }
+  if (path === '/duplicates/merge' && method === 'POST') {
+    const { keeperId, ids } = JSON.parse(body ?? '{}') as { keeperId: string; ids: string[] }
+    return { keeperId, merged: ids.length, renditions: ids.length + 1 }
+  }
   if (path === '/plugins') {
     return {
       hostApi: '1.0',
