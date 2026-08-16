@@ -26,6 +26,7 @@ export function Sidebar({
   devices,
   onSelect,
   onDropTracks,
+  onDropOnDevice,
   onRename,
   onDelete,
   onNew,
@@ -37,6 +38,8 @@ export function Sidebar({
   devices: Device[]
   onSelect: (v: View) => void
   onDropTracks: (playlistId: string, ids: string[]) => void
+  /** Dropping on a device hand-picks those tracks; the next sync moves them. */
+  onDropOnDevice: (deviceId: string, ids: string[]) => void
   onRename: (id: string, name: string) => void
   onDelete: (id: string) => void
   onNew: () => void
@@ -84,8 +87,11 @@ export function Sidebar({
             },
             onDragLeave: () => setOver(null),
             onDrop: (e) => {
+              const raw = e.dataTransfer.getData('application/x-tracks')
               setOver(null)
+              if (!raw) return
               e.preventDefault()
+              onDropOnDevice(d.id, JSON.parse(raw))
             },
           }),
         )}

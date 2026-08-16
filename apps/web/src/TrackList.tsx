@@ -61,6 +61,7 @@ type Props = {
   onUpdate: (ids: string[], patch: Partial<Track>) => void
   onDelete: (ids: string[]) => void
   onAddToPlaylist: (playlistId: string, ids: string[]) => void
+  onAddToDevice: (deviceId: string, ids: string[]) => void
   onReorder: (playlistId: string, ids: string[], toIndex: number) => void
   onGetInfo: (ids: string[]) => void
   onNewPlaylistFrom: (ids: string[]) => void
@@ -427,6 +428,20 @@ export function TrackList(p: Props) {
                     ))}
                 </div>
               </div>
+              {/* Absent with nothing connected -- iTunes never showed a menu
+                  entry that could not do anything. */}
+              {p.devices.length > 0 && (
+                <div className="ctx-sub">
+                  Add to Device
+                  <div className="ctx-flyout">
+                    {p.devices.map((d) => (
+                      <button key={d.id} onClick={() => (p.onAddToDevice(d.id, selectedIds), setMenu(null))}>
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <hr />
               <button onClick={() => (p.onUpdate(selectedIds, { enabled: true }), setMenu(null))}>Check Selection</button>
               <button onClick={() => (p.onUpdate(selectedIds, { enabled: false }), setMenu(null))}>Uncheck Selection</button>

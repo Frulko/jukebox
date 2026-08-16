@@ -36,6 +36,14 @@ export function planSync(db: DB, deviceId: string): SyncPlan {
       : playlistTrackIds(db, JSON.parse(device.syncPlaylistIds || '[]'))
 
   const wanted = new Set(wantedIds)
+  // Hand-picked tracks are added to the rules, never instead of them: dropping
+  // an album onto an iPod must not quietly cancel its playlist sync.
+  for (const r of db.prepare(
+    `SELECT w.trackId FROM device_wanted w
+     JOIN tracks t ON t.id = w.trackId AND t.deletedAt IS NULL
+     WHERE w.deviceId = ?`).all(deviceId) as any[]) {
+    wanted.add(r.trackId as string)
+  }
   const onDevice = db
     .prepare(`SELECT deviceLocalId, trackId, name, size FROM device_tracks WHERE deviceId = ?`)
     .all(deviceId) as any[]

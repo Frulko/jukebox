@@ -40,6 +40,16 @@ export default function App() {
   const [mode, setMode] = useState<LibraryMode>('songs')
   /** "What is left to put on the iPod" — computed server-side, never on a page. */
   const [deviceFilter, setDeviceFilter] = useState<{ deviceId: string; mode: 'on' | 'not' } | null>(null)
+  // A drop on a device moves nothing yet, so it has to say what it did. The
+  // status bar already holds a line of text; a toast would be a new component
+  // for the same sentence.
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 5000)
+    return () => clearTimeout(t)
+  }, [notice])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -148,6 +158,22 @@ export default function App() {
   const addToPlaylist = (playlistId: string, ids: string[]) =>
     api.playlists.addTracks(playlistId, ids).then(refresh)
 
+  /**
+   * Hand-picking tracks for a device: right-click, or dropping a selection on
+   * it in the sidebar. Nothing is transferred here — the picks join the sync
+   * rules, and the sync moves the bytes.
+   */
+  const addToDevice = (deviceId: string, ids: string[]) =>
+    api.devices.want(deviceId, ids).then((r) => {
+      const name = devices.find((d) => d.id === deviceId)?.name ?? 'the device'
+      setNotice(
+        r.added === 0
+          ? `Already waiting for ${name}`
+          : `${r.added} track${r.added > 1 ? 's' : ''} waiting for ${name} — sync to transfer`,
+      )
+      qc.invalidateQueries({ queryKey: ['devices'] })
+    })
+
   const reorder = (playlistId: string, ids: string[], toIndex: number) =>
     api.playlists.reorder(playlistId, ids, toIndex).then(refresh)
 
@@ -224,6 +250,7 @@ export default function App() {
             setBrowse({ genre: null, artist: null, album: null })
           }}
           onDropTracks={addToPlaylist}
+          onDropOnDevice={addToDevice}
           onRename={(id, name) =>
             api.playlists.rename(id, name).then(refresh)
           }
@@ -300,6 +327,7 @@ export default function App() {
                 onUpdate={update}
                 onDelete={remove}
                 onAddToPlaylist={addToPlaylist}
+                onAddToDevice={addToDevice}
                 onReorder={reorder}
                 onGetInfo={setInfoIds}
                 onNewPlaylistFrom={(ids) => newPlaylist(ids)}
@@ -321,7 +349,10 @@ export default function App() {
           <Icon name="repeat" size={10} />
         </button>
         <span className="summary">
-          {view.kind === 'library' && view.id !== 'music' ? mediaSummary(view.id) : media ? '' : summarize(tracks)}
+          {notice ??
+            (view.kind === 'library' && view.id !== 'music'
+              ? mediaSummary(view.id)
+              : media ? '' : summarize(tracks))}
         </span>
         <div className="theme-picker">
           {THEMES.map(([id, label]) => (

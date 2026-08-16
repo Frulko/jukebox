@@ -243,6 +243,61 @@ test('presence travels with the page, and the filters run in SQL', { skip }, asy
   } finally { await h.cleanup() }
 })
 
+test('the scanned format is a codec name a device can be compared against', { skip }, async () => {
+  const h = await harness()
+  try {
+    const formats = (await h.call('GET', '/tracks?limit=100')).body.items.map((t: any) => t.format)
+    // `mpeg` or `m4a/isom/iso2` here means every mp3 in the library would be
+    // queued for transcoding against an iPod that plays mp3 natively.
+    assert.ok(formats.includes('mp3'), `expected mp3, got ${JSON.stringify(formats)}`)
+    assert.ok(!formats.some((f: string) => f.includes('/') || f === 'mpeg'), 'no container names leak through')
+  } finally { await h.cleanup() }
+})
+
+test('a full rescan re-reads files an incremental scan would skip', { skip }, async () => {
+  const h = await harness()
+  try {
+    // Nothing on disk moved, so an ordinary scan skips everything...
+    const before = (await h.call('GET', '/tracks?limit=100')).body.items[0]
+    await h.call('POST', '/sources/loc/scan?full=true')
+    await settle(h.jobs)
+    const after = (await h.call('GET', '/tracks?limit=100')).body.items[0]
+    // ...whereas a full scan bumps the revision because it wrote every row again.
+    assert.ok(after.rev > before.rev, 'a full rescan actually re-reads')
+  } finally { await h.cleanup() }
+})
+
+test('hand-picking tracks for a device shows up in its plan', { skip }, async () => {
+  const h = await harness()
+  try {
+    await h.call('POST', '/devices', {
+      id: 'ipod-1', name: 'iPod', kind: 'ipod-classic', capacity: 10_000_000_000,
+    })
+    // syncMode defaults to 'playlists' with none selected: the plan is empty
+    // until something is picked by hand.
+    assert.equal((await h.call('POST', '/devices/ipod-1/sync', { dryRun: true })).body.add.length, 0)
+
+    const ids = (await h.call('GET', '/tracks?limit=3')).body.items.map((t: any) => t.id)
+    const first = await h.call('POST', '/devices/ipod-1/wanted', { trackIds: [...ids, 'no-such-track'] })
+    assert.equal(first.body.added, ids.length)
+    assert.equal(first.body.unknown, 1, 'a stale id is dropped, not a 400 for the whole drop')
+
+    // Dropping the same selection twice must not claim to have added it twice.
+    const again = await h.call('POST', '/devices/ipod-1/wanted', { trackIds: ids })
+    assert.equal(again.body.added, 0)
+    assert.equal(again.body.alreadyWanted, ids.length)
+
+    const plan = (await h.call('POST', '/devices/ipod-1/sync', { dryRun: true })).body
+    assert.deepEqual(plan.add.map((a: any) => a.trackId).sort(), [...ids].sort())
+
+    const undone = await h.call('DELETE', '/devices/ipod-1/wanted', { trackIds: [ids[0]] })
+    assert.equal(undone.body.removed, 1)
+    assert.equal((await h.call('POST', '/devices/ipod-1/sync', { dryRun: true })).body.add.length, ids.length - 1)
+
+    assert.equal((await h.call('POST', '/devices/nope/wanted', { trackIds: ids })).status, 404)
+  } finally { await h.cleanup() }
+})
+
 test('importing from a device refuses a read-only target before creating a job', { skip }, async () => {
   const h = await harness(false) // source declared read-only
   try {

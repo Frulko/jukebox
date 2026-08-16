@@ -75,6 +75,25 @@ test('an orphan is never removed: it is the only copy left', () => {
   assert.ok(!plan.remove.some((r) => r.deviceLocalId === 'F9'))
 })
 
+test('a hand-picked track joins the rules instead of replacing them', () => {
+  const db = fixture({ mode: 'playlists' })
+  const pl = createPlaylist(db, { name: 'Trip' })
+  addTracks(db, pl.id, ['t1'])
+  db.prepare(`UPDATE devices SET syncPlaylistIds = ? WHERE id = 'ipod'`).run(JSON.stringify([pl.id]))
+  db.prepare(`INSERT INTO device_wanted (deviceId, trackId, addedAt) VALUES ('ipod','t3',1)`).run()
+
+  const plan = planSync(db, 'ipod')
+  assert.deepEqual(plan.add.map((a) => a.trackId).sort(), ['t1', 't3'],
+    'dropping one track on the iPod must not cancel its playlist sync')
+})
+
+test('a hand-picked track that has since been deleted is ignored', () => {
+  const db = fixture({ mode: 'playlists' })
+  db.prepare(`INSERT INTO device_wanted (deviceId, trackId, addedAt) VALUES ('ipod','t1',1)`).run()
+  db.prepare(`UPDATE tracks SET deletedAt = 1 WHERE id = 't1'`).run()
+  assert.equal(planSync(db, 'ipod').add.length, 0)
+})
+
 test('a plan that does not fit says how short it is, before anything moves', () => {
   // 45 MB of music, a device with 10 MB free.
   const db = fixture({ capacity: 10_000_000 })

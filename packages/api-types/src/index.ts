@@ -157,6 +157,13 @@ export type SyncPlan = {
 
 export type DeviceStats = { tracks: number; orphans: number; bytes: number; seconds: number }
 
+/**
+ * The outcome of hand-picking tracks for a device. Split three ways because a
+ * drop of 200 tracks onto an iPod that already holds 180 of them should say so,
+ * rather than claim it added 200.
+ */
+export type WantResult = { added: number; alreadyWanted: number; unknown: number }
+
 /** Cursor pagination. `next` of `null` means: last page. */
 export type Page<T> = { items: T[]; next: string | null; revision?: number }
 

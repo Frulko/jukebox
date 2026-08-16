@@ -136,6 +136,18 @@ CREATE TABLE IF NOT EXISTS device_tracks (
 CREATE INDEX IF NOT EXISTS dt_by_track  ON device_tracks (trackId, deviceId);
 CREATE INDEX IF NOT EXISTS dt_orphans   ON device_tracks (deviceId, trackId);
 
+-- Tracks the user put on a device by hand -- dropped on it in the sidebar, or
+-- sent there from the context menu. iTunes called this manual management and
+-- made it exclusive with syncing; here it is simply added to whatever the sync
+-- rules already want, so dragging one album onto an iPod does not silently
+-- disable its playlist sync.
+CREATE TABLE IF NOT EXISTS device_wanted (
+  deviceId TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  trackId  TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  addedAt  INTEGER NOT NULL,
+  PRIMARY KEY (deviceId, trackId)
+);
+
 CREATE TABLE IF NOT EXISTS jobs (
   id           TEXT PRIMARY KEY,
   kind         TEXT NOT NULL,

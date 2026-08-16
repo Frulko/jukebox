@@ -181,8 +181,15 @@ export function createApp(dbFile: string) {
   api.post('/sources/:id/scan', (c) => {
     const id = c.req.param('id')
     if (!db.prepare(`SELECT id FROM sources WHERE id = ?`).get(id)) return fail(c, 404, 'not_found', 'unknown source')
+    // `full` re-reads every file instead of trusting mtime and size. It is what
+    // to run when the server changes how it derives a field: the files have not
+    // moved, so an ordinary scan would skip all of them.
+    const full = c.req.query('full') === 'true'
     // One key per source: re-triggering a running scan joins it instead of duplicating it.
-    const job = jobs.create('scan', { sourceId: id }, { idempotencyKey: c.req.header('idempotency-key') ?? `scan-${id}` })
+    // A full scan gets its own key, or it would join the incremental one it was
+    // meant to replace.
+    const job = jobs.create('scan', { sourceId: id, full },
+      { idempotencyKey: c.req.header('idempotency-key') ?? `scan-${id}${full ? '-full' : ''}` })
     return c.json(publicJob(job), 202)
   })
 
@@ -295,6 +302,50 @@ export function createApp(dbFile: string) {
       .run(...([...values, nextRev(db), c.req.param('id')] as never[]))
     const d = db.prepare(`SELECT * FROM devices WHERE id = ?`).get(c.req.param('id')) as any
     return d ? c.json(hydrateDevice(d)) : fail(c, 404, 'not_found', 'unknown device')
+  })
+
+  /**
+   * Hand-picked tracks for a device — dropping a selection on the iPod in the
+   * sidebar, or sending it there from the context menu.
+   *
+   * Nothing is transferred here. The picks join whatever the sync rules already
+   * want, and the next sync moves the bytes; that keeps one code path deciding
+   * what a device holds instead of two that can disagree.
+   */
+  api.post('/devices/:id/wanted', async (c) => {
+    const id = c.req.param('id')
+    if (!db.prepare(`SELECT id FROM devices WHERE id = ?`).get(id)) {
+      return fail(c, 404, 'not_found', 'unknown device')
+    }
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.trackIds) || !b.trackIds.length) {
+      return fail(c, 400, 'bad_body', 'expected { trackIds: [] }')
+    }
+    // Unknown ids are dropped rather than rejected: a selection can outlive a
+    // track that was deleted in another window, and failing the whole drop
+    // because of one stale row helps nobody.
+    const known = db.prepare(
+      `SELECT id FROM tracks WHERE deletedAt IS NULL AND id IN (${b.trackIds.map(() => '?').join(',')})`)
+      .all(...(b.trackIds as never[])) as any[]
+    const ins = db.prepare(
+      `INSERT INTO device_wanted (deviceId, trackId, addedAt) VALUES (?, ?, ?)
+       ON CONFLICT (deviceId, trackId) DO NOTHING`)
+    let added = 0
+    for (const t of known) added += ins.run(id, t.id, Date.now()).changes as number
+    nextRev(db)
+    return c.json({ added, alreadyWanted: known.length - added, unknown: b.trackIds.length - known.length })
+  })
+
+  api.delete('/devices/:id/wanted', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.trackIds) || !b.trackIds.length) {
+      return fail(c, 400, 'bad_body', 'expected { trackIds: [] }')
+    }
+    const r = db.prepare(
+      `DELETE FROM device_wanted WHERE deviceId = ? AND trackId IN (${b.trackIds.map(() => '?').join(',')})`)
+      .run(...([c.req.param('id'), ...b.trackIds] as never[]))
+    nextRev(db)
+    return c.json({ removed: r.changes as number })
   })
 
   /**
