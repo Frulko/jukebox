@@ -112,7 +112,7 @@ input[type="checkbox"]::after {
   content: "";
   position: absolute;
   left: 50%;
-  top: 46%;
+  top: 40%;
   width: 3px;
   height: 6px;
   border: solid #fff;
