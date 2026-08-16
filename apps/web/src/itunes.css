@@ -1870,3 +1870,28 @@ input[type="range"]::-webkit-slider-thumb {
 .file-where { margin: 16px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); font-weight: 600; }
 /* Paths are long and their ends are the informative half. */
 .file-info dd.path { direction: rtl; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A view's own filter, distinct from the player bar's search: that one asks the
+   server across a whole source, this one narrows what the page already holds. */
+.view-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.view-head h2 { margin: 0; }
+.view-search {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 230px;
+  height: 22px;
+  padding: 0 8px;
+  margin-left: auto;
+  border: 1px solid var(--field-line);
+  border-radius: 11px;
+  background: var(--field);
+  color: var(--dim);
+}
+.view-search input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 0; background: none; color: var(--text); }
+.view-search input:focus { box-shadow: none; border: 0; }
+.view-search .dim { font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.view-search .clear { border: 0; background: none; color: var(--dim); padding: 0; }
+.view-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+/* In the artist column it is the header of the list rather than a corner control. */
+.artist-list .view-search { width: auto; margin: 6px 6px 8px; }

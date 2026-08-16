@@ -2,6 +2,7 @@ import type { Playlist } from './data'
 import { Icon } from './Icon'
 import { PlaylistCover } from './Artwork'
 import { useScrollMemory } from './viewState'
+import { useViewSearch, ViewSearch } from './ViewSearch'
 
 /**
  * Every playlist, as a wall rather than a list.
@@ -21,22 +22,29 @@ export function PlaylistsView({
   onNew: () => void
 }) {
   const pane = useScrollMemory<HTMLDivElement>('playlists')
+  const search = useViewSearch()
+  const shown = playlists.filter((pl) => search.matches(pl.name))
 
   return (
     <div className="media" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="pl-head">
         <h2>All Playlists</h2>
         <span className="dim">{playlists.length}</span>
+        <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter playlists" count={shown.length} />
         <button className="prim" onClick={onNew}>
           <Icon name="plus" size={9} /> New Playlist
         </button>
       </div>
 
-      {playlists.length === 0 ? (
-        <div className="list-empty">No playlists yet. The button above makes the first one.</div>
+      {shown.length === 0 ? (
+        <div className="list-empty">
+          {playlists.length === 0
+            ? 'No playlists yet. The button above makes the first one.'
+            : `No playlist matches “${search.query}”.`}
+        </div>
       ) : (
         <div className="grid pl-grid">
-          {playlists.map((pl) => (
+          {shown.map((pl) => (
             <button key={pl.id} className="tile pl-tile" onDoubleClick={() => onOpen(pl.id, pl.smart)}>
               <PlaylistCover seed={`${pl.id} ${pl.name}`} size={148} />
               <span className="t">

@@ -5,6 +5,7 @@ import { api, useMissing, useSources } from './api'
 import { fmtTime } from './data'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
+import { useViewSearch, ViewSearch } from './ViewSearch'
 
 const when = (ms: number) =>
   new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -29,7 +30,9 @@ export function MissingView() {
   const [scanning, setScanning] = useState<string | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
 
-  const items = data?.items ?? []
+  const search = useViewSearch()
+  const all = data?.items ?? []
+  const items = all.filter((t) => search.matches(t.name, t.artist, t.album, t.path))
   const groups = useMemo(() => {
     const by = new Map<string, MissingTrack[]>()
     for (const t of items) by.set(t.sourceId, [...(by.get(t.sourceId) ?? []), t])
@@ -64,8 +67,17 @@ export function MissingView() {
 
   return (
     <div className="media missing" ref={pane.ref} onScroll={pane.onScroll}>
+      <div className="view-head">
+        <ViewSearch
+          value={search.query}
+          onChange={search.setQuery}
+          placeholder="Filter by name, artist or path"
+          count={items.length}
+        />
+      </div>
+
       <p className="missing-lead">
-        {items.length.toLocaleString('en-US')} track{items.length > 1 ? 's' : ''} the last scan could not find.
+        {all.length.toLocaleString('en-US')} track{all.length > 1 ? 's' : ''} the last scan could not find.
         Nothing has been deleted — ratings, play counts and playlist places are kept. If a disk was unplugged,
         plug it back and rescan: they return as they were.
       </p>

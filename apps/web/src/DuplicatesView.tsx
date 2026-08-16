@@ -5,6 +5,7 @@ import { api } from './api'
 import { fmtSize, fmtTime } from './data'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
+import { useViewSearch, ViewSearch } from './ViewSearch'
 
 /**
  * The same song, twice.
@@ -109,11 +110,16 @@ export function DuplicatesView({ onNotice }: { onNotice: (message: string) => vo
     queryFn: () => api.duplicates.find(),
     staleTime: 60_000,
   })
-  const groups = data?.groups ?? []
+  const search = useViewSearch()
+  const all = data?.groups ?? []
+  const groups = all.filter((g) => search.matches(g.tracks[0]?.name, g.tracks[0]?.artist, g.tracks[0]?.album))
 
   return (
     <div className="media duplicates" ref={pane.ref} onScroll={pane.onScroll}>
-      <h2>Duplicates</h2>
+      <div className="view-head">
+        <h2>Duplicates</h2>
+        <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter by title or artist" count={groups.length} />
+      </div>
       <p className="dup-lead">
         Rows that look like one song. Matched on the audio itself where a fingerprint exists, on tags and
         length otherwise — and proposed rather than applied, because two recordings sharing a title is

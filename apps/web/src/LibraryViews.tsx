@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Play } from './App'
 import { useRemembered, useScrollMemory } from './viewState'
 import { useMenuPosition } from './useMenuPosition'
+import { useViewSearch, ViewSearch } from './ViewSearch'
 import { albumSeed, Cover } from './Artwork'
 import { Icon } from './Icon'
 import { fmtTime, type Track } from './data'
@@ -113,13 +114,18 @@ export function AlbumsView({
   const [open, setOpen] = useRemembered<string | null>('albums.open', null)
   const pane = useScrollMemory<HTMLDivElement>('albums')
   const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext)
+  const search = useViewSearch()
+  const shown = albums.filter((a) => search.matches(a.album, a.artist))
   const current = albums.find((a) => a.key === open)
 
   return (
     <div className="media" ref={pane.ref} onScroll={pane.onScroll}>
       {menu.node}
+      <div className="view-head">
+        <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter albums" count={shown.length} />
+      </div>
       <div className="grid">
-        {albums.map((a) => (
+        {shown.map((a) => (
           <div
             key={a.key}
             className={`tile ${open === a.key ? 'on' : ''}`}
@@ -187,6 +193,7 @@ export function ArtistsView({
   }, [albums])
 
   const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext)
+  const search = useViewSearch()
   const [sel, setSel] = useRemembered<string | null>('artists.sel', null)
   const list = useScrollMemory<HTMLDivElement>('artists.list')
   const body = useScrollMemory<HTMLDivElement>('artists.body')
@@ -197,7 +204,8 @@ export function ArtistsView({
     <div className="media split">
       {menu.node}
       <div className="artist-list" ref={list.ref} onScroll={list.onScroll}>
-        {artists.map(([name, list]) => (
+        <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter artists" />
+        {artists.filter(([name]) => search.matches(name)).map(([name, list]) => (
           <button
             key={name}
             className={`artist ${name === active ? 'on' : ''}`}
