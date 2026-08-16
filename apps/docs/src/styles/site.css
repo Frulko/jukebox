@@ -144,7 +144,6 @@ td code { white-space: nowrap; }
    large blur reads as a sticker, not as something with weight. */
 .window {
   border: 1px solid var(--line);
-  border-radius: 14px;
   background: var(--panel);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, .03),
@@ -152,6 +151,9 @@ td code { white-space: nowrap; }
     0 12px 28px -10px rgba(0, 0, 0, .2),
     0 40px 80px -30px rgba(0, 0, 0, .32);
   overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+  border-radius: 9px 9px 0 0;
 }
 @media (prefers-color-scheme: dark) {
   .window {
@@ -198,7 +200,7 @@ td code { white-space: nowrap; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 9px;
+  padding: 9px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
