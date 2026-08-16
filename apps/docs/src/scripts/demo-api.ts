@@ -245,6 +245,23 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     return { available: true, formats: ['mp3', 'aac', 'opus', 'alac', 'flac', 'wav'], ffmpeg: '/usr/bin/ffmpeg', fpcalc: null, reason: null }
   }
   if (path === '/transcode' && method === 'POST') return scanning()
+  // Two plugins so the admin page shows both states it has to explain: one
+  // running, one that failed to load and says why.
+  if (path === '/plugins') {
+    return {
+      hostApi: '1.0',
+      items: [
+        { id: 'listenbrainz', name: 'ListenBrainz', version: '0.2.0', author: 'jukebox',
+          description: 'Scrobbles what you listen to, hanging off the play event.',
+          permissions: ['http:api.listenbrainz.org', 'events:play'], contributes: { settings: [] },
+          enabled: 1, state: 'active', error: null, config: {} },
+        { id: 'audiomuse', name: 'AudioMuse', version: '0.4.1', author: 'community',
+          description: 'Sonic analysis: tempo, key and a similarity map of the library.',
+          permissions: ['http:localhost:8008', 'library:read'], contributes: {},
+          enabled: 1, state: 'failed', error: 'Sidecar not reachable at http://localhost:8008', config: {} },
+      ],
+    }
+  }
   if (path === '/facets') return facets(q)
   if (path.startsWith('/tracks/')) return tracks.find((t) => t.id === path.slice(8))
   if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }

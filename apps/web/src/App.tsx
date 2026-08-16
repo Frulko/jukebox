@@ -19,6 +19,7 @@ import { QueueView } from './QueueView'
 import { AlbumsView, ArtistsView } from './LibraryViews'
 import { PlaylistsView } from './PlaylistsView'
 import { ConvertDialog } from './ConvertDialog'
+import { AdminView } from './AdminView'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -339,6 +340,7 @@ export default function App() {
     apps: <AppsView search={search} />,
     radio: <RadioView search={search} />,
     missing: <MissingView />,
+    admin: <AdminView />,
     playlists: (
       <PlaylistsView
         playlists={playlists}
