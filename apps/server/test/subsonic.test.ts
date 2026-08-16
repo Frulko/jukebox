@@ -246,3 +246,93 @@ test('playlists are visible and readable', { skip }, async () => {
     assert.equal((await h.rest('getPlaylist.view', { id: 'nope' })).body.error.code, 70)
   } finally { await h.cleanup() }
 })
+
+test('a tool can walk the whole library through the folder view', { skip }, async () => {
+  const h = await harness()
+  try {
+    // The pre-getArtists browsing pair. Anything written against the original
+    // specification uses it, and a server answering only the modern pair looks
+    // empty to those.
+    const indexes = (await h.rest('getIndexes.view')).body.indexes
+    assert.ok(indexes.index.length > 0)
+    assert.ok(typeof indexes.lastModified === 'number', 'a stamp to decide whether to re-walk')
+
+    const artist = indexes.index.flatMap((i: any) => i.artist)[0]
+    const dir = (await h.rest('getMusicDirectory.view', { id: artist.id })).body.directory
+    assert.equal(dir.name, artist.name)
+    assert.ok(dir.child.every((c: any) => c.isDir), 'an artist contains albums')
+
+    const albumDir = (await h.rest('getMusicDirectory.view', { id: dir.child[0].id })).body.directory
+    assert.ok(albumDir.child.length > 0)
+    // And an album contains songs, which is where the walk ends and the
+    // downloading begins.
+    assert.ok(albumDir.child.every((c: any) => c.isDir === false && c.id))
+  } finally { await h.cleanup() }
+})
+
+test('download is the original bytes and stream may convert', { skip }, async () => {
+  const h = await harness()
+  try {
+    const flac = (await h.rest('search3.view', { query: 'Digital' })).body.searchResult3.song
+      .find((s: any) => s.suffix === 'flac')
+    assert.ok(flac, 'the fixtures include a FLAC')
+
+    // The whole difference between the two routes now that conversion exists.
+    const streamed = await h.rest('stream.view', { id: flac.id, format: 'mp3' })
+    assert.equal(streamed.headers.get('x-jukebox-transcoded'), 'mp3')
+
+    // An archiver that asked to download a file and received a re-encode has
+    // been handed the wrong file: it would quietly replace a FLAC library with
+    // MP3s, and an analyser would measure the encoder rather than the music.
+    const downloaded = await h.rest('download.view', { id: flac.id, format: 'mp3' })
+    assert.equal(downloaded.headers.get('x-jukebox-transcoded'), null)
+    assert.match(downloaded.headers.get('content-type') ?? '', /flac/)
+  } finally { await h.cleanup() }
+})
+
+test('a client can ask what it is allowed to do', { skip }, async () => {
+  const h = await harness()
+  try {
+    const user = (await h.rest('getUser.view')).body.user
+    assert.equal(user.username, 'g')
+    // Clients disable their own scrobbling and rating when this is missing, so
+    // an unanswered getUser looks like a server that does not support them.
+    assert.equal(user.scrobblingEnabled, true)
+    assert.equal(user.streamRole, true)
+    assert.equal(user.downloadRole, true)
+    // Honest about what this server is: there is no video here and nothing
+    // accepts uploads.
+    assert.equal(user.uploadRole, false)
+    assert.equal(user.videoConversionRole, false)
+  } finally { await h.cleanup() }
+})
+
+test('genres, random songs and the older search all answer', { skip }, async () => {
+  const h = await harness()
+  try {
+    const genres = (await h.rest('getGenres.view')).body.genres.genre
+    assert.ok(genres.length > 0)
+    assert.ok(genres.every((g: any) => g.value && g.songCount > 0))
+
+    const random = (await h.rest('getRandomSongs.view', { size: '3' })).body.randomSongs.song
+    assert.ok(random.length > 0 && random.length <= 3)
+
+    // Filtered, because an analyser asking for a sample of one genre should get
+    // one genre.
+    const filtered = (await h.rest('getRandomSongs.view',
+      { size: '10', genre: genres[0].value })).body.randomSongs.song ?? []
+    assert.ok(filtered.every((s: any) => s.genre === genres[0].value))
+
+    const search2 = (await h.rest('search2.view', { query: 'Daft' })).body.searchResult2
+    assert.ok(search2.song.length > 0)
+  } finally { await h.cleanup() }
+})
+
+test('scan status is answerable, so nothing indexes a half-imported library', { skip }, async () => {
+  const h = await harness()
+  try {
+    const status = (await h.rest('getScanStatus.view')).body.scanStatus
+    assert.equal(status.scanning, false, 'the harness settled before asking')
+    assert.ok(status.count > 0)
+  } finally { await h.cleanup() }
+})

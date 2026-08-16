@@ -157,8 +157,11 @@ hands out a URL.
 
 - [x] **5b.1** Users and bearer tokens — scrypt passwords, open until the first account
       exists, tokens stored as hashes and accepted in the query string for `<audio>`
-- [x] **5b.2** OpenSubsonic emitter — ping, browse, search, playlists, stream, cover art,
-      star, rate and scrobble. Both auth schemes, JSON and XML
+- [x] **5b.2** OpenSubsonic emitter — ping, browse (both the modern and the folder-shaped
+      pair), search2 and search3, genres, random songs, playlists, stream, download, cover
+      art, star, rate, scrobble, `getUser` and scan status. Both auth schemes, JSON and XML.
+      `download` never converts and `stream` may: that distinction is what stops an archiver
+      quietly replacing a FLAC library with MP3s
 - [x] **5b.3** Per-user libraries and roles — three roles, not more: `admin` runs the server,
       `user` lives there, `guest` plays and nothing else. Enforced as *capabilities*
       (`admin`/`write`/`curate`/`play`) from one table, by prefix and method, so a route added
@@ -200,7 +203,16 @@ hands out a URL.
       proves the function is deterministic. Their error numbers are read rather than the HTTP
       status: 9 is a dead session, 16 is come back later, and retrying the first blocks
       everything behind it
-- [ ] **5.7** AudioMuse
+- [~] **5.7** AudioMuse — **the half that could be verified is done, the half that could not
+      is not started.** AudioMuse indexes a library by pointing at a media server it supports,
+      and this one already speaks Subsonic, so the actionable question was whether the emitter
+      is complete enough to be walked. It was not: `getIndexes`, `getMusicDirectory`,
+      `search2`, `getGenres`, `getRandomSongs`, `getUser` and `getScanStatus` were all
+      missing, and `download.view` passed `format` through — so a client asking to download a
+      FLAC could receive an MP3, which would have an analyser measuring the encoder rather
+      than the music. All added and tested. What is *not* built is the client that asks
+      AudioMuse for similar tracks: its endpoints are behind a Swagger page on a running
+      instance, two fetches did not produce them, and inventing them would be fiction
 - [x] **5.8** Home Assistant + MQTT — the player publishes itself as a `media_player` entity
       through MQTT discovery, so nobody edits a YAML file, and accepts its commands back.
       MQTT 3.1.1 written by hand inside the plugin (QoS 0, keepalive, reconnect): its packet

@@ -2101,21 +2101,34 @@ export function createApp(dbFile: string) {
    * Streaming and cover art for Subsonic clients.
    *
    * Delegated to the endpoints that already exist rather than reimplemented —
-   * `Range`, rendition selection and the artwork cache are all there, and a
-   * second copy would be a second set of bugs. `maxBitRate` is accepted and
-   * ignored: transcoding on the fly is not built yet, and a client asking for
-   * a lower bitrate would rather have the original than an error.
+   * `Range`, rendition selection, conversion on the fly and the artwork cache
+   * are all there, and a second copy would be a second set of bugs.
    */
-  for (const path of ['/stream.view', '/download.view']) {
-    subsonic.app.get(path, (c) => {
-      const id = c.req.query('id')
-      if (!id) return c.body(null, 400)
-      // `maxBitRate` is accepted and ignored: transcoding on the fly is not
-      // built, and a client asking for a smaller file would rather have the
-      // original than an error.
-      return serveStream(c, id, { format: c.req.query('format') || undefined })
-    })
-  }
+  subsonic.app.get('/stream.view', (c) => {
+    const id = c.req.query('id')
+    if (!id) return c.body(null, 400)
+    // `format` is honoured, and now really converts when the library holds
+    // nothing that matches. `maxBitRate` is still accepted and ignored: the
+    // streaming endpoint takes a format rather than a bitrate, and a client
+    // asking for a smaller file would rather have the original than an error.
+    return serveStream(c, id, { format: c.req.query('format') || undefined })
+  })
+
+  /**
+   * Download is the original bytes, always.
+   *
+   * `format` is deliberately *not* passed through here, which is the whole
+   * difference between the two routes now that conversion exists: `stream` may
+   * hand over something made for the client, `download` may not. Anything that
+   * asks to download a file and receives a re-encode of it has been given the
+   * wrong file — an archiver would quietly replace a FLAC library with MP3s,
+   * and an analyser would measure the encoder rather than the music.
+   */
+  subsonic.app.get('/download.view', (c) => {
+    const id = c.req.query('id')
+    if (!id) return c.body(null, 400)
+    return serveStream(c, id, {})
+  })
 
   subsonic.app.get('/getCoverArt.view', (c) => {
     const id = c.req.query('id')
