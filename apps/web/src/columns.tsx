@@ -1,6 +1,7 @@
 import { createColumnHelper } from '@tanstack/react-table'
 import { fmtDate, fmtSize, fmtTime, type Track } from './data'
 import { Icon } from './Icon'
+import { badgesFor, type BadgeContext } from './trackBadges'
 import type { features } from './tableFeatures'
 
 const h = createColumnHelper<typeof features, Track>()
@@ -10,6 +11,8 @@ export type CellActions = {
   rate: (id: string, rating: number) => void
   /** Connected devices, so the presence column can label its dots. */
   devices: { id: string; name: string }[]
+  /** What the status column needs besides the track. */
+  badgeContext: BadgeContext
 }
 
 /**
@@ -31,6 +34,26 @@ function Presence({ ids, devices }: { ids: string[]; devices: { id: string; name
           </i>
         )
       })}
+    </span>
+  )
+}
+
+/**
+ * The status zone: none, one or several icons, each with its own sentence.
+ *
+ * It sits early in the row because it is scanned rather than read — the eye
+ * runs down it looking for the one that is orange.
+ */
+function Status({ track, ctx }: { track: Track; ctx: BadgeContext }) {
+  const badges = badgesFor(track, ctx)
+  if (!badges.length) return null
+  return (
+    <span className="badges">
+      {badges.map((b) => (
+        <i key={b.id} className={`badge ${b.tone}`} title={b.title}>
+          <Icon name={b.icon} size={9} />
+        </i>
+      ))}
     </span>
   )
 }
@@ -69,6 +92,13 @@ export const makeColumns = (a: CellActions) =>
       size: 34,
       enableResizing: false,
       cell: ({ row }) => <span className="num dim">{row.getDisplayIndex() + 1}</span>,
+    }),
+    h.display({
+      id: 'status',
+      header: '',
+      size: 46,
+      enableResizing: false,
+      cell: ({ row }) => <Status track={row.original} ctx={a.badgeContext} />,
     }),
     h.accessor('name', { header: 'Name', size: 230 }),
     h.accessor('duration', {
@@ -155,14 +185,14 @@ export const makeColumns = (a: CellActions) =>
 
 /** Columns iTunes shows out of the box; everything else lives in View Options. */
 export const DEFAULT_VISIBLE = new Set([
-  'checked', 'index', 'name', 'time', 'artist', 'album', 'genre', 'rating', 'playCount',
+  'checked', 'index', 'status', 'name', 'time', 'artist', 'album', 'genre', 'rating', 'playCount',
   // Shown by default, but TrackList hides it while no device is connected —
   // a column that cannot have content is just wasted width.
   'devices',
 ])
 
 export const COLUMN_LABELS: Record<string, string> = {
-  checked: '✓', index: '#', name: 'Name', time: 'Time', artist: 'Artist', album: 'Album',
+  checked: '✓', index: '#', status: 'Status', name: 'Name', time: 'Time', artist: 'Artist', album: 'Album',
   genre: 'Genre', rating: 'Rating', playCount: 'Plays', year: 'Year', trackNumber: 'Track Number',
   discNumber: 'Disc Number', albumArtist: 'Album Artist', composer: 'Composer', grouping: 'Grouping',
   comments: 'Comments', bpm: 'BPM', kind: 'Kind', size: 'Size', bitRate: 'Bit Rate',

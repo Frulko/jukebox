@@ -7,6 +7,7 @@ import { features } from './tableFeatures'
 import { COLUMN_LABELS, DEFAULT_VISIBLE, makeColumns, NUMERIC } from './columns'
 import type { Playlist, Track } from './data'
 import type { View } from './App'
+import { isUnavailable } from './trackBadges'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -25,6 +26,8 @@ type Props = {
   showArtwork: boolean
   /** Connected devices — the presence column labels its dots with them. */
   devices: { id: string; name: string }[]
+  /** Sources the server reports. A track from anywhere else cannot be played. */
+  sourceIds: string[]
   playlists: Playlist[]
   nowPlaying: string | null
   /** The second argument is the queue this play starts from, in the order shown. */
@@ -70,6 +73,7 @@ export function TrackList(p: Props) {
         p.onUpdate([id], { enabled: !p.tracks.find((t) => t.id === id)?.enabled }),
       rate: (id: string, rating: number) => p.onUpdate([id], { rating }),
       devices: p.devices,
+      badgeContext: { sourceIds: p.sourceIds, deviceIds: p.devices.map((d) => d.id) },
     }),
     [p],
   )
@@ -94,6 +98,12 @@ export function TrackList(p: Props) {
     onColumnOrderChange: setColumnOrder,
     onColumnSizingChange: setColumnSizing,
   })
+
+  const badgeContext = useMemo(
+    () => ({ sourceIds: p.sourceIds, deviceIds: p.devices.map((d) => d.id) }),
+    [p.sourceIds, p.devices],
+  )
+  const unreachable = (t: Track) => isUnavailable(t, badgeContext)
 
   const rows = table.getRowModel().rows
   const selectedIds = table.getSelectedRowIds()
@@ -320,7 +330,7 @@ export function TrackList(p: Props) {
                 data-rowid={row.id}
                 data-rowidx={v.index}
                 style={{ transform: `translateY(${v.start}px)` }}
-                className={`tr ${sel ? 'sel' : ''} ${v.index % 2 ? 'odd' : ''} ${row.id === p.nowPlaying ? 'playing' : ''} ${row.original.enabled ? 'checked' : 'unchecked'} ${dropRow === v.index ? 'drop-above' : ''} ${dropRow === rows.length && v.index === rows.length - 1 ? 'drop-below' : ''}`}
+                className={`tr ${sel ? 'sel' : ''} ${v.index % 2 ? 'odd' : ''} ${row.id === p.nowPlaying ? 'playing' : ''} ${row.original.enabled ? 'checked' : 'unchecked'} ${unreachable(row.original) ? 'unavailable' : ''} ${dropRow === v.index ? 'drop-above' : ''} ${dropRow === rows.length && v.index === rows.length - 1 ? 'drop-below' : ''}`}
                 draggable
                 onDragStart={(e) => dragTracks(e, row.id)}
                 onMouseDown={(e) => clickRow(e, row.id)}
@@ -329,7 +339,9 @@ export function TrackList(p: Props) {
                   if (!sel) table.setRowSelection({ [row.id]: true })
                   openMenu(e, 'row')
                 }}
-                onDoubleClick={() => p.onPlay(row.id, rows.map((r) => r.id))}
+                // A track whose source is gone has nothing to stream. Refusing
+                // here beats a player that starts and immediately errors.
+                onDoubleClick={() => !unreachable(row.original) && p.onPlay(row.id, rows.map((r) => r.id))}
               >
                 {row.getVisibleCells().map((cell) => (
                   <div

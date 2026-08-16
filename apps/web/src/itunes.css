@@ -1557,3 +1557,24 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .missing-error { margin-left: auto; color: var(--accent); font-size: 11px; }
 .missing-head .missing-error + button { margin-left: 10px; }
+
+/* ---------------- the status zone ----------------
+   Zero, one or several icons per row, each with its own sentence on hover. Only
+   `warn` is allowed to pull the eye: if everything is coloured, the one row that
+   needs attention is the one you miss. */
+.badges { display: inline-flex; align-items: center; gap: 3px; }
+.badge {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  font-style: normal;
+  color: var(--dim);
+}
+.badge.warn { color: #e8890c; background: rgba(232, 137, 12, .13); }
+.badge.ok { color: #1f9d4d; }
+.badge.info { color: var(--dim); }
+/* An unreachable file is the one case where dimming is honest: it really cannot
+   be played. It keeps its warning icon at full strength. */
+.tr.unavailable .td:not(.status) { opacity: .5; }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
-  api, useDevices, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useStats,
+  api, useDevices, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
   useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
@@ -94,6 +94,9 @@ export default function App() {
   // Counted in SQL over the whole library: the front only ever holds a page, so
   // it cannot know how much is missing by looking at what it has.
   const missing = useStats().data?.missing ?? 0
+  // A track whose source the server no longer lists cannot be streamed; the row
+  // says so rather than letting the player fail on a double-click.
+  const sourceIds = (useSources().data?.items ?? []).map((s) => s.id)
 
   /**
    * Search, column browser filters and device presence all go to the server —
@@ -396,6 +399,7 @@ export default function App() {
               <TrackList
                 key={viewKey}
                 viewKey={viewKey}
+                sourceIds={sourceIds}
                 rowHeight={THEME_ROW_H[theme]}
                 showArtwork={theme !== 'classic'}
                 devices={devices}

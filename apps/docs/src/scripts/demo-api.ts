@@ -18,6 +18,12 @@ const all = makeLibrary()
 // excludes soft-deleted rows.
 const gone = new Set(all.filter((_, i) => i % 47 === 13).map((t) => t.id))
 const tracks = all.filter((t) => !gone.has(t.id))
+
+// A second source that is *not* returned by /sources: an external drive that is
+// not plugged in. Its tracks are still in the library — with their ratings and
+// their place in playlists — but nothing can stream them, which is exactly the
+// state the row's warning badge is for.
+for (const t of tracks.filter((_, i) => i % 23 === 5)) t.sourceId = 'usb-archive'
 let revision = all.length
 
 const norm = (s: string) => s.toLowerCase()
@@ -122,6 +128,14 @@ const onDevice: DeviceTrack[] = tracks.slice(0, 40).map((t, i) => ({
   sourceUrl: i % 9 === 0 ? `http://sat-pi.local/ipod/F${String(i).padStart(3, '0')}.mp3` : null,
   syncedAt: Date.UTC(2026, 7, 14),
 }))
+
+// The library's own view of what the device holds — the presence column and the
+// "already on a device" badge read this, not the device listing.
+for (const t of onDevice) {
+  if (!t.libraryTrackId) continue
+  const track = tracks.find((x) => x.id === t.libraryTrackId)
+  if (track) track.devices = [DEVICE.id]
+}
 
 const SOURCES: Source[] = [
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
