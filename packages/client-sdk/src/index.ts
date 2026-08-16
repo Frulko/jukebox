@@ -86,6 +86,28 @@ export function createClient(opts: ClientOptions = {}) {
   return {
     health: () => request<{ ok: boolean; revision: number }>('/health'),
 
+    auth: {
+      /** Whether this install has been claimed. Always answerable, signed in or not. */
+      state: () => request<{ open: boolean; users: number }>('/auth/state'),
+      /** Claims a fresh install. Refused once anyone exists. */
+      setup: (username: string, password: string) =>
+        request<{ user: unknown; token: string; id: string }>('/auth/setup', {
+          method: 'POST', body: JSON.stringify({ username, password }),
+        }),
+      login: (username: string, password: string) =>
+        request<{ user: unknown; token: string; id: string }>('/auth/login', {
+          method: 'POST', body: JSON.stringify({ username, password }),
+        }),
+      me: () => request<unknown>('/auth/me'),
+      tokens: () => request<{ items: unknown[] }>('/auth/tokens'),
+      /** The secret is returned once and only its hash is kept. */
+      createToken: (name: string) =>
+        request<{ token: string; id: string }>('/auth/tokens', {
+          method: 'POST', body: JSON.stringify({ name }),
+        }),
+      revoke: (id: string) => request<void>(`/auth/tokens/${id}`, { method: 'DELETE' }),
+    },
+
     tracks: {
       list: (q: TrackQuery = {}) => request<Page<Track>>(`/tracks${qs(q)}`, {}, true),
       /** Distinct values for the column browser, cascading. */

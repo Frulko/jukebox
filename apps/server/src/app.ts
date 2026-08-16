@@ -31,6 +31,10 @@ import { FORMATS, tools } from './ffmpeg.ts'
 import { makeConvertHandler } from './convert.ts'
 import { findDuplicates, mergeTracks } from './duplicates.ts'
 import {
+  authenticate, createToken, createUser, isOpen, listTokens, listUsers,
+  revokeToken, userForToken, type User,
+} from './auth.ts'
+import {
   advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
   setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
 } from './upnp.ts'
@@ -140,7 +144,83 @@ export function createApp(dbFile: string) {
     return c.json(body)
   }
 
+  /**
+   * Authentication.
+   *
+   * A fresh install has no users and answers everything — nobody should be
+   * locked out of their own library by a setup step they have not reached. The
+   * moment the first account exists the server closes, and from then on a
+   * request needs a bearer token.
+   *
+   * Two paths stay open once it is closed: `/health`, so a container probe does
+   * not need credentials, and `/auth/*`, or logging in would require being
+   * logged in.
+   */
+  const OPEN_PATHS = ['/health', '/auth/login', '/auth/setup', '/auth/state']
+
+  api.use('*', async (c, next) => {
+    if (isOpen(db) || OPEN_PATHS.includes(c.req.path.replace(/^\/api\/v1/, ''))) return next()
+
+    const header = c.req.header('authorization') ?? ''
+    // A query token as well as a header: `<audio src>` and a Subsonic client
+    // cannot set headers, and refusing them would mean no playback at all.
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : c.req.query('token')
+    const user = bearer ? userForToken(db, bearer) : null
+    if (!user) return fail(c, 401, 'unauthorized', 'a bearer token is required')
+
+    c.set('user' as never, user as never)
+    return next()
+  })
+
   api.get('/health', (c) => c.json({ ok: true, revision: revision(db) }))
+
+  /** Whether this install has been claimed yet. Always answerable. */
+  api.get('/auth/state', (c) => c.json({ open: isOpen(db), users: listUsers(db).length }))
+
+  /**
+   * Claims a fresh install. Refused once anyone exists, or it would be a way to
+   * mint an admin on a server that is already someone's.
+   */
+  api.post('/auth/setup', async (c) => {
+    if (!isOpen(db)) return fail(c, 409, 'already_set_up', 'this server already has an account')
+    const b = await c.req.json().catch(() => null)
+    if (!b?.username || !b?.password) return fail(c, 400, 'bad_body', 'expected { username, password }')
+    if (String(b.password).length < 8) return fail(c, 400, 'weak_password', 'at least 8 characters')
+
+    const user = await createUser(db, { ...b, role: 'admin' }, dbFile)
+    const token = createToken(db, user.id, b.tokenName ?? 'setup')
+    return c.json({ user, ...token }, 201)
+  })
+
+  api.post('/auth/login', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.username || !b?.password) return fail(c, 400, 'bad_body', 'expected { username, password }')
+    const user = await authenticate(db, b.username, b.password)
+    // One message for both wrong username and wrong password: telling them
+    // apart is telling an attacker which half to keep.
+    if (!user) return fail(c, 401, 'unauthorized', 'wrong username or password')
+    return c.json({ user, ...createToken(db, user.id, b.tokenName ?? 'login') })
+  })
+
+  api.get('/auth/me', (c) => c.json(c.get('user' as never) ?? null))
+
+  api.get('/auth/tokens', (c) => {
+    const user = c.get('user' as never) as User | undefined
+    return user ? c.json({ items: listTokens(db, user.id) }) : fail(c, 401, 'unauthorized', 'not signed in')
+  })
+
+  api.post('/auth/tokens', async (c) => {
+    const user = c.get('user' as never) as User | undefined
+    if (!user) return fail(c, 401, 'unauthorized', 'not signed in')
+    const b = await c.req.json().catch(() => ({}))
+    // Shown once. Only its hash is kept.
+    return c.json(createToken(db, user.id, b.name ?? 'unnamed'), 201)
+  })
+
+  api.delete('/auth/tokens/:id', (c) =>
+    revokeToken(db, c.req.param('id'))
+      ? c.body(null, 204)
+      : fail(c, 404, 'not_found', 'unknown token'))
 
   /* ---------------- library ---------------- */
 

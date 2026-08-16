@@ -209,6 +209,34 @@ CREATE TABLE IF NOT EXISTS job_items (
 -- Installed plugins. "enabled" is the user's choice and survives a reinstall;
 -- "state" is what the host last observed, and "error" is why it is not running.
 -- (No backticks in here: SCHEMA is a template literal and they would end it.)
+-- Accounts. A fresh install has none, which is the "open" state: the server
+-- answers everything until the first user exists, so nobody is locked out of
+-- their own library by a setup step they have not reached yet.
+CREATE TABLE IF NOT EXISTS users (
+  id             TEXT PRIMARY KEY,
+  username       TEXT NOT NULL UNIQUE,
+  passwordHash   TEXT NOT NULL,
+  role           TEXT NOT NULL DEFAULT 'user',
+  -- A recoverable copy, only when the user asked for Subsonic access. Their
+  -- scheme is md5(password + client-chosen salt), which cannot be checked
+  -- against a hash. Encrypted, never plain, and absent unless wanted.
+  subsonicSecret TEXT,
+  createdAt      INTEGER NOT NULL,
+  lastSeenAt     INTEGER
+);
+
+-- Only the hash of a token is kept, for the same reason as a password: one
+-- that can be read back out of the database is a password with a longer name.
+CREATE TABLE IF NOT EXISTS tokens (
+  id         TEXT PRIMARY KEY,
+  userId     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL DEFAULT '',
+  hash       TEXT NOT NULL,
+  createdAt  INTEGER NOT NULL,
+  lastUsedAt INTEGER
+);
+CREATE INDEX IF NOT EXISTS tokens_user ON tokens (userId);
+
 CREATE TABLE IF NOT EXISTS plugins (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,

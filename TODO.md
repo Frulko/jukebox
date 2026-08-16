@@ -109,6 +109,13 @@ hands out a URL.
 - [x] **4.7** Cron scheduler — five-field expressions matched against the wall clock, no
       dependency, no catch-up. Named workflows (chained jobs) still to come
 
+## M5b · Accounts
+
+- [x] **5b.1** Users and bearer tokens — scrypt passwords, open until the first account
+      exists, tokens stored as hashes and accepted in the query string for `<audio>`
+- [ ] **5b.2** OpenSubsonic emitter, on top of the recoverable-password path
+- [ ] **5b.3** Per-user libraries and roles beyond admin/user
+
 ## M5 · Plugins and store
 
 - [x] **5.1** Plugin host — manifest, lifecycle, semver `hostApi`, failure isolation.
