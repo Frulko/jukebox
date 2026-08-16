@@ -1,7 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  RestoreReport, Schedule, Source, Stats, SyncPlan,
+  Move, OrganizePlan, RestoreReport, Schedule, Source, Stats, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
@@ -104,6 +104,22 @@ export function createClient(opts: ClientOptions = {}) {
           method: 'PATCH',
           body: JSON.stringify({ ids, patch, writeToFiles }),
         }),
+    },
+
+    organize: {
+      /**
+       * What it would do. Dry by default and by design: pass `apply` only once
+       * the plan has been looked at, and it is refused outright while any two
+       * tracks want the same destination.
+       */
+      plan: (sourceId: string, pattern: string) =>
+        request<OrganizePlan>('/organize', { method: 'POST', body: JSON.stringify({ sourceId, pattern }) }),
+      apply: (sourceId: string, pattern: string) =>
+        request<Job & { plan: OrganizePlan }>('/organize', {
+          method: 'POST', body: JSON.stringify({ sourceId, pattern, apply: true }),
+        }),
+      undo: (jobId: string) => request<Job>(`/organize/${jobId}/undo`, { method: 'POST' }),
+      log: (limit = 200) => request<{ items: Move[] }>(`/organize/log?limit=${limit}`),
     },
 
     /** Totals over the whole library — never derivable from a page. */
@@ -272,7 +288,7 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  RestoreReport, Schedule, Source, Stats, SyncPlan,
+  Move, OrganizePlan, RestoreReport, Schedule, Source, Stats, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }

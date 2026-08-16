@@ -261,6 +261,32 @@ export type Episode = {
   position: number
 }
 
+/**
+ * What a reorganisation would do. Returned by `POST /organize` without `apply`,
+ * which is the default — the one operation that rewrites a disk is never a
+ * single click.
+ */
+export type OrganizePlan = {
+  moves: { trackId: string; from: string; to: string }[]
+  /** Destinations two or more tracks both want. Nothing runs while any exist. */
+  conflicts: { to: string; trackIds: string[] }[]
+  unchanged: number
+  /** Tracks the pattern could not render, and which field was empty. */
+  skipped: { trackId: string; reason: string }[]
+}
+
+/** One file a reorganisation moved. The log, and what makes undo possible. */
+export type Move = {
+  id: number
+  jobId: string
+  trackId: string
+  sourceId: string
+  fromPath: string
+  toPath: string
+  movedAt: number
+  undoneAt: number | null
+}
+
 /** Library totals, computed in SQL over the whole library rather than a page. */
 export type Stats = {
   tracks: number

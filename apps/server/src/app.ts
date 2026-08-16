@@ -22,6 +22,7 @@ import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
 import { configOf, open as rcOpen, RcloneError } from './rclone.ts'
 import { exportBackup, importBackup } from './backup.ts'
+import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
@@ -86,6 +87,11 @@ export function createApp(dbFile: string) {
   jobs.register('acquire', makeAcquireHandler(db))
   jobs.register('sync', makeSyncHandler(db))
   jobs.register('podcast', makePodcastHandler(db))
+  // One kind, two directions: the payload says which. A separate kind would
+  // need its own concurrency cap for work that must never run beside itself.
+  const organize = makeOrganizeHandler(db)
+  const undo = makeUndoHandler(db)
+  jobs.register('move', (ctx) => (ctx.payload.undo ? undo(ctx) : organize(ctx)))
   jobs.start()
   const scheduler = new Scheduler(db, jobs)
   scheduler.start()
@@ -207,6 +213,57 @@ export function createApp(dbFile: string) {
     jobs: db.prepare(`SELECT state, COUNT(*) AS n FROM jobs GROUP BY state`).all()
       .reduce((acc: any, r: any) => ({ ...acc, [r.state]: r.n }), {}),
   }))
+
+  /* ---------------- file organisation ---------------- */
+
+  /**
+   * What a reorganisation would do. This is the default and the only thing that
+   * happens without `apply: true` — the one operation here that rewrites
+   * someone's disk does not get to be a single click.
+   */
+  api.post('/organize', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.sourceId || !b?.pattern) return fail(c, 400, 'bad_body', 'expected { sourceId, pattern }')
+
+    let plan
+    try {
+      plan = planOrganize(db, { sourceId: b.sourceId, pattern: b.pattern })
+    } catch (err) {
+      return fail(c, 400, 'bad_rule', err instanceof Error ? err.message : 'cannot plan')
+    }
+
+    if (!b.apply) return c.json(plan)
+    // Refused rather than resolved: picking a winner between two tracks that
+    // want the same name would silently delete one of them.
+    if (plan.conflicts.length) {
+      return c.json({ error: { code: 'conflicts',
+        message: `${plan.conflicts.length} destinations are wanted by more than one track`,
+        details: plan.conflicts } }, 409)
+    }
+
+    const job = jobs.create('move', { sourceId: b.sourceId, pattern: b.pattern })
+    return c.json({ ...publicJob(job), plan }, 202)
+  })
+
+  /** Puts a reorganisation back, newest move first. */
+  api.post('/organize/:jobId/undo', (c) => {
+    const jobId = c.req.param('jobId')
+    const n = (db.prepare(`SELECT COUNT(*) AS n FROM moves WHERE jobId = ? AND undoneAt IS NULL`)
+      .get(jobId) as any).n
+    if (!n) return fail(c, 404, 'not_found', 'no moves left to undo for that job')
+    const job = jobs.create('move', { undo: true, jobId }, { idempotencyKey: `undo-${jobId}` })
+    return c.json(publicJob(job), 202)
+  })
+
+  /** The move log, newest first. */
+  api.get('/organize/log', (c) => {
+    const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 1000)
+    return c.json({
+      items: db.prepare(
+        `SELECT id, jobId, trackId, sourceId, fromPath, toPath, movedAt, undoneAt
+         FROM moves ORDER BY id DESC LIMIT ?`).all(limit),
+    })
+  })
 
   /* ---------------- backup ---------------- */
 

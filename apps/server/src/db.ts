@@ -177,6 +177,21 @@ CREATE TABLE IF NOT EXISTS job_items (
   PRIMARY KEY (jobId, idx)
 );
 
+-- Every file a reorganisation moved. This is both the log the user reads and
+-- the only thing that makes the operation undoable, so it is written per move
+-- rather than per job -- an interrupted run is undoable up to where it stopped.
+CREATE TABLE IF NOT EXISTS moves (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  jobId     TEXT NOT NULL,
+  trackId   TEXT NOT NULL,
+  sourceId  TEXT NOT NULL,
+  fromPath  TEXT NOT NULL,
+  toPath    TEXT NOT NULL,
+  movedAt   INTEGER NOT NULL,
+  undoneAt  INTEGER
+);
+CREATE INDEX IF NOT EXISTS moves_job ON moves (jobId, id DESC);
+
 -- Internet radio. A station is a URL plus whatever the stream, its homepage and
 -- the community directory could tell us about it.
 CREATE TABLE IF NOT EXISTS radios (
