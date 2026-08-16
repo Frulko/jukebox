@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { Icon } from './Icon'
+import { useRemembered, useScrollMemory } from './viewState'
 import {
   APP_LIST,
   AUDIOBOOKS,
@@ -17,12 +17,14 @@ const day = (ms: number) => new Date(ms).toLocaleDateString('en-US', { day: 'num
 
 /* ---------------- TV / Podcasts / Audiobooks: shows + episodes ---------------- */
 
-function ShowsView({ shows, unit }: { shows: Show[]; unit: string }) {
-  const [sel, setSel] = useState(shows[0]?.id)
+function ShowsView({ shows, unit, source }: { shows: Show[]; unit: string; source: string }) {
+  const [sel, setSel] = useRemembered(`${source}.show`, shows[0]?.id)
+  const list = useScrollMemory<HTMLDivElement>(`${source}.shows`)
+  const episodes = useScrollMemory<HTMLDivElement>(`${source}.episodes`)
   const show = shows.find((s) => s.id === sel) ?? shows[0]
   return (
     <div className="media split">
-      <div className="show-list">
+      <div className="show-list" ref={list.ref} onScroll={list.onScroll}>
         {shows.map((s) => (
           <button key={s.id} className={`show ${s.id === show.id ? 'on' : ''}`} onClick={() => setSel(s.id)}>
             <div className="art" style={art(s.hue)} />
@@ -44,7 +46,7 @@ function ShowsView({ shows, unit }: { shows: Show[]; unit: string }) {
           <span className="c-date">Release Date</span>
           <span className="c-size">Size</span>
         </div>
-        <div className="ep-body">
+        <div className="ep-body" ref={episodes.ref} onScroll={episodes.onScroll}>
           {show.episodes.map((e, i) => (
             <div key={e.id} className={`ep ${i % 2 ? 'odd' : ''}`}>
               <span className="c-dot">{e.unplayed && <i />}</span>
@@ -63,14 +65,15 @@ function ShowsView({ shows, unit }: { shows: Show[]; unit: string }) {
   )
 }
 
-export const PodcastsView = () => <ShowsView shows={PODCAST_LIST} unit="episodes" />
-export const AudiobooksView = () => <ShowsView shows={AUDIOBOOKS} unit="chapters" />
+export const PodcastsView = () => <ShowsView shows={PODCAST_LIST} unit="episodes" source="podcasts" />
+export const AudiobooksView = () => <ShowsView shows={AUDIOBOOKS} unit="chapters" source="audiobooks" />
 
 /* ---------------- Apps: icon grid ---------------- */
 
 export function AppsView() {
+  const pane = useScrollMemory<HTMLDivElement>('apps')
   return (
-    <div className="media">
+    <div className="media" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="shelf apps">
         {APP_LIST.map((a) => (
           <button key={a.id} className="poster">
@@ -95,7 +98,8 @@ export function AppsView() {
 /* ---------------- Radio: genre → streams ---------------- */
 
 export function RadioView() {
-  const [open, setOpen] = useState<string | null>(RADIO_GENRES[0].name)
+  const [open, setOpen] = useRemembered<string | null>('radio.genre', RADIO_GENRES[0].name)
+  const pane = useScrollMemory<HTMLDivElement>('radio')
   return (
     <div className="media radio">
       <div className="ep-head">
@@ -103,7 +107,7 @@ export function RadioView() {
         <span className="c-time">Bit Rate</span>
         <span className="c-date">Listeners</span>
       </div>
-      <div className="ep-body">
+      <div className="ep-body" ref={pane.ref} onScroll={pane.onScroll}>
         {RADIO_GENRES.map((g) => (
           <div key={g.name}>
             <button className="genre" onClick={() => setOpen(open === g.name ? null : g.name)}>
@@ -131,9 +135,10 @@ export function RadioView() {
 /* ---------------- iTunes Store: fake storefront ---------------- */
 
 export function StoreView({ purchased }: { purchased: boolean }) {
+  const pane = useScrollMemory<HTMLDivElement>(purchased ? 'purchased' : 'store')
   if (purchased) {
     return (
-      <div className="media store">
+      <div className="media store" ref={pane.ref} onScroll={pane.onScroll}>
         <h2>Purchased</h2>
         <div className="charts">
           {STORE_CHARTS.slice(0, 2).map((c) => (
@@ -154,7 +159,7 @@ export function StoreView({ purchased }: { purchased: boolean }) {
     )
   }
   return (
-    <div className="media store">
+    <div className="media store" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="banners">
         {STORE_FEATURED.map((f) => (
           <button key={f.id} className="banner" style={art(f.hue)}>

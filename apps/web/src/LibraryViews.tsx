@@ -2,7 +2,8 @@
 // Artist instead of one flat song table. Songs stays in TrackList; these two are
 // grid-first, which is the whole point of the redesign.
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useRemembered, useScrollMemory } from './viewState'
 import { albumSeed, Cover } from './Artwork'
 import { Icon } from './Icon'
 import { fmtTime, type Track } from './data'
@@ -63,11 +64,12 @@ export function AlbumsView({
   onGetInfo: (ids: string[]) => void
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
-  const [open, setOpen] = useState<string | null>(null)
+  const [open, setOpen] = useRemembered<string | null>('albums.open', null)
+  const pane = useScrollMemory<HTMLDivElement>('albums')
   const current = albums.find((a) => a.key === open)
 
   return (
-    <div className="media">
+    <div className="media" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="grid">
         {albums.map((a) => (
           <div key={a.key} className={`tile ${open === a.key ? 'on' : ''}`}>
@@ -128,13 +130,15 @@ export function ArtistsView({
     return [...by.entries()].sort((x, y) => x[0].localeCompare(y[0]))
   }, [albums])
 
-  const [sel, setSel] = useState<string | null>(null)
+  const [sel, setSel] = useRemembered<string | null>('artists.sel', null)
+  const list = useScrollMemory<HTMLDivElement>('artists.list')
+  const body = useScrollMemory<HTMLDivElement>('artists.body')
   const active = sel ?? artists[0]?.[0]
   const mine = artists.find(([name]) => name === active)?.[1] ?? []
 
   return (
     <div className="media split">
-      <div className="artist-list">
+      <div className="artist-list" ref={list.ref} onScroll={list.onScroll}>
         {artists.map(([name, list]) => (
           <button key={name} className={`artist ${name === active ? 'on' : ''}`} onClick={() => setSel(name)}>
             <Cover seed={list[0].key} size={30} className="round" />
@@ -147,7 +151,7 @@ export function ArtistsView({
           </button>
         ))}
       </div>
-      <div className="artist-body">
+      <div className="artist-body" ref={body.ref} onScroll={body.onScroll}>
         <h2>{active}</h2>
         {mine.map((a) => (
           <div key={a.key} className="artist-album">

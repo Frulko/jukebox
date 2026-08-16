@@ -7,6 +7,7 @@ import { features } from './tableFeatures'
 import { COLUMN_LABELS, DEFAULT_VISIBLE, makeColumns, NUMERIC } from './columns'
 import type { Playlist, Track } from './data'
 import type { View } from './App'
+import { useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
 //
@@ -38,10 +39,6 @@ function usePersisted<T>(key: string, initial: T, merge?: (stored: T, fresh: T) 
 
 const ALL_IDS = Object.keys(COLUMN_LABELS)
 const defaultVisibility = Object.fromEntries(ALL_IDS.map((id) => [id, DEFAULT_VISIBLE.has(id)]))
-
-// Where each source was left scrolled. Module-level so it survives the remount
-// that switching views triggers; deliberately not persisted across reloads.
-const scrollMemory = new Map<string, { top: number; left: number }>()
 
 
 type Props = {
@@ -86,7 +83,9 @@ export function TrackList(p: Props) {
   const [dragCol, setDragCol] = useState<string | null>(null)
   const anchor = useRef<string | null>(null)
   const pendingCollapse = useRef<string | null>(null)
-  const bodyRef = useRef<HTMLDivElement>(null)
+  // Same memory as every other view — see viewState.ts. The header's horizontal
+  // position is not stored: it is derived from the body's on every scroll.
+  const { ref: bodyRef, onScroll: rememberScroll } = useScrollMemory<HTMLDivElement>(p.viewKey)
   const headRef = useRef<HTMLDivElement>(null)
 
   const actions = useMemo(
@@ -138,21 +137,16 @@ export function TrackList(p: Props) {
   // rows above and below. Re-measuring is the documented way out.
   useLayoutEffect(() => { virtualizer.measure() }, [p.rowHeight, virtualizer])
 
-  // Restore where this source was last left, before paint so there is no jump.
+  // The restore happens in the hook, before paint; the header has to be brought
+  // along with it, which it cannot know about.
   useLayoutEffect(() => {
-    const at = scrollMemory.get(p.viewKey)
-    if (at && bodyRef.current) {
-      bodyRef.current.scrollTop = at.top
-      bodyRef.current.scrollLeft = at.left
-      if (headRef.current) headRef.current.scrollLeft = at.left
-    }
-  }, [p.viewKey])
+    if (headRef.current && bodyRef.current) headRef.current.scrollLeft = bodyRef.current.scrollLeft
+  }, [p.viewKey, bodyRef])
 
   const onScroll = () => {
+    rememberScroll()
     const el = bodyRef.current
-    if (!el) return
-    scrollMemory.set(p.viewKey, { top: el.scrollTop, left: el.scrollLeft })
-    if (headRef.current) headRef.current.scrollLeft = el.scrollLeft // header follows horizontally
+    if (el && headRef.current) headRef.current.scrollLeft = el.scrollLeft // header follows horizontally
   }
 
   /* ---- selection: plain click replaces, cmd toggles, shift extends ---- */
