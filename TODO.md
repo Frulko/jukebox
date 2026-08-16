@@ -72,7 +72,9 @@ hands out a URL.
       and the token (nothing is authenticated yet, so it would guard nothing)
 - [~] **3.2** Browser renderer done — one `<audio>` on `/stream/:id`, state read from the
       element. Left: the `output` contract that lets a renderer live elsewhere
-- [ ] **3.3** UPnP/DLNA (SSDP + `SetAVTransportURI`) then Sonos
+- [x] **3.3** UPnP/DLNA — SSDP discovery, description parsing, `SetAVTransportURI`, play,
+      pause, stop, volume. Verified against five real Sonos speakers on the LAN.
+      Sonos-specific grouping and its own queue are still to come
 - [ ] **3.4** Play queue shared between controllers
 - [ ] **3.5** AirPlay · **3.6** Satellite renderer (tablet, Pi + DAC) · **3.7** Chromecast
 - [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)

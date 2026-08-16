@@ -27,6 +27,10 @@ import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.
 import { Events, recordPlay } from './plays.ts'
 import { compatible, fetchIndex, install, uninstall } from './store.ts'
 import {
+  advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
+  setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
+} from './upnp.ts'
+import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
 } from './playlists.ts'
@@ -104,6 +108,9 @@ export function createApp(dbFile: string) {
   // floating promise it could still be reading the database after the process
   // that owns it has closed it.
   const events = new Events()
+  // Cached between searches: SSDP takes seconds, and a UI that lists outputs on
+  // every render would spend its life waiting for a multicast timeout.
+  let renderers: { at: number; items: Renderer[] } = { at: 0, items: [] }
   const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events)
   seedPresets(db)
 
@@ -241,6 +248,79 @@ export function createApp(dbFile: string) {
     jobs: db.prepare(`SELECT state, COUNT(*) AS n FROM jobs GROUP BY state`).all()
       .reduce((acc: any, r: any) => ({ ...acc, [r.state]: r.n }), {}),
   }))
+
+  /* ---------------- outputs ---------------- */
+
+  /**
+   * Renderers on the network.
+   *
+   * Discovery is a live SSDP search rather than a stored list: a speaker that
+   * was unplugged should stop appearing, and one that was plugged in a minute
+   * ago should appear without anyone pressing rescan. It costs a couple of
+   * seconds, which is why the result is cached until asked to refresh.
+   */
+  api.get('/outputs', async (c) => {
+    const now = Date.now()
+    if (c.req.query('refresh') === 'true' || now - renderers.at > 30_000) {
+      renderers = { at: now, items: await discoverRenderers().catch(() => []) }
+    }
+    return c.json({
+      items: renderers.items.map(({ id, name, manufacturer, model, address }) =>
+        ({ id, name, manufacturer, model, address })),
+      // What a renderer will be told to fetch. Shown because when it is wrong --
+      // a container with several interfaces, a machine behind a proxy -- every
+      // play silently fails, and this is the number that explains why.
+      advertising: advertisedBase(Number(process.env.PORT ?? 8787)),
+    })
+  })
+
+  /** Points a renderer at a track and starts it. */
+  api.post('/outputs/:id/play', async (c) => {
+    const renderer = renderers.items.find((r) => r.id === c.req.param('id'))
+    if (!renderer) return fail(c, 404, 'not_found', 'unknown output; try GET /outputs?refresh=true')
+
+    const b = await c.req.json().catch(() => null)
+    if (!b?.trackId) return fail(c, 400, 'bad_body', 'expected { trackId }')
+    const t = getTrack(db, b.trackId)
+    if (!t) return fail(c, 404, 'not_found', 'unknown track')
+
+    const base = advertisedBase(Number(process.env.PORT ?? 8787))
+    try {
+      await playUrl(renderer, {
+        name: t.name, artist: t.artist, album: t.album, duration: t.duration,
+        url: `${base}/api/v1/stream/${t.id}`,
+      })
+      return c.json({ playing: t.id, on: renderer.name, url: `${base}/api/v1/stream/${t.id}` })
+    } catch (err) {
+      return fail(c, 502, 'renderer_refused', err instanceof Error ? err.message : 'the renderer refused')
+    }
+  })
+
+  for (const [path, action] of [['pause', pauseRenderer], ['stop', stopRenderer]] as const) {
+    api.post(`/outputs/:id/${path}`, async (c) => {
+      const renderer = renderers.items.find((r) => r.id === c.req.param('id'))
+      if (!renderer) return fail(c, 404, 'not_found', 'unknown output')
+      try {
+        await action(renderer)
+        return c.body(null, 204)
+      } catch (err) {
+        return fail(c, 502, 'renderer_refused', err instanceof Error ? err.message : 'the renderer refused')
+      }
+    })
+  }
+
+  api.post('/outputs/:id/volume', async (c) => {
+    const renderer = renderers.items.find((r) => r.id === c.req.param('id'))
+    if (!renderer) return fail(c, 404, 'not_found', 'unknown output')
+    const b = await c.req.json().catch(() => null)
+    if (typeof b?.volume !== 'number') return fail(c, 400, 'bad_body', 'expected { volume: 0-100 }')
+    try {
+      await setRendererVolume(renderer, b.volume)
+      return c.body(null, 204)
+    } catch (err) {
+      return fail(c, 502, 'renderer_refused', err instanceof Error ? err.message : 'the renderer refused')
+    }
+  })
 
   /* ---------------- plugins ---------------- */
 
