@@ -18,6 +18,7 @@ import { MissingView } from './MissingView'
 import { QueueView } from './QueueView'
 import { AlbumsView, ArtistsView } from './LibraryViews'
 import { PlaylistsView } from './PlaylistsView'
+import { ConvertDialog } from './ConvertDialog'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -49,6 +50,7 @@ export default function App() {
   const [browserOpen, setBrowserOpen] = useState(true)
   const [format, setFormat] = useState<string | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
+  const [converting, setConverting] = useState<string[] | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
@@ -512,6 +514,7 @@ export default function App() {
                 onPlay={playTrack}
                 onEnqueue={enqueue}
                 onPlayNext={playNext}
+                onConvert={setConverting}
                 onUpdate={update}
                 onDelete={remove}
                 onAddToPlaylist={addToPlaylist}
@@ -553,6 +556,10 @@ export default function App() {
           <Icon name="sync" size={10} />
         </button>
       </div>
+
+      {converting && (
+        <ConvertDialog ids={converting} onClose={() => setConverting(null)} onStarted={setNotice} />
+      )}
 
       {infoIds && infoTracks.length > 0 && (
         <InfoModal

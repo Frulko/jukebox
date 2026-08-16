@@ -1664,3 +1664,26 @@ input[type="range"]::-webkit-slider-thumb {
 .pl-tile { border: 0; background: none; text-align: left; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .pl-tile .t { display: flex; align-items: center; gap: 5px; font-size: 12.5px; }
 .pl-tile .s { color: var(--dim); font-size: 11.5px; }
+
+/* ---------------- convert ---------------- */
+.modal.convert { width: 460px; }
+.convert-lead { margin: 0 0 14px; color: var(--dim); line-height: 1.5; }
+.convert-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.convert-row > span { width: 70px; color: var(--dim); }
+.convert-row select { flex: 1; }
+.convert-what {
+  margin: 16px 0 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+.convert-what legend { padding: 0 5px; color: var(--dim); font-size: 11px; }
+.convert-what label { display: flex; gap: 9px; padding: 7px 4px; align-items: flex-start; border-radius: 6px; }
+.convert-what label.on { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.convert-what b { display: block; font-size: 12.5px; }
+/* The consequence is the point of the choice, so it is not a tooltip. */
+.convert-what em { display: block; font-style: normal; color: var(--dim); line-height: 1.45; margin-top: 2px; }
+.convert-unavailable { display: flex; gap: 10px; align-items: flex-start; }
+.convert-unavailable .icon { color: #e8890c; margin-top: 2px; }
+.convert-unavailable p { margin: 4px 0 0; line-height: 1.5; }
+.convert-failed { margin: 12px 0 0; color: var(--accent); }

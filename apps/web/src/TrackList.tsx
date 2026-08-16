@@ -41,6 +41,8 @@ type Props = {
   onEnqueue: (ids: string[]) => void
   /** Inserts right after the track playing, rather than at the end. */
   onPlayNext: (ids: string[]) => void
+  /** Opens the conversion dialog for these tracks. */
+  onConvert: (ids: string[]) => void
   onUpdate: (ids: string[], patch: Partial<Track>) => void
   onDelete: (ids: string[]) => void
   onAddToPlaylist: (playlistId: string, ids: string[]) => void
@@ -438,6 +440,9 @@ export function TrackList(p: Props) {
               </button>
               <button onClick={() => (p.onGetInfo(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Get Info (${selectedIds.length} items)` : 'Get Info'}
+              </button>
+              <button onClick={() => (p.onConvert(selectedIds), setMenu(null))}>
+                {selectedIds.length > 1 ? `Convert ${selectedIds.length} Tracks…` : 'Convert…'}
               </button>
               <hr />
               <div className="ctx-sub">

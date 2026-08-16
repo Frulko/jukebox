@@ -238,6 +238,13 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   // Before the single-track lookup below, which would otherwise swallow it.
   if (path === '/tracks/missing') return { items: MISSING }
   if (path === '/stats') return stats()
+  // The demo claims ffmpeg the way it claims a library: so the dialog can be
+  // opened and read. The conversion itself answers with the job it would have
+  // started, and no file is touched — there are no files.
+  if (path === '/transcode/capabilities') {
+    return { available: true, formats: ['mp3', 'aac', 'opus', 'alac', 'flac', 'wav'], ffmpeg: '/usr/bin/ffmpeg', fpcalc: null, reason: null }
+  }
+  if (path === '/transcode' && method === 'POST') return scanning()
   if (path === '/facets') return facets(q)
   if (path.startsWith('/tracks/')) return tracks.find((t) => t.id === path.slice(8))
   if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }
