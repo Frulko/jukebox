@@ -87,7 +87,9 @@ export function Player({
   jobs,
   queueLength,
   queueOpen,
+  artOpen,
   onToggleQueue,
+  onToggleArt,
   onToggle,
   onPrev,
   onNext,
@@ -115,7 +117,9 @@ export function Player({
   jobs: Job[]
   queueLength: number
   queueOpen: boolean
+  artOpen: boolean
   onToggleQueue: () => void
+  onToggleArt: () => void
   onToggle: () => void
   onPrev: () => void
   onNext: () => void
@@ -215,7 +219,11 @@ export function Player({
                 <span className="t r">-{fmtTime(Math.max(0, total - position))}</span>
               </div>
             </div>
-            <button className="lcd-eye" title="Cover art">
+            <button
+              className={`lcd-eye ${artOpen ? 'on' : ''}`}
+              title={artOpen ? 'Hide the cover' : 'Show the cover and the files behind this track'}
+              onClick={onToggleArt}
+            >
               <Icon name="columns" size={11} />
             </button>
           </>

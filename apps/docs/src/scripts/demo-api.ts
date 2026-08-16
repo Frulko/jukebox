@@ -24,6 +24,27 @@ const tracks = all.filter((t) => !gone.has(t.id))
 // their place in playlists — but nothing can stream them, which is exactly the
 // state the row's warning badge is for.
 for (const t of tracks.filter((_, i) => i % 23 === 5)) t.sourceId = 'usb-archive'
+
+// Some tracks carry a second file: the same song converted for a device that
+// cannot take the original. One row, two renditions — the shape the conversion
+// dialog produces with "keep both", and the only place the interface shows it.
+for (const t of tracks.filter((_, i) => i % 13 === 4)) {
+  t.renditions = [
+    ...t.renditions,
+    {
+      id: `${t.id}-aac`,
+      format: 'aac',
+      bitRate: 256,
+      sampleRate: 44100,
+      channels: 2,
+      size: Math.round(t.size * 0.42),
+      lossless: 0,
+      preferred: 0,
+      path: t.path.replace(/\.[^.]+$/, '.m4a'),
+      sourceId: t.sourceId,
+    },
+  ]
+}
 let revision = all.length
 
 const norm = (s: string) => s.toLowerCase()

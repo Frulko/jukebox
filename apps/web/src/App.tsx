@@ -23,6 +23,7 @@ import { AdminView } from './AdminView'
 import { DuplicatesView } from './DuplicatesView'
 import { HomeView, useRecentPlaylists } from './HomeView'
 import { usePluginMenu } from './pluginMenu'
+import { NowPlayingPanel } from './NowPlayingPanel'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -54,6 +55,7 @@ export default function App() {
   const [browserOpen, setBrowserOpen] = useState(true)
   const [format, setFormat] = useState<string | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
+  const [artOpen, setArtOpen] = useState(false)
   const [recentPlaylists, rememberPlaylist] = useRecentPlaylists()
   const [converting, setConverting] = useState<string[] | null>(null)
   const [selectIds, setSelectIds] = useState<string[] | null>(null)
@@ -407,7 +409,9 @@ export default function App() {
         jobs={jobs}
         queueLength={queue.length}
         queueOpen={queueOpen}
+        artOpen={artOpen}
         onToggleQueue={() => setQueueOpen((v) => !v)}
+        onToggleArt={() => setArtOpen((v) => !v)}
         onToggle={toggle}
         onPrev={() => (audio.position > 3 ? audio.seek(0) : step(-1))}
         onNext={() => step(1)}
@@ -418,6 +422,8 @@ export default function App() {
         onSearch={setSearch}
         onToggleBrowser={() => setBrowserOpen((v) => !v)}
       />
+
+      {artOpen && current && <NowPlayingPanel track={current} onClose={() => setArtOpen(false)} />}
 
       {queueOpen && (
         <QueueView
