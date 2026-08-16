@@ -172,8 +172,12 @@ hands out a URL.
 
 ## M5 · Plugins and store
 
-- [x] **5.1** Plugin host — manifest, lifecycle, semver `hostApi`, failure isolation.
-      Sidecars (a plugin owning a child process) still to come
+- [x] **5.1** Plugin host — manifest, lifecycle, semver `hostApi`, failure isolation, and
+      **sidecars**: `net.spawn` gives a plugin a child process the host owns. Output drained
+      whether or not anyone listens (a full stdout pipe blocks the program mid-write and looks
+      like a hang), unref'd so a running sidecar is never why SIGTERM does nothing, SIGTERM on
+      stop, and an opt-in restart with a growing delay — restarting something that exits
+      immediately, immediately, is a fork bomb with good intentions. Host API 1.2.0
 - [x] **5.2** Host-provided transports — `http`, `ws`, `tcp`, `udp`, plus timers, all closed
       when the plugin stops. No `mqtt`: it would be the first runtime dependency added for
       something nothing uses, and a plugin can carry its own client. The host takes it over

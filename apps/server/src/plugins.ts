@@ -32,13 +32,15 @@ import { createPlaylist as makePlaylist } from './playlists.ts'
 
 /** Bumped on a breaking change to what `PluginHost` hands a plugin. */
 /**
- * 1.1.0: the player.
+ * 1.2.0: sidecars.
  *
- * A minor bump, because it only adds — `on('player')` and `host.player`. Every
- * plugin declaring `^1.0.0` still loads, which is the whole reason the range is
- * a range.
+ * 1.1.0 added the player — `on('player')` and `host.player`. 1.2.0 adds
+ * `net.spawn`, a child process the host owns and kills.
+ *
+ * Both are minor bumps because both only add: every plugin declaring `^1.0.0`
+ * still loads, which is the whole reason the range is a range.
  */
-export const HOST_API_VERSION = '1.1.0'
+export const HOST_API_VERSION = '1.2.0'
 
 export type Manifest = {
   id: string
@@ -175,11 +177,14 @@ export type Host = {
   /** Creates a playlist, so a command can return one it just built. */
   createPlaylist: (name: string, trackIds: string[]) => { id: string; name: string }
   /**
-   * Sockets, requests and timers that the host closes when the plugin stops.
+   * Sockets, requests, timers and child processes that the host closes when the
+   * plugin stops.
    *
-   * A plugin can reach `fetch` and `net.connect` directly — it runs in this
-   * process. Using these instead is what makes turning it off actually turn it
-   * off.
+   * A plugin can reach `fetch`, `net.connect` and `spawn` directly — it runs in
+   * this process. Using these instead is what makes turning it off actually
+   * turn it off, and for a spawned program that matters more than for anything
+   * else here: an orphaned process holds a port, eats CPU, and survives
+   * everything short of a reboot.
    */
   net: Transports
   /**
