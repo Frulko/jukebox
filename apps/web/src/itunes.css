@@ -1194,3 +1194,152 @@ input[type="range"]::-webkit-slider-thumb {
   color: #fff;
 }
 .devtracks-row.orphan .c-name { font-weight: 600; }
+
+/* ================================================================
+   THEME · Studio — dark canvas, floating surfaces, one green.
+
+   The first skin that is not an Apple product. Where the other three
+   sit inside a single window frame, this one breaks the app into
+   panels that float on a near-black canvas: depth carries the
+   hierarchy instead of borders, which is what music apps settled on
+   once dark mode stopped being an option. Surfaces get lighter as
+   they rise — canvas, sidebar, content, popovers — and the only
+   saturated colour in the interface is the accent.
+   ================================================================ */
+
+[data-theme="studio"] {
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fs: 12.5px;
+
+  /* the elevation ladder: every surface is one step lighter than the one under it */
+  --canvas: #08090c;
+  --raised: #14181f;
+
+  --chrome: transparent;
+  --chrome-line: transparent;
+  --chrome-text: #e6eaf2;
+  --chrome-inset: none;
+
+  --btn: #171c24;
+  --btn-line: #232a35;
+  --btn-text: #c3cad6;
+  --btn-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  --btn-on: #2fe08a;
+  --btn-on-line: #2fe08a;
+  --btn-on-text: #06120c;
+
+  --sidebar: #0e1219;
+  --sidebar-line: transparent;
+  --sidebar-text: #aab3c2;
+  --sidebar-section: #626c7e;
+  --sidebar-sel: rgba(47, 224, 138, .13);
+  --sidebar-sel-text: #eafff5;
+  --sidebar-sel-icon: #2fe08a;
+  --sidebar-sel-shadow: none;
+  --sidebar-shadow: none;
+
+  --content: #0c1015;
+  --text: #e8ecf3;
+  --dim: #7f8899;
+  --line: #1c222c;
+  --line-soft: #161b23;
+
+  --head: transparent;
+  --head-line: #1c222c;
+  --head-text: #6d7688;
+  --head-sorted: rgba(47, 224, 138, .09);
+
+  --stripe: transparent;
+  --sel: rgba(47, 224, 138, .16);
+  --sel-text: #eafff5;
+  --sel-blur: rgba(255, 255, 255, .06);
+  --row-h: 30px;
+  --row-radius: 9px;
+
+  --lcd: rgba(255, 255, 255, .05);
+  --lcd-line: rgba(255, 255, 255, .09);
+  --lcd-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  --track-bg: #262d38;
+
+  --status: transparent;
+  --panel: #14181f;
+  --field: #10151c;
+  --field-line: #262d38;
+  --accent: #2fe08a;
+  --focus: rgba(47, 224, 138, .3);
+  --menu: #171c24;
+  --menu-text: #e8ecf3;
+  --menu-line: #262d38;
+  --star: #2fe08a;
+  --star-off: #2b323d;
+  --scroll-thumb: #262d38;
+  --scroll-thumb-hover: #38414f;
+  --scroll-track: transparent;
+  --radius: 9px;
+}
+
+/* --- the window becomes a canvas with panels floating on it --- */
+[data-theme="studio"] body { background: var(--canvas); }
+[data-theme="studio"] .itunes { background: var(--canvas); border: 0; padding: 8px; gap: 8px; }
+[data-theme="studio"] .topbar { height: 54px; padding: 0 4px; border-bottom: 0; }
+[data-theme="studio"] .main { gap: 8px; }
+[data-theme="studio"] .sidebar,
+[data-theme="studio"] .content {
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  overflow: hidden;
+}
+[data-theme="studio"] .sidebar { width: 196px; border-right: 1px solid var(--line-soft); padding-top: 4px; }
+[data-theme="studio"] .statusbar { border-top: 0; padding-top: 6px; }
+
+/* --- controls: pills, no bevel --- */
+[data-theme="studio"] .transport button,
+[data-theme="studio"] .right-tools > button { width: 30px; height: 26px; border-radius: 8px; }
+[data-theme="studio"] .transport button:hover,
+[data-theme="studio"] .right-tools > button:hover { background: #1d232c; }
+
+/* --- now playing: the one glass surface, floating over the canvas --- */
+[data-theme="studio"] .lcd {
+  border-radius: 12px;
+  border: 1px solid var(--lcd-line);
+  backdrop-filter: blur(14px);
+}
+[data-theme="studio"] .lcd-title { font-weight: 600; letter-spacing: -.01em; }
+[data-theme="studio"] .lcd-scrub .knob,
+[data-theme="studio"] input[type="range"]::-webkit-slider-thumb {
+  border: 0;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(47, 224, 138, .18);
+}
+
+/* --- the list: rows are cards, not lines --- */
+[data-theme="studio"] .tbody { padding: 4px 8px; }
+[data-theme="studio"] .tr { width: calc(100% - 16px); }
+[data-theme="studio"] .tr:not(.sel):hover { background: #151a22; }
+[data-theme="studio"] .tr.sel { box-shadow: inset 0 0 0 1px rgba(47, 224, 138, .35); }
+[data-theme="studio"] .tr.sel .stars i.on { color: var(--accent); }
+[data-theme="studio"] .thead { padding: 0 8px; height: 30px; }
+[data-theme="studio"] .th {
+  border-right: 0;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* --- sidebar: taller targets, the selection is a pill --- */
+[data-theme="studio"] .sidebar .src { height: 30px; padding: 0 10px; border-radius: 9px; margin: 1px 8px; }
+[data-theme="studio"] .sidebar .src.on { font-weight: 600; }
+[data-theme="studio"] .sidebar .section { padding: 14px 16px 4px; letter-spacing: .1em; }
+
+/* --- artwork and popovers keep the same soft geometry --- */
+[data-theme="studio"] .tile-art .cover,
+[data-theme="studio"] .album-detail > .cover { border-radius: 12px; }
+[data-theme="studio"] .grid { gap: 26px 20px; padding: 22px; }
+[data-theme="studio"] .cb-pane li:nth-child(even) { background: transparent; }
+[data-theme="studio"] .cb-pane li:hover { background: #151a22; }
+[data-theme="studio"] .modal-backdrop { background: rgba(0, 0, 0, .6); }
+[data-theme="studio"] .modal { border-radius: 16px; box-shadow: 0 30px 70px rgba(0, 0, 0, .6); }
+[data-theme="studio"] .modal-titlebar .close { border-color: transparent; background: #2b323d; }
+[data-theme="studio"] .cap-bar { background: #262d38; }

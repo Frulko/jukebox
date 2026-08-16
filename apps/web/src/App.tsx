@@ -18,14 +18,15 @@ import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
 
-export type Theme = 'classic' | 'itunes12' | 'music'
+export type Theme = 'classic' | 'itunes12' | 'music' | 'studio'
 const THEMES: Array<[Theme, string]> = [
   ['classic', 'iTunes 8'],
   ['itunes12', 'iTunes 12'],
   ['music', 'Music'],
+  ['studio', 'Studio'],
 ]
 /** Must track --row-h in each theme block; the virtualiser needs the number. */
-export const THEME_ROW_H: Record<Theme, number> = { classic: 17, itunes12: 21, music: 26 }
+export const THEME_ROW_H: Record<Theme, number> = { classic: 17, itunes12: 21, music: 26, studio: 30 }
 
 const NO_TRACKS: Track[] = []
 

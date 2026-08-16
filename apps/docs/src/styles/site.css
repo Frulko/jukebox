@@ -138,33 +138,92 @@ td code { white-space: nowrap; }
 }
 
 /* --- the embedded app ---
-   The front is a full application with its own three themes: it is framed, not
-   restyled. The chrome around it says so. */
-.demo {
-  background: var(--panel);
+   The front is a full application, so it is presented as one: a desktop window
+   sitting above the page. Three stacked shadows rather than one — a hairline
+   contact shadow, a short ambient one and a long soft one — because a single
+   large blur reads as a sticker, not as something with weight. */
+.window {
   border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 10px;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .03),
+    0 2px 4px rgba(0, 0, 0, .05),
+    0 12px 28px -10px rgba(0, 0, 0, .2),
+    0 40px 80px -30px rgba(0, 0, 0, .32);
+  overflow: hidden;
 }
-.demo iframe {
-  display: block;
-  width: 100%;
-  height: min(78vh, 760px);
-  border: 0;
-  border-radius: 10px;
-  background: var(--bg);
+@media (prefers-color-scheme: dark) {
+  .window {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, .04),
+      0 12px 28px -10px rgba(0, 0, 0, .6),
+      0 48px 90px -30px rgba(0, 0, 0, .8);
+  }
 }
-.demo-bar {
+
+.window-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 6px 10px;
-  font-size: 12.5px;
-  color: var(--dim);
-  font-family: var(--mono);
+  height: 40px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(color-mix(in srgb, var(--panel) 100%, transparent), color-mix(in srgb, var(--ink) 4%, var(--panel)));
 }
-.demo-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
-.demo-bar a { margin-left: auto; }
+.window-bar .lights { display: flex; gap: 8px; flex: none; }
+.window-bar .lights i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  /* the inner ring is what keeps them from looking like flat stickers */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
+}
+.window-bar .lights i:nth-child(1) { background: #ff5f57; }
+.window-bar .lights i:nth-child(2) { background: #febc2e; }
+.window-bar .lights i:nth-child(3) { background: #28c840; }
+.window-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  font-weight: 560;
+  color: var(--dim);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.window-bar .side { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.window-bar .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.window-bar .badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.window-bar a { color: var(--dim); text-decoration: none; }
+.window-bar a:hover { color: var(--accent); }
+.window iframe {
+  display: block;
+  width: 100%;
+  height: min(76vh, 780px);
+  border: 0;
+  background: var(--bg);
+}
+/* Under the window: what it is, in the page's own voice rather than in chrome. */
+.window-note { margin: 14px 0 0; font-size: 13.5px; color: var(--dim); }
 
 /* --- docs --- */
 .doc { display: grid; grid-template-columns: 210px 1fr; gap: 48px; padding-top: 44px; }
@@ -186,8 +245,9 @@ td code { white-space: nowrap; }
   .card { padding: 15px 16px; border-radius: 12px; }
   .card h3 { font-size: 15px; }
   .card p, .btn { font-size: 13.5px; }
-  .demo { padding: 6px; border-radius: 14px; }
-  .demo iframe { height: 70vh; height: 70dvh; }
+  .window { border-radius: 12px; }
+  .window-title { display: none; }
+  .window iframe { height: 70vh; height: 70dvh; }
   pre { font-size: 11.5px; padding: 12px 13px; }
   h1 { font-size: clamp(26px, 7vw, 34px); }
   h2 { font-size: 21px; }

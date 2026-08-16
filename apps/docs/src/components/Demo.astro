@@ -2,22 +2,28 @@
 import { url } from '../lib/url'
 
 interface Props {
-  /** Shown in the frame's bar — what the reader is looking at. */
+  /** The window's title bar text. */
+  title?: string
+  /** Shown under the window, in the page's voice. */
   note?: string
 }
-const { note = 'demo mode — a fabricated library, no server behind it' } = Astro.props
+const { title = 'jukebox', note } = Astro.props
 
 // The real front end, built from `apps/web` with `VITE_DEMO=1`. It is framed in
-// an iframe rather than mounted here: it brings its own three themes and its own
+// an iframe rather than mounted here: it brings its own themes and its own
 // keyboard handling, and neither should leak into the documentation around it.
 const app = url('/app/')
 ---
 
-<div class="demo">
-  <div class="demo-bar">
-    <span class="dot"></span>
-    <span>{note}</span>
-    <a href={app} target="_blank" rel="noopener">open full screen ↗</a>
+<div class="window">
+  <div class="window-bar">
+    <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="window-title">{title}</span>
+    <span class="side">
+      <span class="badge">demo</span>
+      <a href={app} target="_blank" rel="noopener">open ↗</a>
+    </span>
   </div>
   <iframe src={app} title="The jukebox interface" loading="lazy"></iframe>
 </div>
+{note && <p class="window-note">{note}</p>}
