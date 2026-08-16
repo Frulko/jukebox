@@ -7,12 +7,13 @@ import type { JobQueue } from './jobs.ts'
  *
  * Two decisions shape everything here.
  *
- * **The clock is asked, never predicted.** A tick fires once a minute and asks
- * each schedule "do you match *this* minute?". The alternative — computing the
- * next fire time and sleeping until it — has to reason about DST, and gets it
- * wrong twice a year: a 02:30 job either runs twice in October or not at all in
- * March. Matching the wall clock is immune to that, because the wall clock is
- * what the user meant.
+ * **The clock is asked, never predicted.** A tick fires twice a minute and asks
+ * each schedule "do you match *this* minute?". Computing a next-fire time and
+ * sleeping until it means doing DST arithmetic; asking the wall clock means the
+ * spring-forward case needs no code at all, because 02:30 simply never occurs
+ * that night. The autumn case still does need care, and it lives in `runDue`:
+ * the "already ran" marker is a wall-clock minute, not an epoch minute, or a
+ * 02:30 job runs twice on the night the clocks go back.
  *
  * **No cron dependency.** The five-field subset below is the whole of what a
  * schedule needs, and it fits in one screen with tests. The one part that is
@@ -111,6 +112,16 @@ export function matches(c: Cron, at: Date): boolean {
   return true
 }
 
+/**
+ * The local wall-clock minute, as a sortable string. This is the identity of an
+ * occurrence: two instants that read 02:30 on the same date are the same
+ * occurrence even when an hour of real time separates them.
+ */
+export function minuteKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 export type Schedule = {
   id: string
   name: string
@@ -119,13 +130,14 @@ export type Schedule = {
   payload: unknown
   enabled: 0 | 1
   lastRunAt: number | null
+  lastRunKey: string | null
   lastJobId: string | null
 }
 
 const hydrate = (r: any): Schedule => ({
   id: r.id, name: r.name, cron: r.cron, kind: r.kind,
   payload: JSON.parse(r.payload || '{}'),
-  enabled: r.enabled, lastRunAt: r.lastRunAt, lastJobId: r.lastJobId,
+  enabled: r.enabled, lastRunAt: r.lastRunAt, lastRunKey: r.lastRunKey, lastJobId: r.lastJobId,
 })
 
 export function listSchedules(db: DB): Schedule[] {
@@ -144,6 +156,13 @@ export function getSchedule(db: DB, id: string): Schedule | null {
  * than once inside the same minute (a slow tick, a clock nudged by NTP), and a
  * nightly sync must not start twice because of it.
  *
+ * "This minute" is the *local wall-clock* minute, not an epoch minute. On the
+ * night the clocks go back, 02:30 happens twice, an hour apart — two different
+ * epoch minutes, one wall-clock minute. Keyed on the epoch, a nightly 02:30 job
+ * would run twice that night; keyed on the wall clock it runs once. The other
+ * direction needs no code at all: when the clocks go forward 02:30 never occurs,
+ * so nothing matches it.
+ *
  * Missed minutes are not caught up. A machine asleep from 02:00 to 09:00 wakes
  * to seven hours of "due" jobs under any catch-up scheme, and running them all
  * at once is worse than skipping them — the next occurrence is minutes or hours
@@ -151,20 +170,20 @@ export function getSchedule(db: DB, id: string): Schedule | null {
  */
 export function runDue(db: DB, jobs: JobQueue, now: Date): string[] {
   const started: string[] = []
-  const minute = Math.floor(now.getTime() / 60000)
+  const key = minuteKey(now)
 
   for (const s of listSchedules(db)) {
     if (!s.enabled) continue
     const cron = parseCron(s.cron)
     if (!cron) continue
     if (!matches(cron, now)) continue
-    if (s.lastRunAt !== null && Math.floor(s.lastRunAt / 60000) === minute) continue
+    if (s.lastRunKey === key) continue
 
-    // The idempotency key carries the minute, so a schedule cannot stack two
+    // The key is in the idempotency key too, so a schedule cannot stack two
     // jobs for the same occurrence even if the queue is behind.
-    const job = jobs.create(s.kind, s.payload, { idempotencyKey: `sched-${s.id}-${minute}` })
-    db.prepare(`UPDATE schedules SET lastRunAt = ?, lastJobId = ? WHERE id = ?`)
-      .run(now.getTime(), job.id, s.id)
+    const job = jobs.create(s.kind, s.payload, { idempotencyKey: `sched-${s.id}-${key}` })
+    db.prepare(`UPDATE schedules SET lastRunAt = ?, lastRunKey = ?, lastJobId = ? WHERE id = ?`)
+      .run(now.getTime(), key, job.id, s.id)
     started.push(job.id)
   }
   return started

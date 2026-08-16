@@ -199,6 +199,8 @@ export type Schedule = {
   payload: unknown
   enabled: 0 | 1
   lastRunAt: number | null
+  /** Local wall-clock minute of the last run — the identity of an occurrence. */
+  lastRunKey: string | null
   lastJobId: string | null
 }
 

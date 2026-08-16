@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { matches, parseCron, runDue } from '../src/cron.ts'
+import { matches, minuteKey, parseCron, runDue } from '../src/cron.ts'
 import { open } from '../src/db.ts'
 import { JobQueue } from '../src/jobs.ts'
 
@@ -103,6 +103,37 @@ test('missed minutes are not caught up', () => {
   // The machine was asleep at 03:30 and wakes at 09:00. Running seven hours of
   // backlog at once is worse than waiting for tomorrow.
   assert.equal(runDue(db, jobs, at('2026-08-16T09:00:00')).length, 0)
+})
+
+test('a nightly job runs once on the night the clocks go back', () => {
+  // 25 Oct 2026, EU autumn change: 02:30 local happens twice, an hour of real
+  // time apart. Two epoch minutes, one wall-clock minute.
+  const first = new Date(Date.UTC(2026, 9, 25, 0, 30))
+  const second = new Date(Date.UTC(2026, 9, 25, 1, 30))
+  if (first.getHours() !== 2 || second.getHours() !== 2) {
+    // Only meaningful in a zone that observes the EU change; UTC CI skips it.
+    return
+  }
+
+  assert.equal(minuteKey(first), minuteKey(second), 'the same occurrence, an hour apart')
+  assert.notEqual(Math.floor(+first / 60000), Math.floor(+second / 60000),
+    'which is exactly why an epoch-minute marker would fire twice')
+
+  const { db, jobs } = fixture()
+  schedule(db, '30 2 * * *')
+  assert.equal(runDue(db, jobs, first).length, 1)
+  assert.equal(runDue(db, jobs, second).length, 0, 'the repeated hour must not re-fire it')
+})
+
+test('a job at a time that never happens simply does not run', () => {
+  // 29 Mar 2026, spring forward: 02:30 does not exist. Nothing to code around —
+  // no instant matches it, so nothing fires.
+  const { db, jobs } = fixture()
+  schedule(db, '30 2 * * *')
+  const skipped = new Date(Date.UTC(2026, 2, 29, 1, 30)) // 03:30 local in Paris
+  if (skipped.getHours() === 3) {
+    assert.equal(runDue(db, jobs, skipped).length, 0)
+  }
 })
 
 test('a broken expression is skipped without stopping the others', () => {

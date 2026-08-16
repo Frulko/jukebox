@@ -188,6 +188,10 @@ CREATE TABLE IF NOT EXISTS schedules (
   payload   TEXT NOT NULL DEFAULT '{}',
   enabled   INTEGER NOT NULL DEFAULT 1,
   lastRunAt INTEGER,
+  -- The local wall-clock minute of the last run, e.g. 2026-10-25T02:30. Not the
+  -- epoch: on the night the clocks go back that minute happens twice, and a
+  -- nightly job must run once.
+  lastRunKey TEXT,
   lastJobId TEXT,
   createdAt INTEGER NOT NULL
 );
