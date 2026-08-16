@@ -1,0 +1,143 @@
+import { createColumnHelper } from '@tanstack/react-table'
+import { fmtDate, fmtSize, fmtTime, type Track } from './data'
+import { Icon } from './Icon'
+import type { features } from './tableFeatures'
+
+const h = createColumnHelper<typeof features, Track>()
+
+export type CellActions = {
+  toggleChecked: (id: string) => void
+  rate: (id: string, rating: number) => void
+}
+
+function Stars({ value, onRate }: { value: number; onRate: (n: number) => void }) {
+  return (
+    <span className="stars" onMouseDown={(e) => e.stopPropagation()}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <i key={n} className={n <= value ? 'on' : 'off'} onClick={() => onRate(value === n && n === 1 ? 0 : n)}>
+          <Icon name="star" size={10} />
+        </i>
+      ))}
+    </span>
+  )
+}
+
+export const makeColumns = (a: CellActions) =>
+  h.columns([
+    h.display({
+      id: 'checked',
+      header: () => <span className="hdr-check">✓</span>,
+      size: 24,
+      enableResizing: false,
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.original.enabled}
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={() => a.toggleChecked(row.original.id)}
+        />
+      ),
+    }),
+    h.display({
+      id: 'index',
+      header: '',
+      size: 34,
+      enableResizing: false,
+      cell: ({ row }) => <span className="num dim">{row.getDisplayIndex() + 1}</span>,
+    }),
+    h.accessor('name', { header: 'Name', size: 230 }),
+    h.accessor('duration', {
+      id: 'time',
+      header: 'Time',
+      size: 52,
+      cell: (c) => <span className="num">{fmtTime(c.getValue())}</span>,
+    }),
+    h.accessor('artist', { header: 'Artist', size: 150 }),
+    h.accessor('album', { header: 'Album', size: 160 }),
+    h.accessor('genre', { header: 'Genre', size: 95 }),
+    h.accessor('rating', {
+      header: 'Rating',
+      size: 78,
+      cell: (c) => <Stars value={c.getValue()} onRate={(n) => a.rate(c.row.original.id, n)} />,
+    }),
+    h.accessor('playCount', {
+      header: 'Plays',
+      size: 46,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('year', {
+      header: 'Year',
+      size: 44,
+      cell: (c) => <span className="num">{c.getValue()}</span>,
+    }),
+    h.accessor('trackNumber', {
+      id: 'trackNumber',
+      header: 'Track #',
+      size: 56,
+      cell: (c) => <span className="num">{`${c.getValue()} of ${c.row.original.trackCount}`}</span>,
+    }),
+    h.accessor('discNumber', {
+      header: 'Disc #',
+      size: 50,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('albumArtist', { header: 'Album Artist', size: 150 }),
+    h.accessor('composer', { header: 'Composer', size: 150 }),
+    h.accessor('grouping', { header: 'Grouping', size: 110 }),
+    h.accessor('comments', { header: 'Comments', size: 160 }),
+    h.accessor('bpm', {
+      header: 'BPM',
+      size: 46,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('kind', { header: 'Kind', size: 150 }),
+    h.accessor('size', {
+      header: 'Size',
+      size: 62,
+      cell: (c) => <span className="num">{fmtSize(c.getValue())}</span>,
+    }),
+    h.accessor('bitRate', {
+      header: 'Bit Rate',
+      size: 62,
+      cell: (c) => <span className="num">{c.getValue()} kbps</span>,
+    }),
+    h.accessor('sampleRate', {
+      header: 'Sample Rate',
+      size: 82,
+      cell: (c) => <span className="num">{(c.getValue() / 1000).toFixed(3)} kHz</span>,
+    }),
+    h.accessor('dateAdded', {
+      header: 'Date Added',
+      size: 100,
+      cell: (c) => fmtDate(c.getValue()),
+    }),
+    h.accessor('lastPlayed', {
+      header: 'Last Played',
+      size: 100,
+      cell: (c) => fmtDate(c.getValue()),
+    }),
+    h.accessor('skipCount', {
+      header: 'Skips',
+      size: 46,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+  ])
+
+/** Columns iTunes shows out of the box; everything else lives in View Options. */
+export const DEFAULT_VISIBLE = new Set([
+  'checked', 'index', 'name', 'time', 'artist', 'album', 'genre', 'rating', 'playCount',
+])
+
+export const COLUMN_LABELS: Record<string, string> = {
+  checked: '✓', index: '#', name: 'Name', time: 'Time', artist: 'Artist', album: 'Album',
+  genre: 'Genre', rating: 'Rating', playCount: 'Plays', year: 'Year', trackNumber: 'Track Number',
+  discNumber: 'Disc Number', albumArtist: 'Album Artist', composer: 'Composer', grouping: 'Grouping',
+  comments: 'Comments', bpm: 'BPM', kind: 'Kind', size: 'Size', bitRate: 'Bit Rate',
+  sampleRate: 'Sample Rate', dateAdded: 'Date Added', lastPlayed: 'Last Played', skipCount: 'Skips',
+}
+
+/** Columns whose values are right-aligned in iTunes. */
+export const NUMERIC = new Set([
+  'index', 'time', 'playCount', 'year', 'trackNumber', 'discNumber', 'bpm', 'size',
+  'bitRate', 'sampleRate', 'skipCount',
+])

@@ -1,0 +1,228 @@
+import { useMemo, useState } from 'react'
+import { fmtDate, fmtSize, fmtTime, type Track } from './data'
+import { Icon } from './Icon'
+import { albumSeed, Cover } from './Artwork'
+
+type Field = {
+  key: keyof Track
+  label: string
+  type: 'text' | 'number' | 'check' | 'textarea' | 'select' | 'stars'
+  tab: 'details' | 'options' | 'artwork'
+  options?: string[]
+  half?: boolean
+  suffix?: string
+}
+
+const FIELDS: Field[] = [
+  { key: 'name', label: 'Name', type: 'text', tab: 'details' },
+  { key: 'artist', label: 'Artist', type: 'text', tab: 'details' },
+  { key: 'albumArtist', label: 'Album Artist', type: 'text', tab: 'details' },
+  { key: 'album', label: 'Album', type: 'text', tab: 'details' },
+  { key: 'grouping', label: 'Grouping', type: 'text', tab: 'details' },
+  { key: 'composer', label: 'Composer', type: 'text', tab: 'details' },
+  { key: 'comments', label: 'Comments', type: 'textarea', tab: 'details' },
+  { key: 'genre', label: 'Genre', type: 'text', tab: 'details', half: true },
+  { key: 'year', label: 'Year', type: 'number', tab: 'details', half: true },
+  { key: 'trackNumber', label: 'Track Number', type: 'number', tab: 'details', half: true },
+  { key: 'discNumber', label: 'Disc Number', type: 'number', tab: 'details', half: true },
+  { key: 'bpm', label: 'BPM', type: 'number', tab: 'details', half: true },
+  { key: 'compilation', label: 'Part of a compilation', type: 'check', tab: 'details' },
+  { key: 'rating', label: 'Rating', type: 'stars', tab: 'options' },
+  { key: 'loved', label: 'Loved', type: 'check', tab: 'options' },
+  { key: 'enabled', label: 'Enabled (plays in this list)', type: 'check', tab: 'options' },
+  { key: 'kind', label: 'Kind', type: 'text', tab: 'options', half: true },
+]
+
+const MIXED = Symbol('mixed')
+
+/** Common value across the selection, or MIXED. */
+function shared(tracks: Track[], key: keyof Track) {
+  const first = tracks[0][key]
+  return tracks.every((t) => t[key] === first) ? first : MIXED
+}
+
+export function InfoModal({
+  tracks,
+  onClose,
+  onApply,
+}: {
+  tracks: Track[]
+  onClose: () => void
+  onApply: (patch: Partial<Track>) => void
+}) {
+  const multi = tracks.length > 1
+  const [tab, setTab] = useState<'details' | 'options' | 'artwork' | 'file'>('details')
+  const [patch, setPatch] = useState<Partial<Track>>({})
+  const [on, setOn] = useState<Set<string>>(new Set())
+
+  const base = useMemo(
+    () => Object.fromEntries(FIELDS.map((f) => [f.key, shared(tracks, f.key)])) as Record<string, unknown>,
+    [tracks],
+  )
+
+  const setField = (f: Field, value: unknown) => {
+    setPatch((old) => ({ ...old, [f.key]: value }))
+    if (multi) setOn((old) => new Set(old).add(f.key as string))
+  }
+
+  const valueOf = (f: Field) => {
+    if (f.key in patch) return patch[f.key]
+    const b = base[f.key as string]
+    return b === MIXED ? (f.type === 'check' ? false : '') : b
+  }
+
+  const apply = () => {
+    const out: Partial<Track> = {}
+    for (const f of FIELDS) {
+      if (multi && !on.has(f.key as string)) continue
+      if (!(f.key in patch)) continue
+      ;(out as Record<string, unknown>)[f.key] = patch[f.key]
+    }
+    if (Object.keys(out).length) onApply(out)
+    onClose()
+  }
+
+  const tabs: Array<typeof tab> = multi ? ['details', 'options', 'artwork'] : ['details', 'options', 'artwork', 'file']
+  const visible = FIELDS.filter((f) => f.tab === tab)
+  const t = tracks[0]
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className={`modal ${multi ? 'multi' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modal-titlebar">
+          <button className="close" onClick={onClose} />
+          <span>{multi ? 'Multiple Item Information' : `${t.name} — Item Information`}</span>
+        </div>
+
+        <div className="modal-head">
+          <Cover seed={albumSeed(t)} size={58} className="art" />
+          <div className="head-meta">
+            {multi ? (
+              <>
+                <b>{tracks.length} songs selected</b>
+                <span>Edits apply to every checked field.</span>
+                <span className="dim">{[...new Set(tracks.map((x) => x.artist))].slice(0, 3).join(', ')}…</span>
+              </>
+            ) : (
+              <>
+                <b>{t.name}</b>
+                <span>{t.artist}</span>
+                <span className="dim">{t.album}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="tabs">
+          {tabs.map((id) => (
+            <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+              {id[0].toUpperCase() + id.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <div className="modal-body">
+          {tab === 'file' ? (
+            <dl className="file-info">
+              {[
+                ['Kind', t.format],
+                ['Size', fmtSize(t.size)],
+                ['Bit Rate', `${t.bitRate} kbps`],
+                ['Sample Rate', `${(t.sampleRate / 1000).toFixed(3)} kHz`],
+                ['Duration', fmtTime(t.duration)],
+                ['Date Added', fmtDate(t.dateAdded)],
+                ['Last Played', fmtDate(t.lastPlayed) || 'Never'],
+                ['Plays', String(t.playCount)],
+                ['Skips', String(t.skipCount)],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <div className="fields">
+              {visible.map((f) => {
+                const mixed = base[f.key as string] === MIXED && !(f.key in patch)
+                const enabled = !multi || on.has(f.key as string)
+                return (
+                  <label
+                    key={f.key as string}
+                    className={`field ${f.half ? 'half' : ''} ${f.type === 'check' ? 'bool' : ''} ${f.type === 'textarea' ? 'tall' : ''} ${enabled ? '' : 'off'}`}
+                  >
+                    {multi && (
+                      <input
+                        type="checkbox"
+                        className="apply-box"
+                        checked={on.has(f.key as string)}
+                        onChange={(e) =>
+                          setOn((old) => {
+                            const n = new Set(old)
+                            if (e.target.checked) n.add(f.key as string)
+                            else n.delete(f.key as string)
+                            return n
+                          })
+                        }
+                      />
+                    )}
+                    <span className="lbl">{f.label}</span>
+                    {f.type === 'check' ? (
+                      <input
+                        type="checkbox"
+                        disabled={multi && !enabled}
+                        checked={Boolean(valueOf(f))}
+                        onChange={(e) => setField(f, e.target.checked)}
+                      />
+                    ) : f.type === 'textarea' ? (
+                      <textarea
+                        disabled={multi && !enabled}
+                        placeholder={mixed ? 'Mixed' : ''}
+                        value={String(valueOf(f) ?? '')}
+                        onChange={(e) => setField(f, e.target.value)}
+                      />
+                    ) : f.type === 'stars' ? (
+                      <span className="stars big">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <i
+                            key={n}
+                            className={n <= Number(valueOf(f) || 0) ? 'on' : 'off'}
+                            onClick={() => setField(f, n === 1 && Number(valueOf(f)) === 1 ? 0 : n)}
+                          >
+                            <Icon name="star" size={14} />
+                          </i>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="input-wrap">
+                        <input
+                          type={f.type === 'number' ? 'number' : 'text'}
+                          disabled={multi && !enabled}
+                          placeholder={mixed ? 'Mixed' : ''}
+                          value={String(valueOf(f) ?? '')}
+                          onChange={(e) =>
+                            setField(f, f.type === 'number' ? Number(e.target.value) : e.target.value)
+                          }
+                        />
+                        {f.suffix && <em>{f.suffix}</em>}
+                      </span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-foot">
+          {multi && <span className="dim">{on.size} field{on.size === 1 ? '' : 's'} will be applied</span>}
+          <span className="spacer" />
+          <button onClick={onClose}>Cancel</button>
+          <button className="default" onClick={apply}>
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
