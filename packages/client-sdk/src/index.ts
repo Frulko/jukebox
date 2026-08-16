@@ -1,6 +1,6 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  JobItem, JobItemsPage, JobItemState, Source, SyncPlan, Track, TrackPatch, TrackQuery,
+  JobItem, JobItemsPage, JobItemState, JobKind, Schedule, Source, SyncPlan, Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
 
@@ -146,6 +146,17 @@ export function createClient(opts: ClientOptions = {}) {
         request<JobItemsPage>(`/jobs/${id}/items${qs(q)}`),
     },
 
+    schedules: {
+      list: () => request<{ items: Schedule[] }>('/schedules', {}, true),
+      create: (s: { name: string; cron: string; kind: JobKind; payload?: unknown; enabled?: boolean }) =>
+        request<Schedule>('/schedules', { method: 'POST', body: JSON.stringify(s) }),
+      update: (id: string, patch: Partial<Pick<Schedule, 'name' | 'cron' | 'payload'>> & { enabled?: boolean }) =>
+        request<Schedule>(`/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+      remove: (id: string) => request<void>(`/schedules/${id}`, { method: 'DELETE' }),
+      /** Runs it now, without moving its next occurrence. */
+      run: (id: string) => request<Job>(`/schedules/${id}/run`, { method: 'POST' }),
+    },
+
     devices: {
       list: () => request<{ items: Device[] }>('/devices', {}, true),
       /** What is actually on the device, without going through the library. */
@@ -217,6 +228,6 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  JobItem, JobItemsPage, JobItemState, Source, SyncPlan, Track, TrackPatch, TrackQuery,
+  JobItem, JobItemsPage, JobItemState, JobKind, Schedule, Source, SyncPlan, Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }

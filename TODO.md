@@ -86,7 +86,8 @@ hands out a URL.
       dry run by default, log and undo
 - [ ] **4.5** Settings / admin — sources, destination folders, write capabilities
 - [ ] **4.6** Backup / restore — secrets excluded by default
-- [ ] **4.7** Cron scheduler + named workflows (overnight sync)
+- [x] **4.7** Cron scheduler — five-field expressions matched against the wall clock, no
+      dependency, no catch-up. Named workflows (chained jobs) still to come
 
 ## M5 · Plugins and store
 

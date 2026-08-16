@@ -12,6 +12,7 @@ import { makeScanHandler } from './scan.ts'
 import { makeWritebackHandler } from './writeback.ts'
 import { makeAcquireHandler } from './acquire.ts'
 import { makeSyncHandler, planSync } from './sync.ts'
+import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
@@ -33,6 +34,8 @@ export function createApp(dbFile: string) {
   jobs.register('acquire', makeAcquireHandler(db))
   jobs.register('sync', makeSyncHandler(db))
   jobs.start()
+  const scheduler = new Scheduler(db, jobs)
+  scheduler.start()
   seedPresets(db)
 
   const app = new Hono()
@@ -243,6 +246,56 @@ export function createApp(dbFile: string) {
   api.delete('/jobs/:id', (c) => {
     const job = jobs.cancel(c.req.param('id'))
     return job ? c.json(publicJob(job)) : fail(c, 404, 'not_found', 'unknown job')
+  })
+
+  /* ---------------- schedules ---------------- */
+
+  api.get('/schedules', (c) => withETag(c, { items: listSchedules(db) }))
+
+  api.post('/schedules', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.name || !b?.cron || !b?.kind) return fail(c, 400, 'bad_body', 'expected { name, cron, kind }')
+    // Rejected here rather than stored: an expression that never parses is a
+    // schedule that silently never runs, and the user finds out weeks later.
+    if (!parseCron(b.cron)) return fail(c, 400, 'bad_cron', `not a five-field cron expression: ${b.cron}`)
+    if (!jobs.knows(b.kind)) return fail(c, 400, 'bad_kind', `no handler registered for ${b.kind}`)
+
+    const id = `sc-${randomUUID().slice(0, 8)}`
+    db.prepare(`INSERT INTO schedules (id, name, cron, kind, payload, enabled, createdAt)
+                VALUES (?,?,?,?,?,?,?)`)
+      .run(id, b.name, b.cron, b.kind, JSON.stringify(b.payload ?? {}), b.enabled === false ? 0 : 1, Date.now())
+    return c.json(getSchedule(db, id), 201)
+  })
+
+  api.patch('/schedules/:id', async (c) => {
+    const id = c.req.param('id')
+    if (!getSchedule(db, id)) return fail(c, 404, 'not_found', 'unknown schedule')
+    const b = await c.req.json().catch(() => ({}))
+    if (b.cron !== undefined && !parseCron(b.cron)) {
+      return fail(c, 400, 'bad_cron', `not a five-field cron expression: ${b.cron}`)
+    }
+    const ALLOWED = ['name', 'cron', 'enabled', 'payload'] as const
+    const cols = ALLOWED.filter((k) => b[k] !== undefined)
+    if (!cols.length) return fail(c, 400, 'no_field', 'no editable field')
+    const values = cols.map((k) =>
+      k === 'payload' ? JSON.stringify(b[k]) : k === 'enabled' ? (b[k] ? 1 : 0) : b[k])
+    db.prepare(`UPDATE schedules SET ${cols.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`)
+      .run(...([...values, id] as never[]))
+    return c.json(getSchedule(db, id))
+  })
+
+  api.delete('/schedules/:id', (c) => {
+    const r = db.prepare(`DELETE FROM schedules WHERE id = ?`).run(c.req.param('id'))
+    return r.changes ? c.body(null, 204) : fail(c, 404, 'not_found', 'unknown schedule')
+  })
+
+  /** Runs it now, without waiting for its next occurrence and without moving it. */
+  api.post('/schedules/:id/run', (c) => {
+    const s = getSchedule(db, c.req.param('id'))
+    if (!s) return fail(c, 404, 'not_found', 'unknown schedule')
+    const job = jobs.create(s.kind, s.payload)
+    db.prepare(`UPDATE schedules SET lastJobId = ? WHERE id = ?`).run(job.id, s.id)
+    return c.json(publicJob(job), 202)
   })
 
   /* ---------------- devices ---------------- */
@@ -582,5 +635,5 @@ export function createApp(dbFile: string) {
   app.route('/api/v1', api)
   app.notFound((c) => fail(c, 404, 'not_found', 'unknown route'))
 
-  return { app, db, jobs }
+  return { app, db, jobs, scheduler }
 }

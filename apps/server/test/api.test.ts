@@ -331,6 +331,43 @@ test('hand-picking tracks for a device shows up in its plan', { skip }, async ()
   } finally { await h.cleanup() }
 })
 
+test('a schedule refuses an expression that would never fire', { skip }, async () => {
+  const h = await harness()
+  try {
+    const bad = await h.call('POST', '/schedules', {
+      name: 'Nightly', cron: 'every night please', kind: 'scan', payload: { sourceId: 'loc' },
+    })
+    // Stored, it would silently never run and the user would find out in weeks.
+    assert.equal(bad.status, 400)
+    assert.equal(bad.body.error.code, 'bad_cron')
+
+    const unknown = await h.call('POST', '/schedules', {
+      name: 'Nightly', cron: '0 3 * * *', kind: 'nonsense',
+    })
+    assert.equal(unknown.status, 400, 'a kind with no handler makes jobs nothing will run')
+
+    const ok = await h.call('POST', '/schedules', {
+      name: 'Nightly rescan', cron: '0 3 * * *', kind: 'scan', payload: { sourceId: 'loc', full: true },
+    })
+    assert.equal(ok.status, 201)
+    assert.equal(ok.body.enabled, 1)
+    assert.equal((await h.call('GET', '/schedules')).body.items.length, 1)
+
+    assert.equal((await h.call('PATCH', `/schedules/${ok.body.id}`, { cron: 'nope' })).status, 400)
+    assert.equal((await h.call('PATCH', `/schedules/${ok.body.id}`, { enabled: false })).body.enabled, 0)
+
+    // Running it now must not wait for 3am, and must actually queue the work.
+    const run = await h.call('POST', `/schedules/${ok.body.id}/run`)
+    assert.equal(run.status, 202)
+    await settle(h.jobs)
+    assert.ok(h.jobs.list({ kind: 'scan' }).some((j: any) => j.id === run.body.id))
+
+    assert.equal((await h.call('DELETE', `/schedules/${ok.body.id}`)).status, 204)
+    assert.equal((await h.call('GET', '/schedules')).body.items.length, 0)
+    assert.equal((await h.call('POST', '/schedules/sc-nope/run')).status, 404)
+  } finally { await h.cleanup() }
+})
+
 test('a job says which items failed, not just how many', { skip }, async () => {
   const h = await harness()
   try {

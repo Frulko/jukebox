@@ -185,6 +185,23 @@ export type DeviceStats = { tracks: number; orphans: number; bytes: number; seco
  */
 export type WantResult = { added: number; alreadyWanted: number; unknown: number }
 
+/**
+ * A recurring job. The cron expression is stored as written, not as a computed
+ * next-fire time: that is what makes a schedule mean the same thing across a
+ * restart and across a DST boundary.
+ */
+export type Schedule = {
+  id: string
+  name: string
+  /** Five fields, local time: minute hour day-of-month month day-of-week. */
+  cron: string
+  kind: JobKind
+  payload: unknown
+  enabled: 0 | 1
+  lastRunAt: number | null
+  lastJobId: string | null
+}
+
 /** Cursor pagination. `next` of `null` means: last page. */
 export type Page<T> = { items: T[]; next: string | null; revision?: number }
 

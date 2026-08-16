@@ -4,7 +4,7 @@ import { createApp } from './app.ts'
 const port = Number(process.env.PORT ?? 8787)
 const dbFile = process.env.JUKEBOX_DB ?? './data/library.db'
 
-const { app, jobs } = createApp(dbFile)
+const { app, jobs, scheduler } = createApp(dbFile)
 
 const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`jukebox · http://localhost:${info.port}/api/v1 · db ${dbFile}`)
@@ -14,6 +14,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     jobs.stop()
+    scheduler.stop()
     server.close(() => process.exit(0))
   })
 }

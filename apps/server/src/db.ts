@@ -177,6 +177,21 @@ CREATE TABLE IF NOT EXISTS job_items (
   PRIMARY KEY (jobId, idx)
 );
 
+-- Scheduled work: the overnight sync, the podcast refresh. The cron expression
+-- is stored as written rather than as a computed next-fire time, so a schedule
+-- means the same thing across a restart and across a DST boundary.
+CREATE TABLE IF NOT EXISTS schedules (
+  id        TEXT PRIMARY KEY,
+  name      TEXT NOT NULL,
+  cron      TEXT NOT NULL,
+  kind      TEXT NOT NULL,
+  payload   TEXT NOT NULL DEFAULT '{}',
+  enabled   INTEGER NOT NULL DEFAULT 1,
+  lastRunAt INTEGER,
+  lastJobId TEXT,
+  createdAt INTEGER NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5(
   name, artist, album, albumArtist, composer, genre,
   content='tracks', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2'

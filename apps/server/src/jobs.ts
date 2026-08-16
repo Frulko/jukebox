@@ -151,6 +151,12 @@ export class JobQueue {
     return job
   }
 
+  /** Whether a handler is registered for this kind — a schedule for one that is
+   *  not would create jobs nothing ever picks up. */
+  knows(kind: string): boolean {
+    return this.#handlers.has(kind as JobKind)
+  }
+
   get(id: string): Job | null {
     const row = this.#db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(id) as any
     return row ? hydrate(row) : null
