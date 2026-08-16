@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Play } from './App'
 import { useRemembered, useScrollMemory } from './viewState'
+import { useMenuPosition } from './useMenuPosition'
 import { albumSeed, Cover } from './Artwork'
 import { Icon } from './Icon'
 import { fmtTime, type Track } from './data'
@@ -44,6 +45,7 @@ export function groupAlbums(tracks: Track[]): Album[] {
  */
 function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void, onPlayNext: (ids: string[]) => void) {
   const [menu, setMenu] = useState<{ x: number; y: number; ids: string[]; label: string } | null>(null)
+  const position = useMenuPosition(menu)
 
   useEffect(() => {
     if (!menu) return
@@ -62,7 +64,7 @@ function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void, onPlayNe
   }
 
   const node = menu ? (
-    <div className="ctx" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="ctx" ref={position.setFloating} style={position.floatingStyles} onMouseDown={(e) => e.stopPropagation()}>
       <button onClick={() => (onPlay(menu.ids[0], menu.ids), setMenu(null))}>Play {menu.label}</button>
       <button onClick={() => (onPlayNext(menu.ids), setMenu(null))}>Play Next</button>
       <button onClick={() => (onEnqueue(menu.ids), setMenu(null))}>

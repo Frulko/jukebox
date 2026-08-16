@@ -8,14 +8,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.27.20",
+    "@jukebox/api-types": "*",
+    "@jukebox/client-sdk": "*",
+    "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-table": "^9.1.2",
     "@tanstack/react-virtual": "^3.13.0",
-    "@tanstack/react-query": "^5.62.0",
     "idb-keyval": "^6.3.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "@jukebox/api-types": "*",
-    "@jukebox/client-sdk": "*"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

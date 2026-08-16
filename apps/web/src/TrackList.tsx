@@ -9,6 +9,7 @@ import type { Playlist, Track } from './data'
 import type { View } from './App'
 import { isUnavailable } from './trackBadges'
 import type { PluginEntry } from './pluginMenu'
+import { useMenuPosition } from './useMenuPosition'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -73,6 +74,7 @@ export function TrackList(p: Props) {
   )
   const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('jukebox.sizes', {})
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'row' | 'header' | 'format' } | null>(null)
+  const menuPosition = useMenuPosition(menu)
   const [dropRow, setDropRow] = useState<number | null>(null)
   const [dragCol, setDragCol] = useState<string | null>(null)
   const anchor = useRef<string | null>(null)
@@ -416,7 +418,12 @@ export function TrackList(p: Props) {
       </div>
 
       {menu && (
-        <div className="ctx" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
+        <div
+          className="ctx"
+          ref={menuPosition.setFloating}
+          style={menuPosition.floatingStyles}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {menu.kind === 'format' ? (
             <>
               <div className="ctx-title">Format</div>
