@@ -26,6 +26,8 @@ import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.t
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
 import { Events, recordPlay } from './plays.ts'
 import { compatible, fetchIndex, install, uninstall } from './store.ts'
+import { FORMATS, tools } from './ffmpeg.ts'
+import { makeConvertHandler } from './convert.ts'
 import {
   advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
   setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
@@ -94,6 +96,7 @@ export function createApp(dbFile: string) {
   jobs.register('acquire', makeAcquireHandler(db))
   jobs.register('sync', makeSyncHandler(db))
   jobs.register('podcast', makePodcastHandler(db))
+  jobs.register('transcode', makeConvertHandler(db))
   // One kind, two directions: the payload says which. A separate kind would
   // need its own concurrency cap for work that must never run beside itself.
   const organize = makeOrganizeHandler(db)
@@ -248,6 +251,51 @@ export function createApp(dbFile: string) {
     jobs: db.prepare(`SELECT state, COUNT(*) AS n FROM jobs GROUP BY state`).all()
       .reduce((acc: any, r: any) => ({ ...acc, [r.state]: r.n }), {}),
   }))
+
+  /* ---------------- conversion ---------------- */
+
+  /**
+   * What this server can convert, and whether it can convert at all.
+   *
+   * ffmpeg is a binary on PATH rather than a dependency, so it may simply not
+   * be there. Saying so here lets the UI disable conversion with a reason
+   * rather than queue a job that fails once per track.
+   */
+  api.get('/transcode/capabilities', async (c) => {
+    const t = await tools(c.req.query('refresh') === 'true')
+    return c.json({
+      available: Boolean(t.ffmpeg),
+      formats: t.ffmpeg ? FORMATS : [],
+      ffmpeg: t.ffmpeg,
+      fpcalc: t.fpcalc,
+      reason: t.ffmpeg ? null : 'ffmpeg is not installed on this server',
+    })
+  })
+
+  /**
+   * Converts a selection.
+   *
+   * `replace: false` keeps both files as two renditions of one track, which is
+   * the case worth having: an iPod that takes AAC and a browser that wants the
+   * FLAC are the same song, and keeping both stops every sync re-encoding it.
+   */
+  api.post('/transcode', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.ids?.length || !b?.format) return fail(c, 400, 'bad_body', 'expected { ids: [], format }')
+    if (!FORMATS.includes(String(b.format).toLowerCase())) {
+      return fail(c, 400, 'bad_format', `cannot convert to ${b.format}; try one of ${FORMATS.join(', ')}`)
+    }
+    const t = await tools()
+    // Refused before a job exists: a queue full of failures is a worse answer
+    // than one clear no.
+    if (!t.ffmpeg) return fail(c, 503, 'no_ffmpeg', 'ffmpeg is not installed on this server')
+
+    const job = jobs.create('transcode', {
+      ids: b.ids, format: String(b.format).toLowerCase(),
+      quality: b.quality, replace: Boolean(b.replace),
+    })
+    return c.json(publicJob(job), 202)
+  })
 
   /* ---------------- outputs ---------------- */
 

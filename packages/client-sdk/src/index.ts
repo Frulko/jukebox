@@ -117,6 +117,25 @@ export function createClient(opts: ClientOptions = {}) {
         }),
     },
 
+    transcode: {
+      /**
+       * Whether this server can convert at all. ffmpeg is a binary on PATH, not
+       * a dependency, so it may simply be absent — and a UI that offers
+       * conversion anyway queues a job that fails once per track.
+       */
+      capabilities: () => request<{
+        available: boolean; formats: string[]; ffmpeg: string | null
+        fpcalc: string | null; reason: string | null
+      }>('/transcode/capabilities'),
+      /**
+       * `replace: false` keeps both files as two renditions of one track, which
+       * is the case worth having: an iPod that takes AAC and a browser that
+       * wants the FLAC are the same song.
+       */
+      run: (p: { ids: string[]; format: string; quality?: string; replace?: boolean }) =>
+        request<Job>('/transcode', { method: 'POST', body: JSON.stringify(p) }),
+    },
+
     store: {
       /**
        * Browses an index. The URL is passed every time and there is no default:

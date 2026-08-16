@@ -84,7 +84,8 @@ hands out a URL.
 - [x] **4b.1** `renditions` — a track is the song, a rendition is a file of it. Backfilled by
       migration; the flat format/size/bitRate on tracks stay as the preferred one's copy
 - [x] **4b.2** Sync picks a rendition the device already plays before deciding to convert
-- [ ] **4b.3** `POST /transcode` — { ids, format, quality?, replace }, needs ffmpeg on PATH
+- [x] **4b.3** `POST /transcode` — { ids, format, quality?, replace }. ffmpeg is a binary on
+      PATH, not a dependency; `GET /transcode/capabilities` says whether it is there
 - [ ] **4b.4** Streaming picks a rendition, and can be asked for a specific one
 - [ ] **4b.5** Duplicate detection — merge two scanned files of the same song into renditions
 
