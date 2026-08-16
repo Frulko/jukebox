@@ -41,6 +41,7 @@ const DOCS: Record<string, Doc> = {
   'GET /tracks/count': { summary: 'How many tracks a query matches.', tag: 'library' },
   'GET /tracks/delta': { summary: 'What changed since a revision. The main network win.', tag: 'library', query: ['since', 'limit'] },
   'GET /tracks/missing': { summary: 'Tracks whose file the scanner can no longer find.', tag: 'library' },
+  'GET /tracks/:id/memberships': { summary: 'Every playlist and device holding this track. Smart playlists are asked, not read.', tag: 'library' },
   'GET /tracks/:id': { summary: 'One track.', tag: 'library' },
   'PATCH /tracks': { summary: 'Edits one or many. Tag writing to disk becomes a job.', tag: 'library', body: '{ ids, patch, writeToFiles? }' },
   'POST /tracks/:id/play': { summary: 'Records a listen. Half the length or four minutes, never under thirty seconds.', tag: 'library', body: '{ played, startedAt? }' },

@@ -476,6 +476,20 @@ export type PlayerState = {
   by: string | null
 }
 
+/**
+ * Every playlist and device holding one track.
+ *
+ * Answered by the server because a client cannot: a smart playlist's membership
+ * is a query rather than a stored list, so anything computed client-side would
+ * be wrong for exactly the playlists people care most about.
+ */
+export type Memberships = {
+  /** `position` is where it sits in a manual playlist, and null for a smart one. */
+  playlists: { id: string; name: string; smart: string | null; position: number | null }[]
+  /** `present` is on the device now; `wanted` is picked but not yet synced. */
+  devices: { id: string; name: string; wanted: boolean; present: boolean }[]
+}
+
 /** Cursor pagination. `next` of `null` means: last page. */
 export type Page<T> = { items: T[]; next: string | null; revision?: number }
 

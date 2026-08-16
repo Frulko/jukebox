@@ -29,6 +29,61 @@ const COLUMNS = `t.id, t.sourceId, t.path, t.kind, t.name, t.artist, t.albumArti
 
 const ids = (csv: string) => csv.split(',').map((s) => s.trim()).filter(Boolean)
 
+/**
+ * Every playlist and device that holds one track.
+ *
+ * The playlist half cannot be answered by a client, and that is the reason this
+ * route exists rather than convenience: a smart playlist's membership is a
+ * query, not a stored list, so "is this track in it" is the rules engine's
+ * question. Anything computed client-side would be wrong for exactly the
+ * playlists people care most about.
+ */
+export type Memberships = {
+  playlists: { id: string; name: string; smart: string | null; position: number | null }[]
+  devices: { id: string; name: string; wanted: boolean; present: boolean }[]
+}
+
+export function membershipsOf(db: DB, trackId: string, smart: (rules: any) => { where: string; params: unknown[]; limit: number }): Memberships | null {
+  if (!db.prepare(`SELECT id FROM tracks WHERE id = ? AND deletedAt IS NULL`).get(trackId)) return null
+
+  const playlists: Memberships['playlists'] = []
+
+  for (const p of db.prepare(`SELECT * FROM playlists WHERE deletedAt IS NULL ORDER BY createdAt`)
+    .all() as any[]) {
+    if (!p.smart) {
+      const row = db.prepare(
+        `SELECT position FROM playlist_tracks WHERE playlistId = ? AND trackId = ?`)
+        .get(p.id, trackId) as any
+      // Position is worth having: "track 4 of Jazz for the evening" says where
+      // you put it, which is most of why anyone opens this.
+      if (row) playlists.push({ id: p.id, name: p.name, smart: null, position: row.position })
+      continue
+    }
+
+    // A smart playlist is asked, not read. The rules run with the track pinned,
+    // which is the same query the playlist itself uses -- so the answer cannot
+    // drift from what the playlist would actually show.
+    const q = smart(p.rules ? JSON.parse(p.rules) : {})
+    const hit = db.prepare(
+      `SELECT id FROM (SELECT id FROM tracks WHERE ${q.where} LIMIT ${q.limit}) WHERE id = ?`)
+      .get(...([...q.params, trackId] as never[]))
+    if (hit) playlists.push({ id: p.id, name: p.name, smart: p.smart, position: null })
+  }
+
+  // `present` and `wanted` are different facts and the second is the reason to
+  // look: a track hand-picked for the iPod that has not synced yet is exactly
+  // the case someone opens this menu to check.
+  const devices = (db.prepare(
+    `SELECT d.id, d.name,
+            EXISTS (SELECT 1 FROM device_wanted w WHERE w.deviceId = d.id AND w.trackId = ?) AS wanted,
+            EXISTS (SELECT 1 FROM device_tracks t WHERE t.deviceId = d.id AND t.trackId = ?) AS present
+     FROM devices d ORDER BY d.name`).all(trackId, trackId) as any[])
+    .map((d) => ({ id: d.id, name: d.name, wanted: Boolean(d.wanted), present: Boolean(d.present) }))
+    .filter((d) => d.wanted || d.present)
+
+  return { playlists, devices }
+}
+
 export type Rendition = {
   id: string
   format: string

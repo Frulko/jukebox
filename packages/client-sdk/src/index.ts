@@ -1,7 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  CommandResult, DuplicateGroup, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
+  CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
   Source, Stats,
@@ -134,6 +134,13 @@ export function createClient(opts: ClientOptions = {}) {
         request<{ counted: boolean; playCount?: number; reason?: string }>(`/tracks/${id}/play`, {
           method: 'POST', body: JSON.stringify({ played, startedAt }),
         }),
+      /**
+       * Every playlist and device holding this track.
+       *
+       * Smart playlists are asked rather than read, so the answer matches what
+       * the playlist would actually show.
+       */
+      memberships: (id: string) => request<Memberships>(`/tracks/${id}/memberships`),
       /** Tracks whose file has gone. They keep their ratings and come back on rescan. */
       missing: (limit = 200) => request<{ items: MissingTrack[] }>(`/tracks/missing?limit=${limit}`),
       /**
@@ -422,7 +429,7 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  CommandResult, DuplicateGroup, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
+  CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
   Source, Stats,

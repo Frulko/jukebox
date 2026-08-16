@@ -1,7 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { open } from '../src/db.ts'
-import { countTracks, deviceStats, facets, listDeviceTracks, listTracks, tracksDelta } from '../src/library.ts'
+import {
+  countTracks, deviceStats, facets, listDeviceTracks, listTracks, membershipsOf, tracksDelta,
+} from '../src/library.ts'
+import { addTracks, createPlaylist, smartQuery } from '../src/playlists.ts'
 
 function fixture() {
   const db = open(':memory:')
@@ -156,4 +159,47 @@ test('the format filter runs in SQL, and the facets say what is there', () => {
   // A client typing FLAC should not silently get nothing.
   assert.equal(listTracks(db, { format: first.value.toUpperCase(), limit: 500 }).items.length, first.count)
   assert.equal(listTracks(db, { format: 'not-a-codec', limit: 500 }).items.length, 0)
+})
+
+test('memberships answer for smart playlists, which a client cannot', () => {
+  const db = fixture()
+  const manual = createPlaylist(db, { name: 'Roadtrip' })
+  addTracks(db, manual.id, ['t2', 't1'])
+  // A smart playlist is a query. Its membership cannot be read from a table,
+  // which is the entire reason this lives on the server.
+  createPlaylist(db, { name: 'Rock only', smart: 'rock', rules: { all: [{ field: 'genre', op: 'is', value: 'Rock' }] } })
+  createPlaylist(db, { name: 'Jazz only', smart: 'jazz', rules: { all: [{ field: 'genre', op: 'is', value: 'Jazz' }] } })
+
+  const m = membershipsOf(db, 't1', smartQuery)!
+  const byName = Object.fromEntries(m.playlists.map((p) => [p.name, p]))
+
+  assert.ok(byName.Roadtrip)
+  // Where you put it, which is most of why anyone opens this.
+  assert.equal(byName.Roadtrip.position, 1)
+  assert.equal(byName.Roadtrip.smart, null)
+
+  assert.ok(byName['Rock only'], 't1 is Rock, so the rules match it')
+  assert.equal(byName['Rock only'].position, null, 'a smart playlist has matches, not positions')
+  assert.ok(!byName['Jazz only'], 'and it does not appear in one whose rules it fails')
+
+  assert.equal(membershipsOf(db, 'no-such-track', smartQuery), null)
+})
+
+test('a device says both whether it holds a track and whether it wants one', () => {
+  const db = fixture()
+  // Two different facts, and the second is the reason to look: a track picked
+  // for the iPod that has not synced yet is the case someone checks.
+  db.prepare(`INSERT INTO device_wanted (deviceId, trackId, addedAt) VALUES ('nano','t2',1)`).run()
+
+  const held = membershipsOf(db, 't1', smartQuery)!
+  const onIpod = held.devices.find((d) => d.id === 'ipod')!
+  assert.equal(onIpod.present, true)
+  assert.equal(onIpod.wanted, false)
+
+  const waiting = membershipsOf(db, 't2', smartQuery)!.devices.find((d) => d.id === 'nano')!
+  assert.equal(waiting.wanted, true)
+  assert.equal(waiting.present, false, 'picked, not yet synced')
+
+  // A device with no relationship to the track is not listed at all.
+  assert.equal(membershipsOf(db, 't4', smartQuery)!.devices.length, 0)
 })

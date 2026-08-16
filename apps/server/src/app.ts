@@ -16,8 +16,8 @@ import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
 import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandler } from './podcasts.ts'
 import { createRadio, deleteRadio, discover, getRadio, listRadios, updateRadio } from './radio.ts'
 import {
-  countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, pickRendition,
-  playlistTracks, smartTracks, tracksDelta,
+  countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, membershipsOf,
+  pickRendition, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
 import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
@@ -318,6 +318,19 @@ export function createApp(dbFile: string) {
     }
     const result = recordPlay(db, events, c.req.param('id'), b)
     return result ? c.json(result) : fail(c, 404, 'not_found', 'unknown track')
+  })
+
+  /**
+   * Where a track lives: every playlist and device holding it.
+   *
+   * On the server because a client cannot answer it. A smart playlist's
+   * membership is a query rather than a stored list, so "is this track in it"
+   * belongs to the rules engine — and brute-forcing the manual ones would be
+   * one request per playlist to answer a single right-click.
+   */
+  api.get('/tracks/:id/memberships', (c) => {
+    const m = membershipsOf(db, c.req.param('id'), smartQuery)
+    return m ? c.json(m) : fail(c, 404, 'not_found', 'unknown track')
   })
 
   api.get('/tracks/:id', (c) => {
