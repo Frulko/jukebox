@@ -153,6 +153,12 @@ export function createClient(opts: ClientOptions = {}) {
         request<{ received: number; matched: number; orphans: number }>(`/devices/${id}/tracks`, {
           method: 'PUT', body: JSON.stringify({ items }),
         }),
+      /** Pulls tracks the device has and the library does not. */
+      importTracks: (id: string, deviceLocalIds: string[], targetSourceId: string, targetPath?: string) =>
+        request<Job>(`/devices/${id}/import`, {
+          method: 'POST',
+          body: JSON.stringify({ deviceLocalIds, targetSourceId, targetPath }),
+        }),
       stats: (id: string) => request<DeviceStats>(`/devices/${id}/stats`, {}, true),
       update: (id: string, patch: Partial<Pick<Device, 'name' | 'autoSync' | 'syncMode' | 'syncPlaylistIds'>>) =>
         request<Device>(`/devices/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),

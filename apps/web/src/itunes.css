@@ -1144,3 +1144,39 @@ input[type="range"]::-webkit-slider-thumb {
 .devicebar-group button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .devicebar-group button:last-child { border-radius: 0 var(--radius) var(--radius) 0; margin-left: -1px; }
 .devicebar button.on { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }
+
+/* ---------------- device contents ---------------- */
+
+.dev-tabs { padding: 0 0 0 0; background: none; border-bottom: 1px solid var(--line-soft); }
+.devtracks { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.devtracks-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 10px;
+}
+.devtracks-bar .spacer { flex: 1; }
+.devtracks-note {
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--dim);
+}
+.devtracks-head, .devtracks-row {
+  grid-template-columns: 22px 1fr 180px 60px 96px;
+}
+.devtracks-row { height: 21px; }
+.devtracks-row .c-state { text-align: right; }
+/* A track the device holds and the library does not is the whole point of this
+   view, so it is the one thing marked. */
+.tag-orphan {
+  font-style: normal;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+}
+.devtracks-row.orphan .c-name { font-weight: 600; }

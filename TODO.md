@@ -51,9 +51,10 @@ hands out a URL.
 
 ## M2 · Devices — the feature that sets us apart
 
-- [~] **2.1** Satellite contract + local fake satellite (before your real API)
+- [x] **2.1** Satellite contract + local fake satellite — `apps/satellite`, announces itself,
+      serves the device contents and the bytes
 - [x] **2.2** `GET /devices/:id/tracks` — **see the device independently of the library**
-- [ ] **2.3** **Import from the device** — the tracks with `libraryTrackId: null` are the
+- [x] **2.3** **Import from the device** — the tracks with `libraryTrackId: null` are the
       feature: pulling music back off an old iPod. Matched by fingerprint.
 - [x] **2.4** **Presence column** — one dot per device, hidden when none is connected
 - [x] **2.5** **`onDevice` / `notOnDevice` filters** — computed in SQL, never over a page already

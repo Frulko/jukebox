@@ -242,3 +242,50 @@ test('presence travels with the page, and the filters run in SQL', { skip }, asy
     assert.equal(present.length, 2)
   } finally { await h.cleanup() }
 })
+
+test('importing from a device refuses a read-only target before creating a job', { skip }, async () => {
+  const h = await harness(false) // source declared read-only
+  try {
+    await h.call('POST', '/devices', { id: 'ipod-1', name: 'iPod', kind: 'ipod-classic' })
+    await h.call('PUT', '/devices/ipod-1/tracks', {
+      items: [{ deviceLocalId: 'F99', name: 'Lost Track', artist: 'Unknown', duration: 200,
+                sourceUrl: 'http://satellite.local/f99' }],
+    })
+
+    const res = await h.call('POST', '/devices/ipod-1/import', {
+      deviceLocalIds: ['F99'], targetSourceId: 'loc',
+    })
+    // Refusing now beats failing after a transfer has started.
+    assert.equal(res.status, 409)
+    assert.equal(res.body.error.code, 'read_only')
+    assert.equal(h.jobs.list({ kind: 'acquire' }).length, 0, 'no job is created')
+  } finally { await h.cleanup() }
+})
+
+test('importing from a device queues a job when the target accepts writes', { skip }, async () => {
+  const h = await harness(true)
+  try {
+    await h.call('POST', '/devices', { id: 'ipod-1', name: 'iPod', kind: 'ipod-classic' })
+    await h.call('PUT', '/devices/ipod-1/tracks', {
+      items: [{ deviceLocalId: 'F99', name: 'Lost Track', artist: 'Unknown', duration: 200,
+                sourceUrl: 'http://satellite.local/f99' }],
+    })
+
+    const orphans = await h.call('GET', '/devices/ipod-1/tracks?orphansOnly=true')
+    assert.equal(orphans.body.items.length, 1)
+    assert.equal(orphans.body.items[0].libraryTrackId, null)
+    assert.equal(orphans.body.items[0].sourceUrl, 'http://satellite.local/f99',
+      'without a fetch URL there is nothing to import')
+
+    const res = await h.call('POST', '/devices/ipod-1/import', {
+      deviceLocalIds: ['F99'], targetSourceId: 'loc', targetPath: 'Recovered',
+    })
+    assert.equal(res.status, 202)
+    assert.equal(res.body.kind, 'acquire')
+
+    const res2 = await h.call('POST', '/devices/ipod-1/import', {
+      deviceLocalIds: ['F99'], targetSourceId: 'loc',
+    })
+    assert.notEqual(res2.body.id, undefined)
+  } finally { await h.cleanup() }
+})

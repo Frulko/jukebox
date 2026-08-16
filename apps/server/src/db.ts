@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS device_tracks (
   size          INTEGER NOT NULL DEFAULT 0,
   format        TEXT NOT NULL DEFAULT '',
   fingerprint   TEXT,
+  sourceUrl     TEXT,                  -- where the satellite will serve the bytes
   syncedAt      INTEGER,
   PRIMARY KEY (deviceId, deviceLocalId)
 );

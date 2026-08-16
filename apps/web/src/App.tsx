@@ -77,7 +77,10 @@ export default function App() {
         ? libraryPage.data?.items ?? NO_TRACKS
         : NO_TRACKS
 
-  const loading = libraryPage.isPending || playlistPage.isPending
+  // `isPending` stays true forever on a disabled query, so a device view would
+  // sit on the loading screen for good. `isLoading` is pending *and* fetching,
+  // which is what "we are actually waiting" means.
+  const loading = libraryPage.isLoading || playlistPage.isLoading
 
   const patchTracks = useUpdateTracks()
   const update = useCallback(

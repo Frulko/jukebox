@@ -36,12 +36,17 @@ on fabricated data; wiring it to the API is in progress.
 ```
 apps/server    the API — library, files, jobs
 apps/web       the React + TanStack interface
+apps/docs      the Astro + Starlight site that publishes docs/
 packages/      shared contracts and client SDK
 docs/          architecture, stack, API, map
 scripts/       guardrails and fixtures
 ```
 
 ## Documentation
+
+Published at **[frulko.github.io/jukebox](https://frulko.github.io/jukebox)** —
+built from `docs/` on every push to `main`. Locally:
+`npm run dev --workspace @jukebox/docs`.
 
 | | |
 |---|---|

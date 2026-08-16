@@ -138,6 +138,8 @@ export type DeviceTrack = {
   duration: number
   size: number
   format: string
+  /** Where the satellite will serve the bytes. Null means it cannot be imported. */
+  sourceUrl: string | null
   syncedAt: number | null
 }
 

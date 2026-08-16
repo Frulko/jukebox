@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CAPACITY_SEGMENTS, DEVICE_ICON, type Device } from './devices'
-import { api } from './api'
+import { api, useSources } from './api'
+import { DeviceTracks } from './DeviceTracks'
 import { Icon } from './Icon'
 import type { Playlist } from './data'
 
@@ -21,6 +22,8 @@ export function DeviceView({
   onDevices: () => void
 }) {
   const [job, setJob] = useState<{ kind: 'sync' | 'backup'; progress: number } | null>(null)
+  const [tab, setTab] = useState<'settings' | 'contents'>('settings')
+  const sources = useSources().data?.items ?? []
 
   const used = Object.values(device.used).reduce((a, b) => a + b, 0)
   const free = Math.max(0, device.capacity - used)
@@ -77,6 +80,19 @@ export function DeviceView({
         </div>
       </div>
 
+      <div className="tabs dev-tabs">
+        {(['settings', 'contents'] as const).map((id) => (
+          <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+            {id === 'settings' ? 'Settings' : 'On this device'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'contents' && (
+        <DeviceTracks deviceId={device.id} deviceName={device.name} sources={sources} />
+      )}
+
+      {tab === 'settings' && <>
       <div className="dev-panel">
         <h3>Options</h3>
         <label className="dev-check">
@@ -146,6 +162,8 @@ export function DeviceView({
           </div>
         )}
       </div>
+
+      </>}
 
       <div className="dev-foot">
         <div className="capacity">

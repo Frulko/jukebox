@@ -1,0 +1,10 @@
+{
+  "name": "@jukebox/satellite",
+  "private": true,
+  "type": "module",
+  "main": "src/serve.ts",
+  "scripts": {
+    "dev": "node --experimental-strip-types --no-warnings=ExperimentalWarning --watch src/serve.ts",
+    "start": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/serve.ts"
+  }
+}

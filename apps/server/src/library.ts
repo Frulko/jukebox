@@ -232,7 +232,7 @@ export function listDeviceTracks(db: DB, deviceId: string, opts: { cursor?: stri
 
   const rows = db
     .prepare(`SELECT dt.deviceLocalId, dt.trackId AS libraryTrackId, dt.name, dt.artist,
-                     dt.album, dt.duration, dt.size, dt.format, dt.syncedAt
+                     dt.album, dt.duration, dt.size, dt.format, dt.sourceUrl, dt.syncedAt
               FROM device_tracks dt WHERE ${where.join(' AND ')}
               ORDER BY dt.deviceLocalId ASC LIMIT ?`)
     .all(...([...params, limit] as never[])) as any[]

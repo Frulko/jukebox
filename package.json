@@ -14,11 +14,12 @@
     "dev:server": "npm run dev --workspace @jukebox/server",
     "dev:web": "npm run dev --workspace @jukebox/web",
     "build": "npm run build --workspaces --if-present",
-    "check": "tsc -p packages/api-types && tsc -p packages/client-sdk && tsc -p apps/server && tsc -p apps/web",
+    "check": "tsc -p packages/api-types && tsc -p packages/client-sdk && tsc -p apps/server && tsc -p apps/satellite && tsc -p apps/web",
     "test": "node scripts/test.mjs",
     "no-native": "node scripts/no-native.mjs",
     "fixtures": "node scripts/fixtures.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "dev:satellite": "npm run dev --workspace @jukebox/satellite"
   },
   "devDependencies": {
     "typescript": "~5.9.2",

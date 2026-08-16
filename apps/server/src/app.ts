@@ -7,6 +7,7 @@ import { open, revision, nextRev, type DB } from './db.ts'
 import { JobQueue, publicJob, type JobKind } from './jobs.ts'
 import { makeScanHandler } from './scan.ts'
 import { makeWritebackHandler } from './writeback.ts'
+import { makeAcquireHandler } from './acquire.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
@@ -21,6 +22,7 @@ export function createApp(dbFile: string) {
   const jobs = new JobQueue(db)
   jobs.register('scan', makeScanHandler(db))
   jobs.register('writeback', makeWritebackHandler(db))
+  jobs.register('acquire', makeAcquireHandler(db))
   jobs.start()
   seedPresets(db)
 
@@ -259,8 +261,8 @@ export function createApp(dbFile: string) {
     db.prepare(`DELETE FROM device_tracks WHERE deviceId = ?`).run(id)
     const ins = db.prepare(`
       INSERT INTO device_tracks (deviceId, deviceLocalId, trackId, name, artist, album,
-        duration, size, format, fingerprint, syncedAt)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+        duration, size, format, fingerprint, sourceUrl, syncedAt)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
     const byFp = db.prepare(`SELECT id FROM tracks WHERE fingerprint = ? AND deletedAt IS NULL LIMIT 1`)
     const byMeta = db.prepare(
       `SELECT id FROM tracks WHERE lower(artist) = lower(?) AND lower(name) = lower(?)
@@ -273,7 +275,8 @@ export function createApp(dbFile: string) {
       const trackId = (hit as any)?.id ?? null
       if (trackId) matched++
       ins.run(id, it.deviceLocalId, trackId, it.name ?? '', it.artist ?? '', it.album ?? '',
-        it.duration ?? 0, it.size ?? 0, it.format ?? '', it.fingerprint ?? null, Date.now())
+        it.duration ?? 0, it.size ?? 0, it.format ?? '', it.fingerprint ?? null,
+        it.sourceUrl ?? null, Date.now())
     }
     nextRev(db)
     return c.json({ received: b.items.length, matched, orphans: b.items.length - matched })
@@ -317,6 +320,33 @@ export function createApp(dbFile: string) {
       limit: c.req.query('limit'),
       orphansOnly: c.req.query('orphansOnly') === 'true',
     })))
+
+  /**
+   * Import tracks that live on the device but not in the library.
+   *
+   * This is the point of showing a device independently: an old iPod is often
+   * the last copy of music whose library is long gone. The satellite serves the
+   * bytes; without a `sourceUrl` there is nothing to fetch, and the job says so
+   * rather than failing with no reason.
+   */
+  api.post('/devices/:id/import', async (c) => {
+    const id = c.req.param('id')
+    const b = await c.req.json().catch(() => null)
+    if (!b?.deviceLocalIds?.length) return fail(c, 400, 'bad_body', 'expected { deviceLocalIds: [] }')
+    if (!b.targetSourceId) return fail(c, 400, 'bad_body', 'expected a targetSourceId')
+
+    const target = db.prepare(`SELECT id, writable FROM sources WHERE id = ?`).get(b.targetSourceId) as any
+    if (!target) return fail(c, 404, 'not_found', 'unknown target source')
+    // Importing writes files. A read-only source refuses before a job is even
+    // created, so the user is told now rather than after a failed transfer.
+    if (!target.writable) return fail(c, 409, 'read_only', 'target source is read-only')
+
+    const job = jobs.create('acquire', {
+      deviceId: id, deviceLocalIds: b.deviceLocalIds,
+      targetSourceId: b.targetSourceId, targetPath: b.targetPath ?? 'Imported',
+    }, { idempotencyKey: c.req.header('idempotency-key') })
+    return c.json(publicJob(job), 202)
+  })
 
   api.get('/devices/:id/stats', (c) => withETag(c, deviceStats(db, c.req.param('id'))))
 
