@@ -34,7 +34,15 @@ hands out a URL.
       that was wrong from then on. Device presence travels with the track, so it is a change
       to the track; the symmetric difference is stamped, so a satellite re-reporting the same
       contents on every heartbeat still costs nothing. `apps/server/test/delta.test.ts` replays
-      every delta from zero and asserts the result equals the page
+      every delta from zero and asserts the result equals the page.
+      One round trip holds and is now measured rather than believed: statements are counted by
+      wrapping `prepare`, and a page of 1 costs exactly what a page of 50 does. SSE was two
+      thirds kept — jobs, player and plays were pushed, a change to the *library* was not, so
+      an edit from another window or a Subsonic client was invisible until something asked,
+      and asking is polling. Every revision bump now emits `library`, hooked in `nextRev`
+      itself because there are 38 call sites and one added tomorrow must be covered without
+      anyone remembering. Coalesced at 250ms: a scan stamps a revision per file, so a first
+      import of 40,000 tracks would otherwise be 40,000 frames down every open connection
 - [x] **1.4** Raw SQL schema on `node:sqlite` — WAL, covering indexes, FTS5. Drizzle evaluated
       then dropped (see `docs/stack.md`)
 - [x] **1.4b** Migration runner — an ordered array + `PRAGMA user_version`, one transaction each.

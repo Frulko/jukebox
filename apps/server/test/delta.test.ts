@@ -48,8 +48,22 @@ async function harness() {
   await call('POST', '/sources/s/scan')
   await settle()
 
+  // Statements executed, counted by wrapping prepare(). The only way to ask
+  // "is this one round trip" without guessing from a stopwatch.
+  let statements = 0
+  const realPrepare = app.db.prepare.bind(app.db)
+  ;(app.db as any).prepare = (sql: string) => {
+    const stmt = realPrepare(sql)
+    for (const m of ['all', 'get', 'run'] as const) {
+      const fn = (stmt as any)[m].bind(stmt)
+      ;(stmt as any)[m] = (...args: unknown[]) => { statements++; return fn(...args) }
+    }
+    return stmt
+  }
+
   return {
     call,
+    statements: () => statements,
     cleanup: async () => {
       app.jobs.stop()
       await rm(dir, { recursive: true, force: true })
@@ -167,5 +181,22 @@ test('a client that follows the delta ends up with what the page says', async ()
       assert.equal(mine.rating, t.rating, t.name)
       assert.deepEqual(mine.devices, t.devices, `${t.name}: presence disagrees`)
     }
+  } finally { await h.cleanup() }
+})
+
+test('a page costs the same number of queries however large it is', async () => {
+  const h = await harness()
+  try {
+    // The fourth rule: one round trip per page. Presence, renditions and tags
+    // travel with the rows, so a 300-row page must not become 301 queries --
+    // the shape of every slow listing endpoint ever written.
+    const counts: number[] = []
+    for (const limit of [1, 2, 50]) {
+      const before = h.statements()
+      await h.call('GET', `/tracks?limit=${limit}`)
+      counts.push(h.statements() - before)
+    }
+    assert.equal(new Set(counts).size, 1,
+      `query count grew with the page: ${counts.join(', ')}`)
   } finally { await h.cleanup() }
 })

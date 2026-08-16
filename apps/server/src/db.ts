@@ -554,9 +554,40 @@ export function open(file: string): DB {
 }
 
 /** Next revision. Every write goes through here — that is what makes the delta trustworthy. */
+/**
+ * Told whenever the revision moves.
+ *
+ * Registered here rather than at the call sites because there are 38 of those
+ * across a dozen files, and the whole point is that a bump added tomorrow is
+ * covered without anyone remembering — the same reasoning that makes the
+ * delta correct. Every revision change goes through `nextRev` by construction.
+ *
+ * Keyed on the database so two servers in one process — which is every test
+ * file here — do not hear each other's changes.
+ */
+type RevisionListener = (revision: number) => void
+const revisionListeners = new WeakMap<DB, Set<RevisionListener>>()
+
+export function onRevision(db: DB, fn: RevisionListener): () => void {
+  const set = revisionListeners.get(db) ?? new Set()
+  revisionListeners.set(db, set)
+  set.add(fn)
+  return () => set.delete(fn)
+}
+
 export function nextRev(db: DB): number {
   db.exec(`UPDATE meta SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = 'revision'`)
-  return revision(db)
+  const rev = revision(db)
+
+  for (const fn of revisionListeners.get(db) ?? []) {
+    try {
+      fn(rev)
+    } catch {
+      // A listener that throws must not roll back the write that just
+      // succeeded, nor stop the next listener hearing about it.
+    }
+  }
+  return rev
 }
 
 export function revision(db: DB): number {

@@ -6,7 +6,7 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { join } from 'node:path'
-import { open, revision, nextRev, type DB } from './db.ts'
+import { open, revision, nextRev, onRevision, type DB } from './db.ts'
 import { JobQueue, publicJob, type JobItemState, type JobKind } from './jobs.ts'
 import { makeScanHandler } from './scan.ts'
 import { makeWritebackHandler } from './writeback.ts'
@@ -261,6 +261,29 @@ export function createApp(dbFile: string) {
   // every render would spend its life waiting for a multicast timeout.
   let renderers: { at: number; items: Output[] } = { at: 0, items: [] }
   const player = new Player(db, events)
+
+  /**
+   * "The library changed" — the event that stops a second controller polling.
+   *
+   * Carries only the revision. The client already knows what to do with one:
+   * ask `delta?since=`, which is the rule this composes with. Sending the rows
+   * themselves would duplicate that endpoint and get it wrong differently.
+   *
+   * Coalesced, and that is not an optimisation. A scan stamps a revision per
+   * changed file, so a first import of 40,000 tracks would otherwise be 40,000
+   * events down every open connection. Waiting a beat and sending the newest
+   * number loses nothing, because the number is all there is.
+   */
+  let revisionPending: ReturnType<typeof setTimeout> | null = null
+  const stopRevisionWatch = onRevision(db, (rev) => {
+    if (revisionPending) return
+    revisionPending = setTimeout(() => {
+      revisionPending = null
+      events.emit('library', { revision: revision(db) })
+    }, 250)
+    revisionPending.unref?.()
+    void rev
+  })
   const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events, player)
   seedPresets(db)
 
@@ -2135,14 +2158,21 @@ export function createApp(dbFile: string) {
           // one thing this API set out not to make anyone do.
           const onPlayer = (state: unknown) => send('player', state)
           const onPlay = (e: unknown) => send('play', e)
+          // Without this, an edit made in another window -- or by a Subsonic
+          // client, or by a satellite reporting what is on an iPod -- is
+          // invisible until something is polled, which is the one thing this
+          // API set out not to make anyone do.
+          const onLibrary = (e: unknown) => send('library', e)
           events.on('player', onPlayer)
           events.on('play', onPlay)
+          events.on('library', onLibrary)
 
           const beat = setInterval(() => ctrl.enqueue(enc.encode(': ping\n\n')), 25000)
           c.req.raw.signal.addEventListener('abort', () => {
             off()
             events.off('player', onPlayer)
             events.off('play', onPlay)
+            events.off('library', onLibrary)
             clearInterval(beat)
             ctrl.close()
           })
@@ -2224,7 +2254,11 @@ export function createApp(dbFile: string) {
 
   // A cast connection is a live socket, so it has to be given back. Without
   // this the process will not exit on its own.
-  const closeOutputs = () => { for (const id of [...castSessions.keys()]) closeCast(id) }
+  const closeOutputs = () => {
+    for (const id of [...castSessions.keys()]) closeCast(id)
+    if (revisionPending) clearTimeout(revisionPending)
+    stopRevisionWatch()
+  }
 
   return { app, db, jobs, scheduler, plugins, events, closeOutputs }
 }
