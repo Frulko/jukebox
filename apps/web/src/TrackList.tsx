@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTable } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Icon } from './Icon'
@@ -83,6 +83,10 @@ export function TrackList(p: Props) {
   const [dragCol, setDragCol] = useState<string | null>(null)
   const anchor = useRef<string | null>(null)
   const pendingCollapse = useRef<string | null>(null)
+  /** Rubber-band selection — see startBand. Content coords, so it survives scrolling. */
+  const band = useRef<{ x0: number; y0: number; base: Record<string, true> } | null>(null)
+  const pointer = useRef({ x: 0, y: 0 })
+  const [bandBox, setBandBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   // Same memory as every other view — see viewState.ts. The header's horizontal
   // position is not stored: it is derived from the body's on every scroll.
   const { ref: bodyRef, onScroll: rememberScroll } = useScrollMemory<HTMLDivElement>(p.viewKey)
@@ -180,6 +184,7 @@ export function TrackList(p: Props) {
 
   /* ---- selection: plain click replaces, cmd toggles, shift extends ---- */
   const clickRow = (e: React.MouseEvent, id: string) => {
+    if (e.altKey && e.button === 0) return startBand(e) // band over the rows
     const isSelected = table.getRow(id)?.getIsSelected()
     if (e.button === 2) {
       if (!isSelected) {
@@ -227,6 +232,113 @@ export function TrackList(p: Props) {
     pendingCollapse.current = null
   }
 
+  /* ---- rubber band ----
+   * The conflict is real and it is not arbitrable by guessing: a row is
+   * `draggable`, so a press on one already means "carry these tracks
+   * somewhere". Starting a band there would have to steal that gesture after
+   * the fact, and the two look identical for the first few pixels.
+   *
+   * So the band starts where no row is — the strip beside a table narrower than
+   * the pane, the space under a short list — which is also where Finder starts
+   * one. Alt gives the same gesture on top of the rows for a full list, and
+   * cancels that press's drag rather than racing it (see dragTracks).
+   *
+   * Selection is by vertical overlap only: a row spans the whole width, so
+   * asking for a horizontal intersection too would make a narrow drag select
+   * nothing while visibly crossing rows. */
+  // Coordinates are taken against the sizer, not the scroller: it is the
+  // element the rows are laid out in, so this is right through a theme's
+  // padding and stays right while the band auto-scrolls.
+  const sizerRef = useRef<HTMLDivElement>(null)
+  const toContent = (x: number, y: number) => {
+    const r = sizerRef.current!.getBoundingClientRect()
+    return { x: x - r.left, y: y - r.top }
+  }
+
+  /** Draws the band and selects what it crosses. The single source of both. */
+  const applyBand = () => {
+    const st = band.current
+    if (!sizerRef.current || !st) return
+    const { x: x1, y: y1 } = toContent(pointer.current.x, pointer.current.y)
+    setBandBox({ x: Math.min(st.x0, x1), y: Math.min(st.y0, y1), w: Math.abs(x1 - st.x0), h: Math.abs(y1 - st.y0) })
+
+    const h = p.rowHeight
+    const first = Math.max(0, Math.floor(Math.min(st.y0, y1) / h))
+    // A band ending exactly on a boundary should not take the row it only
+    // touches, hence the -1; the max keeps a band with no height on the row it
+    // started in rather than between two of them.
+    const last = Math.min(rows.length - 1, Math.max(first, Math.ceil(Math.max(st.y0, y1) / h) - 1))
+    const next = { ...st.base }
+    for (let i = first; i <= last; i++) next[rows[i].id] = true
+    table.setRowSelection(next)
+  }
+  // The listeners below outlive any one render; this keeps them on the current
+  // rows and row height without re-subscribing mid-drag.
+  const applyRef = useRef(applyBand)
+  applyRef.current = applyBand
+
+  const startBand = (e: React.MouseEvent) => {
+    if (!sizerRef.current || e.button !== 0) return
+    const { x: x0, y: y0 } = toContent(e.clientX, e.clientY)
+    band.current = {
+      x0,
+      y0,
+      // Shift and cmd add to what is already selected, as they do on a click.
+      base: e.shiftKey || e.metaKey || e.ctrlKey ? Object.fromEntries(selectedIds.map((id) => [id, true])) : {},
+    }
+    pointer.current = { x: e.clientX, y: e.clientY }
+    // Applied at once, so a press in the empty space under the list drops the
+    // selection there and then — the same press elsewhere would.
+    applyBand()
+    // Where the band started is where a later shift-click should extend from;
+    // leaving the old anchor would extend from a row nobody pointed at.
+    anchor.current = rows[Math.floor(y0 / p.rowHeight)]?.id ?? null
+  }
+
+  const banding = bandBox !== null
+  useEffect(() => {
+    if (!banding) return
+
+    const onMove = (e: MouseEvent) => {
+      pointer.current = { x: e.clientX, y: e.clientY }
+      applyRef.current()
+    }
+    const onUp = () => {
+      band.current = null
+      setBandBox(null)
+    }
+    // Dragging past the top or bottom edge scrolls, or the band would be
+    // capped at one screenful in a list that is never one screenful.
+    let raf = requestAnimationFrame(function tick() {
+      const el = bodyRef.current
+      if (el) {
+        const r = el.getBoundingClientRect()
+        const over =
+          pointer.current.y < r.top + 24
+            ? pointer.current.y - (r.top + 24)
+            : pointer.current.y > r.bottom - 24
+              ? pointer.current.y - (r.bottom - 24)
+              : 0
+        if (over) {
+          el.scrollTop += Math.max(-28, Math.min(28, over / 2))
+          applyRef.current()
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    })
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    // Text selection would otherwise follow the pointer across the rows.
+    const prev = document.body.style.userSelect
+    document.body.style.userSelect = 'none'
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = prev
+    }
+  }, [banding, bodyRef, table])
+
   const move = (delta: number, extend: boolean) => {
     const cur = rows.findIndex((r) => r.id === (anchor.current ?? selectedIds[0]))
     const next = Math.max(0, Math.min(rows.length - 1, (cur < 0 ? -1 : cur) + delta))
@@ -264,6 +376,9 @@ export function TrackList(p: Props) {
 
   /* ---- drag & drop ---- */
   const dragTracks = (e: React.DragEvent, id: string) => {
+    // The alt press started a band on this row; cancelling here is what keeps
+    // the two gestures from running at once.
+    if (band.current) return e.preventDefault()
     pendingCollapse.current = null // a drag started: keep the whole selection
     const ids = table.getRow(id)?.getIsSelected() ? selectedIds : [id]
     if (!table.getRow(id)?.getIsSelected()) table.setRowSelection({ [id]: true })
@@ -383,8 +498,32 @@ export function TrackList(p: Props) {
         onDragOver={bodyDragOver}
         onDrop={bodyDrop}
         onDragLeave={() => setDropRow(null)}
+        // Only where no row is: a press on a row bubbles up here too, and that
+        // one belongs to the row's own handler.
+        onMouseDown={(e) => !(e.target as HTMLElement).closest('.tr') && startBand(e)}
       >
-        <div className="tbody-sizer" style={{ height: virtualizer.getTotalSize(), width: table.getTotalSize() }}>
+        <div
+          className="tbody-sizer"
+          ref={sizerRef}
+          style={{ height: virtualizer.getTotalSize(), width: table.getTotalSize() }}
+        >
+          {bandBox && (
+            <div
+              // Inline rather than a class: the marquee is the one thing here
+              // no theme has an opinion about, and the stylesheet is shared.
+              style={{
+                position: 'absolute',
+                left: bandBox.x,
+                top: bandBox.y,
+                width: bandBox.w,
+                height: bandBox.h,
+                background: 'color-mix(in srgb, var(--accent) 20%, transparent)',
+                border: '1px solid var(--accent)',
+                pointerEvents: 'none',
+                zIndex: 3,
+              }}
+            />
+          )}
           {virtualizer.getVirtualItems().map((v) => {
             const row = rows[v.index]
             const sel = row.getIsSelected()
