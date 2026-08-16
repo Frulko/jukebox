@@ -19,7 +19,13 @@ services:
       - /path/to/your/music:/music:ro
       # The database, plugins and anything downloaded. Back this up; it holds
       # the ratings, playlists and play counts a rescan cannot rebuild.
+      #
+      # The container runs as uid 1000, so this directory has to be writable by
+      # it. A fresh bind mount is created owned by root and the server then
+      # cannot write its database -- if that happens, `chown 1000:1000 ./data`
+      # is the fix. Set `user:` below if your own uid is not 1000.
       - ./data:/data
+    # user: "1000:1000"
     environment:
       # Speakers fetch the stream themselves, so they need an address that
       # means something to them. Inside a container the guess is usually wrong;

@@ -160,7 +160,8 @@ hands out a URL.
 - [x] **7.4** Docker image + compose — `node:22-bookworm-slim` because the alpine images do
       not publish `linux/arm/v7`, which is the platform the Node 22 ceiling exists for.
       Built locally for this arch; the multi-arch push is a CI step (7.5)
-- [ ] **7.5** CI job that builds and pushes `amd64` / `arm64` / `arm/v7` with buildx
+- [x] **7.5** CI — a smoke job that runs the image and checks it serves the app, the API,
+      a deep link, ffmpeg, rclone and a non-root user; then buildx pushes all three arches
 
 ## Frontend leftovers
 

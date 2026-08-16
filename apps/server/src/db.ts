@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync } from 'node:fs'
+import { accessSync, constants, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 export type DB = DatabaseSync
@@ -441,7 +441,21 @@ export function migrate(db: DB, list: Migration[] = MIGRATIONS): number {
 }
 
 export function open(file: string): DB {
-  if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true })
+  if (file !== ':memory:') {
+    try {
+      mkdirSync(dirname(file), { recursive: true })
+      accessSync(dirname(file), constants.W_OK)
+    } catch {
+      // SQLite says "unable to open database file", which is true and useless
+      // when you are looking at a container. The cause is almost always a bind
+      // mount owned by root while the server runs as someone else, so the
+      // message names the fix rather than the symptom.
+      throw new Error(
+        `cannot write to ${dirname(file)} — the database lives there. ` +
+        `In Docker this is usually a volume owned by root while the server runs as uid 1000: ` +
+        `\`chown 1000:1000\` the directory, or set JUKEBOX_DB somewhere writable.`)
+    }
+  }
   const db = new DatabaseSync(file)
   // WAL: reads no longer block the writer. On a one-hour scan that is the
   // difference between a live UI and a frozen one.

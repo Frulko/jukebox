@@ -1,0 +1,116 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # Build for this runner's own architecture first, and start it. A Dockerfile
+  # that builds proves very little; one whose container answers its own health
+  # endpoint proves the thing anyone actually cares about. Doing it before the
+  # slow cross-platform build means a broken image fails in two minutes rather
+  # than twenty.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build for this architecture
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: jukebox:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: The container serves the app and the API
+        run: |
+          # No bind mount for /data. A host directory mounted there arrives
+          # owned by root and the container runs as `node`, so the database
+          # could not be created -- which is a real deployment trap, not a
+          # smoke-test detail, and is called out in docker-compose.yml. The
+          # image's own /data is already owned correctly.
+          docker run -d --name jukebox -p 8787:8787 jukebox:smoke
+
+          # Give it a moment, then insist rather than hope.
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/api/v1/health >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+          echo "— health"
+          curl -fsS http://127.0.0.1:8787/api/v1/health | tee /dev/stderr | grep -q '"ok":true'
+
+          # The web app, which is the half a container is most likely to be
+          # missing: nothing served it until the image existed.
+          echo "— the web app"
+          curl -fsS http://127.0.0.1:8787/ | grep -qi '<div id="root"'
+
+          # A client-side route must fall back to index.html rather than 404.
+          echo "— a deep link"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/some/view)" = 200
+
+          # ...while the API keeps returning JSON errors.
+          echo "— an unknown API route"
+          curl -s http://127.0.0.1:8787/api/v1/nope | grep -q '"not_found"'
+
+          # The tools the image exists to carry.
+          echo "— ffmpeg and rclone"
+          docker exec jukebox ffmpeg -version | head -1
+          docker exec jukebox rclone version | head -1
+
+          # And it is not running as root.
+          echo "— the user"
+          test "$(docker exec jukebox id -un)" = node
+
+      - name: What it said, if any of that failed
+        if: failure()
+        run: docker logs jukebox
+
+  # The platforms the Node 22 ceiling exists to serve. armv7 builds under QEMU
+  # and is slow; it is also the one this project refuses to drop.
+  publish:
+    needs: smoke
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
