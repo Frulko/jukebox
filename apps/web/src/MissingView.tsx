@@ -1,14 +1,150 @@
 import { useMemo, useState } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
-import type { MissingTrack } from '@jukebox/client-sdk'
-import { api, useMissing, useSources } from './api'
+import type { MissingTrack, Source } from '@jukebox/client-sdk'
+import { api, useMissing, useSources, useTracks } from './api'
 import { fmtTime } from './data'
 import { Icon } from './Icon'
+import { useMenuPosition } from './useMenuPosition'
 import { useScrollMemory } from './viewState'
 import { useViewSearch, ViewSearch } from './ViewSearch'
 import { DataTable } from './DataTable'
 import type { features } from './tableFeatures'
+
+/** What the sources route adds for a local source, and api-types does not name yet. */
+type Mounted = Source & {
+  mount?: { device: string; type: string; network: boolean; readOnly: boolean; point: string } | null
+}
+
+const folderOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/'))) || '/'
+const fileOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
+
+/**
+ * Where a file went, and what to do about it.
+ *
+ * A missing track is not a broken row to be tidied away: it is a rating, a play
+ * count and a place in three playlists, waiting for a disk. So this answers the
+ * two questions actually being asked — *where was it* and *is it somewhere else
+ * now* — and offers only what is real. It does not open a Finder window,
+ * because a web page cannot; it hands over the path instead, which is what you
+ * paste into one.
+ *
+ * The search is the part worth having. A file that was moved rather than lost
+ * comes back into the library under its new path at the next scan, so the same
+ * name and artist may well be sitting there already — under a different id, in
+ * a different folder, with none of this row's history attached to it.
+ */
+function WhereDidItGo({
+  track,
+  source,
+  onClose,
+  onRescan,
+}: {
+  track: MissingTrack
+  source: Mounted | undefined
+  onClose: () => void
+  onRescan: () => void
+}) {
+  const [copied, setCopied] = useState<string | null>(null)
+  const elsewhere = useTracks({ q: track.name, limit: 5 }, true)
+  // Name *and* artist. A library holds a dozen tracks called "Intro", and
+  // offering them as "it may have moved here" is a worse answer than none.
+  const others = (elsewhere.data?.items ?? []).filter(
+    (t) => t.name === track.name && t.artist === track.artist)
+
+  const copy = (what: string, value: string) => {
+    const done = navigator.clipboard?.writeText(value)
+    // No clipboard at all (an insecure origin) reads the same as one that
+    // refused: either way the button did nothing, and a button that did nothing
+    // in silence is the thing to avoid. The path stays on screen to select.
+    if (!done) return setCopied('The browser would not let us copy — select it above')
+    void done.then(
+      () => setCopied(`${what} copied`),
+      () => setCopied('The browser would not let us copy — select it above'),
+    )
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal where-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modal-titlebar">
+          <button className="close" onClick={onClose} />
+          <span>{track.name} — where did it go?</span>
+        </div>
+
+        <div className="modal-body">
+          <h4>It was here</h4>
+          <dl className="file-info">
+            <div>
+              <dt>Source</dt>
+              <dd>
+                {source ? source.name : track.sourceName || track.sourceId}
+                {source?.mount ? (
+                  <span className="dim">
+                    {' '}· on {source.mount.device} ({source.mount.type}
+                    {source.mount.network ? ', network' : ''})
+                  </span>
+                ) : source && 'mount' in source ? (
+                  // `mount: null` is the server saying it looked and the path is
+                  // on no filesystem this machine currently has — the disk is
+                  // out, which is usually the whole answer. An *absent* key is a
+                  // server that did not look, and claiming "not mounted" for it
+                  // would be inventing the most alarming reading of silence.
+                  <span className="gone"> · not mounted</span>
+                ) : null}
+              </dd>
+            </div>
+            <div>
+              <dt>Folder</dt>
+              <dd className="path" title={folderOf(track.path)}>{folderOf(track.path)}</dd>
+            </div>
+            <div>
+              <dt>File</dt>
+              <dd className="path" title={fileOf(track.path)}>{fileOf(track.path)}</dd>
+            </div>
+            <div>
+              <dt>Last seen</dt>
+              <dd>{when(track.deletedAt)}</dd>
+            </div>
+          </dl>
+
+          {/* Why the row is worth keeping rather than tidying away. */}
+          <h4 className="file-where">What it carries</h4>
+          <dl className="file-info">
+            <div>
+              <dt>Rating</dt>
+              <dd>{track.rating ? '★'.repeat(track.rating) : <span className="dim">none</span>}</dd>
+            </div>
+            <div>
+              <dt>Plays</dt>
+              <dd>{track.playCount || <span className="dim">none</span>}</dd>
+            </div>
+          </dl>
+
+          <h4 className="file-where">Elsewhere in your library</h4>
+          {elsewhere.isPending && <p className="dim">Looking…</p>}
+          {!elsewhere.isPending && others.length === 0 && (
+            <p className="dim">Nothing else in the library has that name — it has not simply moved.</p>
+          )}
+          {others.map((t) => (
+            <div key={t.id} className="where-found">
+              <Icon name="music" size={10} />
+              <span className="n">{t.artist || t.albumArtist}</span>
+              <span className="path" title={t.path}>{t.path}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="modal-foot">
+          <span className="dim">{copied ?? ''}</span>
+          <button onClick={() => copy('Folder', folderOf(track.path))}>Copy folder</button>
+          <button onClick={() => copy('Path', track.path)}>Copy path</button>
+          <button className="default" onClick={onRescan}>Rescan this source</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const h = createColumnHelper<typeof features, MissingTrack>()
 
@@ -58,6 +194,11 @@ export function MissingView() {
   const sources = useSources().data?.items ?? []
   const [scanning, setScanning] = useState<string | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  /** Pointed at, right-clicked, and opened: three states of the same row. */
+  const [selected, setSelected] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; track: MissingTrack } | null>(null)
+  const [asking, setAsking] = useState<MissingTrack | null>(null)
+  const menuPosition = useMenuPosition(menu)
 
   const search = useViewSearch()
   const all = data?.items ?? []
@@ -94,8 +235,10 @@ export function MissingView() {
     )
   }
 
+  const sourceOf = (t: MissingTrack) => (sources as Mounted[]).find((x) => x.id === t.sourceId)
+
   return (
-    <div className="media missing" ref={pane.ref} onScroll={pane.onScroll}>
+    <div className="media missing" ref={pane.ref} onScroll={pane.onScroll} onMouseDown={() => setMenu(null)}>
       <div className="view-head">
         <ViewSearch
           value={search.query}
@@ -137,10 +280,52 @@ export function MissingView() {
               memoryKey={`missing:${sourceId}`}
               rowHeight={22}
               empty="Nothing matches."
+              selectedId={selected}
+              onRowClick={(t) => setSelected(t.id)}
+              // Double-click plays a track everywhere else in the app; here
+              // there is nothing to play, and the question the row raises is
+              // "where did it go" — so that is what it opens.
+              onRowDoubleClick={(t) => setAsking(t)}
+              onRowContextMenu={(t, e) => {
+                e.preventDefault()
+                setSelected(t.id)
+                setMenu({ x: e.clientX, y: e.clientY, track: t })
+              }}
             />
           </div>
         )
       })}
+
+      {menu && (
+        <div
+          className="ctx"
+          ref={menuPosition.setFloating}
+          style={menuPosition.floatingStyles}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button onClick={() => (setAsking(menu.track), setMenu(null))}>Where did it go…</button>
+          <hr />
+          <button onClick={() => (void navigator.clipboard?.writeText(menu.track.path), setMenu(null))}>
+            Copy path
+          </button>
+          <button onClick={() => (void navigator.clipboard?.writeText(folderOf(menu.track.path)), setMenu(null))}>
+            Copy folder
+          </button>
+          <hr />
+          <button onClick={() => (rescan(menu.track.sourceId), setMenu(null))}>
+            Rescan {sourceOf(menu.track)?.name ?? menu.track.sourceName ?? 'this source'}
+          </button>
+        </div>
+      )}
+
+      {asking && (
+        <WhereDidItGo
+          track={asking}
+          source={sourceOf(asking)}
+          onClose={() => setAsking(null)}
+          onRescan={() => (rescan(asking.sourceId), setAsking(null))}
+        />
+      )}
     </div>
   )
 }

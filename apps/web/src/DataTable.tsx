@@ -28,6 +28,8 @@ export function DataTable<T extends RowData>({
   rowHeight = 26,
   rowClass,
   empty,
+  selectedId,
+  onRowClick,
   onRowDoubleClick,
   onRowContextMenu,
 }: {
@@ -39,6 +41,13 @@ export function DataTable<T extends RowData>({
   rowHeight?: number
   rowClass?: (row: T) => string
   empty?: React.ReactNode
+  /**
+   * Single selection, when a view wants one. Deliberately not the track list's
+   * multi-selection: that exists because a library row is something you act on
+   * in bulk, and these tables are things you point at one at a time.
+   */
+  selectedId?: string | null
+  onRowClick?: (row: T, e: React.MouseEvent) => void
   onRowDoubleClick?: (row: T) => void
   onRowContextMenu?: (row: T, e: React.MouseEvent) => void
 }) {
@@ -111,7 +120,8 @@ export function DataTable<T extends RowData>({
                 key={row.id}
                 data-rowid={row.id}
                 style={{ transform: `translateY(${v.start}px)` }}
-                className={`tr ${v.index % 2 ? 'odd' : ''} ${rowClass?.(row.original) ?? ''}`}
+                className={`tr ${v.index % 2 ? 'odd' : ''} ${row.id === selectedId ? 'sel' : ''} ${rowClass?.(row.original) ?? ''}`}
+                onMouseDown={(e) => e.button === 0 && onRowClick?.(row.original, e)}
                 onDoubleClick={() => onRowDoubleClick?.(row.original)}
                 onContextMenu={(e) => onRowContextMenu?.(row.original, e)}
               >

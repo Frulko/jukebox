@@ -1870,6 +1870,12 @@ input[type="range"]::-webkit-slider-thumb {
 .file-where { margin: 16px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); font-weight: 600; }
 /* Paths are long and their ends are the informative half. */
 .file-info dd.path { direction: rtl; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `direction: rtl` is how the ellipsis lands at the *front* of a long path,
+   where the repeated prefix is. It also hands the string to the bidi algorithm,
+   which reorders a trailing "/3.flac" into "flac.3" — right for a path that is
+   clipped, wrong for anything short enough to read whole. `plaintext` keeps the
+   clipping and takes the direction from the string itself. */
+.file-info dd.path, .where-found .path, .admin-table td.path { unicode-bidi: plaintext; }
 
 /* A view's own filter, distinct from the player bar's search: that one asks the
    server across a whole source, this one narrows what the page already holds. */
@@ -2057,3 +2063,16 @@ input[type="range"]::-webkit-slider-thumb {
 /* Six columns rather than five: the sixth is where the episode actually is.
    Scoped to podcasts, because audiobooks share `.ep` and have five. */
 .media.podcasts .ep-head, .media.podcasts .ep { grid-template-columns: 18px 1fr 84px 116px 124px 78px; }
+
+/* ---------------- where did it go ----------------
+   A missing file is a rating, a play count and a place in three playlists
+   waiting for a disk, so the panel says what it was and what it carries, and
+   offers only what a web page can actually do about it. */
+.where-modal { width: 520px; max-width: 92vw; }
+.where-modal .modal-body { max-height: 52vh; overflow-y: auto; }
+.where-modal h4 { margin: 0 0 6px; font-size: 11px; }
+.where-modal .gone { color: var(--danger, #d4342c); }
+.where-found { display: flex; align-items: center; gap: 8px; padding: 3px 0; min-width: 0; }
+.where-found .n { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where-found .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; unicode-bidi: plaintext; }
+.where-modal .modal-foot .dim { flex: 1; }

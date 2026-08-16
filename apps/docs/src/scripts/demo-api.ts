@@ -334,8 +334,12 @@ for (const e of EPISODES) {
 }
 
 const SOURCES: Source[] = [
+  // With its mount, as the real route reports it: a UI that can say "this share
+  // is not mounted" instead of showing an empty library needs the answer to
+  // exist even when it is the reassuring one.
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
-    lastScanAt: Date.UTC(2026, 7, 16), rev: 1 },
+    lastScanAt: Date.UTC(2026, 7, 16), rev: 1,
+    mount: { device: '/dev/disk3s5', type: 'apfs', network: false, readOnly: false, point: '/' } } as Source,
 ]
 
 // A scan in flight. The demo needs one so the display has something to cycle to
