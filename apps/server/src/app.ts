@@ -7,7 +7,7 @@ import { stat } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { join } from 'node:path'
 import { open, revision, nextRev, type DB } from './db.ts'
-import { JobQueue, publicJob, type JobKind } from './jobs.ts'
+import { JobQueue, publicJob, type JobItemState, type JobKind } from './jobs.ts'
 import { makeScanHandler } from './scan.ts'
 import { makeWritebackHandler } from './writeback.ts'
 import { makeAcquireHandler } from './acquire.ts'
@@ -220,6 +220,24 @@ export function createApp(dbFile: string) {
       : b.action === 'resume' ? jobs.resume(c.req.param('id'))
       : null
     return job ? c.json(publicJob(job)) : fail(c, 400, 'bad_action', 'action ∈ pause | resume')
+  })
+
+  /**
+   * What a job did, item by item.
+   *
+   * "Failed: ENOSPC" over 300 tracks does not say which ones, or whether the
+   * other 290 landed. `counts` answers that from SQL over the whole job, so it
+   * stays "3 of 40000 failed" rather than "3 of the 200 on this page".
+   */
+  api.get('/jobs/:id/items', (c) => {
+    const id = c.req.param('id')
+    if (!jobs.get(id)) return fail(c, 404, 'not_found', 'unknown job')
+    const state = c.req.query('state')
+    return c.json(jobs.items(id, {
+      cursor: c.req.query('cursor'),
+      limit: c.req.query('limit'),
+      state: state as JobItemState | undefined,
+    }))
   })
 
   api.delete('/jobs/:id', (c) => {

@@ -33,52 +33,63 @@ export function makeAcquireHandler(db: DB) {
       if (ctx.aborted()) return
       const t = row.get(deviceId, deviceLocalIds[i]) as any
       done++
-      if (!t) continue
+      if (!t) {
+        ctx.item(i, deviceLocalIds[i], 'skipped', { error: 'no longer on the device' })
+        continue
+      }
       if (!t.sourceUrl) {
         // Nothing to fetch. Saying which track and why beats a silent skip.
-        db.prepare(`INSERT OR REPLACE INTO job_items (jobId, idx, ref, state, error) VALUES (?,?,?,'failed',?)`)
-          .run(ctx.job.id, i, t.deviceLocalId, 'no fetch URL from the satellite')
+        ctx.item(i, t.deviceLocalId, 'failed', { error: 'no fetch URL from the satellite' })
         continue
       }
 
-      const res = await fetch(t.sourceUrl)
-      if (!res.ok) throw new Error(`${res.status} fetching ${t.deviceLocalId}`)
-      const buf = Buffer.from(await res.arrayBuffer())
-
-      const safe = (s: string) => (s || 'Unknown').replace(/[/\\:*?"<>|]/g, '_').trim()
-      const ext = t.format ? `.${t.format}` : extname(t.name) || '.mp3'
-      const rel = join(targetPath, safe(t.artist), safe(t.album), `${safe(t.name)}${ext}`)
-      const abs = join(source.root, rel)
-      await mkdir(dirname(abs), { recursive: true })
-
-      // Temp then rename: an interrupted import must not leave a truncated file
-      // that the next scan indexes as a real track.
-      const tmp = `${abs}.part-${createHash('sha1').update(t.deviceLocalId).digest('hex').slice(0, 8)}`
-      await writeFile(tmp, buf)
-      await rename(tmp, abs)
-      bytes += buf.byteLength
-
-      let meta: any = {}
       try {
-        meta = await readTags(abs)
-      } catch { /* unreadable: it still enters the library so the user can fix it */ }
+        const res = await fetch(t.sourceUrl)
+        if (!res.ok) throw new Error(`${res.status} fetching ${t.deviceLocalId}`)
+        const buf = Buffer.from(await res.arrayBuffer())
 
-      const id = createHash('sha1').update(`${source.id} ${rel}`).digest('base64url').slice(0, 16)
-      db.prepare(`
-        INSERT INTO tracks (id, sourceId, path, name, artist, albumArtist, album, duration,
-          bitRate, format, size, mtime, dateAdded, rev)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        ON CONFLICT (sourceId, path) DO UPDATE SET deletedAt = NULL, rev = excluded.rev`)
-        .run(id, source.id, rel, meta.tags?.name ?? t.name, meta.tags?.artist ?? t.artist,
-          meta.tags?.albumArtist ?? t.artist, meta.tags?.album ?? t.album,
-          meta.audio?.duration ?? 0, meta.audio?.bitRate ?? 0,
-          (meta.audio?.format || t.format || '').toLowerCase(), buf.byteLength, Date.now(),
-          Date.now(), nextRev(db))
+        const safe = (s: string) => (s || 'Unknown').replace(/[/\\:*?"<>|]/g, '_').trim()
+        const ext = t.format ? `.${t.format}` : extname(t.name) || '.mp3'
+        const rel = join(targetPath, safe(t.artist), safe(t.album), `${safe(t.name)}${ext}`)
+        const abs = join(source.root, rel)
+        await mkdir(dirname(abs), { recursive: true })
 
-      // Link the device row to the track we just created: the same music is now
-      // in both places, and the presence column should say so immediately.
-      db.prepare(`UPDATE device_tracks SET trackId = ? WHERE deviceId = ? AND deviceLocalId = ?`)
-        .run(id, deviceId, t.deviceLocalId)
+        // Temp then rename: an interrupted import must not leave a truncated file
+        // that the next scan indexes as a real track.
+        const tmp = `${abs}.part-${createHash('sha1').update(t.deviceLocalId).digest('hex').slice(0, 8)}`
+        await writeFile(tmp, buf)
+        await rename(tmp, abs)
+        bytes += buf.byteLength
+
+        let meta: any = {}
+        try {
+          meta = await readTags(abs)
+        } catch { /* unreadable: it still enters the library so the user can fix it */ }
+
+        const id = createHash('sha1').update(`${source.id} ${rel}`).digest('base64url').slice(0, 16)
+        db.prepare(`
+          INSERT INTO tracks (id, sourceId, path, name, artist, albumArtist, album, duration,
+            bitRate, format, size, mtime, dateAdded, rev)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT (sourceId, path) DO UPDATE SET deletedAt = NULL, rev = excluded.rev`)
+          .run(id, source.id, rel, meta.tags?.name ?? t.name, meta.tags?.artist ?? t.artist,
+            meta.tags?.albumArtist ?? t.artist, meta.tags?.album ?? t.album,
+            meta.audio?.duration ?? 0, meta.audio?.bitRate ?? 0,
+            (meta.audio?.format || t.format || '').toLowerCase(), buf.byteLength, Date.now(),
+            Date.now(), nextRev(db))
+
+        // Link the device row to the track we just created: the same music is now
+        // in both places, and the presence column should say so immediately.
+        db.prepare(`UPDATE device_tracks SET trackId = ? WHERE deviceId = ? AND deviceLocalId = ?`)
+          .run(id, deviceId, t.deviceLocalId)
+
+        ctx.item(i, t.deviceLocalId, 'done', { bytes: buf.byteLength })
+      } catch (err) {
+        // One unreachable file must not abandon the other 299. An import runs
+        // over a network and a device that can be unplugged mid-transfer;
+        // throwing here meant a single hiccup lost the whole batch.
+        ctx.item(i, t.deviceLocalId, 'failed', { error: err instanceof Error ? err.message : String(err) })
+      }
 
       ctx.checkpoint(t.deviceLocalId, { done, total: deviceLocalIds.length, bytes })
     }

@@ -35,21 +35,26 @@ export function makeWritebackHandler(db: DB) {
       const t = row.get(ids[i]) as any
       done++
 
-      if (!t) continue
+      if (!t) {
+        ctx.item(i, ids[i], 'skipped', { error: 'track no longer in the library' })
+        continue
+      }
       if (!t.writable) {
         // Not an error: the source is declared read-only and the user meant it.
-        // The database keeps the value, the file does not.
+        // The database keeps the value, the file does not. Recorded per item all
+        // the same -- a console line saying "12 refused" cannot tell you which.
         refused++
+        ctx.item(i, ids[i], 'skipped', { error: 'source is read-only' })
         continue
       }
 
       try {
         await writeTags(join(t.root, t.path), patch)
+        ctx.item(i, ids[i], 'done')
       } catch (err) {
         // A locked or corrupt file must not fail the other 499. Record it and
         // move on.
-        db.prepare(`INSERT OR REPLACE INTO job_items (jobId, idx, ref, state, error) VALUES (?, ?, ?, 'failed', ?)`)
-          .run(ctx.job.id, i, ids[i], err instanceof Error ? err.message : String(err))
+        ctx.item(i, ids[i], 'failed', { error: err instanceof Error ? err.message : String(err) })
       }
 
       if (done % 20 === 0) ctx.checkpoint(ids[i], { done, total: ids.length })

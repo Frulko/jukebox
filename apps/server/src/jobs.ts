@@ -44,8 +44,27 @@ export type JobContext = {
   cursor: string | null
   /** Records progress. Call it often: it is the only resume point. */
   checkpoint(cursor: string | null, progress?: { done?: number; total?: number; bytes?: number }): void
+  /**
+   * Records the outcome of one item within the job.
+   *
+   * A sync of 300 tracks that reports "failed: ENOSPC" is nearly useless — the
+   * question is always *which* ones, and whether the other 290 landed. This is
+   * how a job answers that. Idempotent on `idx`, so a resumed job overwrites
+   * its own earlier attempt at the same item rather than doubling it.
+   */
+  item(idx: number, ref: string, state: JobItemState, extra?: { bytes?: number; error?: string }): void
   /** `true` when the job must stop — cancelled or paused. */
   aborted(): boolean
+}
+
+export type JobItemState = 'pending' | 'done' | 'failed' | 'skipped'
+
+export type JobItem = {
+  idx: number
+  ref: string
+  state: JobItemState
+  bytes: number
+  error: string | null
 }
 
 export type JobHandler = (ctx: JobContext) => Promise<void>
@@ -148,6 +167,44 @@ export class JobQueue {
     return (this.#db.prepare(sql).all(...(params as never[])) as any[]).map(hydrate)
   }
 
+  /**
+   * The items of one job, paginated.
+   *
+   * Paginated because it is unbounded: a full iPod sync is tens of thousands of
+   * rows, and "show me what failed" must not mean shipping all of them. Ordered
+   * by `idx` — the order the job did the work in, which is the order a reader
+   * wants to scan for the point things went wrong.
+   */
+  items(jobId: string, opts: { cursor?: string; limit?: unknown; state?: JobItemState } = {}):
+    { items: JobItem[]; next: string | null; counts: Record<JobItemState, number> } {
+    const limit = Math.min(Math.max(Number(opts.limit) || 200, 1), 1000)
+    const where = ['jobId = ?']
+    const params: unknown[] = [jobId]
+    if (opts.state) { where.push('state = ?'); params.push(opts.state) }
+    // The cursor is the last `idx` seen. An integer, so no encoding to get wrong.
+    if (opts.cursor) { where.push('idx > ?'); params.push(Number(opts.cursor)) }
+
+    const rows = this.#db
+      .prepare(`SELECT idx, ref, state, bytes, error FROM job_items
+                WHERE ${where.join(' AND ')} ORDER BY idx ASC LIMIT ?`)
+      .all(...([...params, limit] as never[])) as any[]
+
+    // The totals come from SQL over the whole job, never from the page: "3 of
+    // 40000 failed" is the number worth reading, and counting a page would
+    // answer "3 of 200".
+    const counts = { pending: 0, done: 0, failed: 0, skipped: 0 } as Record<JobItemState, number>
+    for (const r of this.#db.prepare(`SELECT state, COUNT(*) AS n FROM job_items WHERE jobId = ? GROUP BY state`)
+      .all(jobId) as any[]) {
+      counts[r.state as JobItemState] = r.n as number
+    }
+
+    return {
+      items: rows,
+      next: rows.length === limit ? String(rows[rows.length - 1].idx) : null,
+      counts,
+    }
+  }
+
   pause(id: string): Job | null {
     this.#running.get(id) && (this.#running.get(id)!.abort = true)
     this.#db.prepare(`UPDATE jobs SET state = 'paused' WHERE id = ? AND state IN ('queued','running')`).run(id)
@@ -241,6 +298,16 @@ export class JobQueue {
           .run(cursor, progress?.done ?? null, progress?.total ?? null, progress?.bytes ?? null, job.id)
         const fresh = this.get(job.id)
         if (fresh) this.#emit(fresh)
+      },
+      item: (idx, ref, state, extra) => {
+        this.#db
+          .prepare(
+            `INSERT INTO job_items (jobId, idx, ref, state, bytes, error) VALUES (?,?,?,?,?,?)
+             ON CONFLICT (jobId, idx) DO UPDATE SET
+               ref = excluded.ref, state = excluded.state,
+               bytes = excluded.bytes, error = excluded.error`,
+          )
+          .run(job.id, idx, ref, state, extra?.bytes ?? 0, extra?.error ?? null)
       },
       aborted: () => {
         if (handle.abort) return true

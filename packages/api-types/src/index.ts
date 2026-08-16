@@ -155,6 +155,27 @@ export type SyncPlan = {
   shortBy: number | null
 }
 
+/** One unit of work inside a job — a track written, fetched or refused. */
+export type JobItemState = 'pending' | 'done' | 'failed' | 'skipped'
+
+export type JobItem = {
+  idx: number
+  ref: string
+  state: JobItemState
+  bytes: number
+  error: string | null
+}
+
+/**
+ * A page of job items, with totals over the *whole* job. Counting the page
+ * would answer "3 of the 200 shown" when the question is "3 of 40000".
+ */
+export type JobItemsPage = {
+  items: JobItem[]
+  next: string | null
+  counts: Record<JobItemState, number>
+}
+
 export type DeviceStats = { tracks: number; orphans: number; bytes: number; seconds: number }
 
 /**

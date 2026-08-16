@@ -1,6 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta, WantResult,
+  JobItem, JobItemsPage, JobItemState, Source, SyncPlan, Track, TrackPatch, TrackQuery,
+  TracksDelta, WantResult,
 } from '@jukebox/api-types'
 
 /**
@@ -140,6 +141,9 @@ export function createClient(opts: ClientOptions = {}) {
       pause: (id: string) => request<Job>(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify({ action: 'pause' }) }),
       resume: (id: string) => request<Job>(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify({ action: 'resume' }) }),
       cancel: (id: string) => request<Job>(`/jobs/${id}`, { method: 'DELETE' }),
+      /** What the job did, item by item — which tracks failed, not just how many. */
+      items: (id: string, q: { cursor?: string; limit?: number; state?: JobItemState } = {}) =>
+        request<JobItemsPage>(`/jobs/${id}/items${qs(q)}`),
     },
 
     devices: {
@@ -213,5 +217,6 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta, WantResult,
+  JobItem, JobItemsPage, JobItemState, Source, SyncPlan, Track, TrackPatch, TrackQuery,
+  TracksDelta, WantResult,
 }

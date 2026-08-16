@@ -331,6 +331,42 @@ test('hand-picking tracks for a device shows up in its plan', { skip }, async ()
   } finally { await h.cleanup() }
 })
 
+test('a job says which items failed, not just how many', { skip }, async () => {
+  const h = await harness()
+  try {
+    await h.call('POST', '/devices', { id: 'ipod-1', name: 'iPod', kind: 'ipod-classic' })
+    // Three orphans: one with no URL at all, one pointing nowhere, one fine.
+    await h.call('PUT', '/devices/ipod-1/tracks', {
+      items: [
+        { deviceLocalId: 'A', name: 'No URL', artist: 'X', duration: 10 },
+        { deviceLocalId: 'B', name: 'Dead URL', artist: 'X', duration: 10,
+          sourceUrl: 'http://127.0.0.1:1/nope' },
+      ],
+    })
+
+    const job = (await h.call('POST', '/devices/ipod-1/import', {
+      deviceLocalIds: ['A', 'B'], targetSourceId: 'loc',
+    })).body
+    await settle(h.jobs)
+
+    const page = (await h.call('GET', `/jobs/${job.id}/items`)).body
+    assert.equal(page.counts.failed, 2)
+    const byRef = Object.fromEntries(page.items.map((i: any) => [i.ref, i]))
+    assert.match(byRef.A.error, /no fetch URL/)
+    // The unreachable one must be recorded and survived, not thrown out of the
+    // whole job -- an import runs over a network and will hit one of these.
+    assert.equal(byRef.B.state, 'failed')
+    assert.ok(byRef.B.error, 'the reason travels with the item')
+
+    // The job itself ran to completion rather than dying on the first bad fetch.
+    assert.equal((await h.call('GET', `/jobs/${job.id}`)).body.state, 'done')
+
+    const failedOnly = (await h.call('GET', `/jobs/${job.id}/items?state=failed`)).body
+    assert.equal(failedOnly.items.length, 2)
+    assert.equal((await h.call('GET', '/jobs/no-such-job/items')).status, 404)
+  } finally { await h.cleanup() }
+})
+
 test('ejecting disconnects the device without forgetting anything', { skip }, async () => {
   const h = await harness()
   try {

@@ -28,8 +28,8 @@ hands out a URL.
       resolution for no gain
 - [x] **1.5** **Job system** — persisted, resumable, pausable, per-kind concurrency,
       idempotent, aggregates
-- [ ] **1.5b** Per-item job detail — the `job_items` table exists but is neither written
-      nor read; `GET /jobs/:id/items` is not mounted
+- [x] **1.5b** Per-item job detail — `ctx.item()` records every outcome, `GET /jobs/:id/items`
+      paginates them with counts over the whole job
 - [x] **1.6** Local folder source — **streaming** scan, never the whole thing in memory
 - [x] **1.7** Tag read/write + fingerprints — disk write-back as a job, read-only sources
       respected
