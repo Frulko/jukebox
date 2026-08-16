@@ -68,7 +68,8 @@ hands out a URL.
 
 - [~] **3.1** `GET /stream/:id` — `Range` done. Left: per-renderer profile, transcode cache,
       and the token (nothing is authenticated yet, so it would guard nothing)
-- [ ] **3.2** `output` contract + browser renderer
+- [~] **3.2** Browser renderer done — one `<audio>` on `/stream/:id`, state read from the
+      element. Left: the `output` contract that lets a renderer live elsewhere
 - [ ] **3.3** UPnP/DLNA (SSDP + `SetAVTransportURI`) then Sonos
 - [ ] **3.4** Play queue shared between controllers
 - [ ] **3.5** AirPlay · **3.6** Satellite renderer (tablet, Pi + DAC) · **3.7** Chromecast
