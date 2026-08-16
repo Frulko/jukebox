@@ -269,6 +269,23 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     const { keeperId, ids } = JSON.parse(body ?? '{}') as { keeperId: string; ids: string[] }
     return { keeperId, merged: ids.length, renditions: ids.length + 1 }
   }
+  // Two feeds: one healthy, one that has been failing — the state the home
+  // page exists to surface rather than hide behind a count.
+  if (path === '/podcasts') {
+    return {
+      items: [
+        { id: 'pod-vinyl', feedUrl: 'https://example.invalid/vinyl.xml', title: 'The Vinyl Hours',
+          description: 'Long-form listening.', author: 'Frulko', imageUrl: null, siteUrl: null,
+          cron: '0 7 * * *', keepLast: 10, autoDownload: 1, targetSourceId: 'demo', targetPath: 'Podcasts',
+          lastFetchAt: Date.UTC(2026, 7, 16, 7), lastError: null, episodeCount: 128, downloadedCount: 10 },
+        { id: 'pod-compression', feedUrl: 'https://example.invalid/compression.xml', title: 'Compression',
+          description: 'Audio engineering, weekly.', author: 'anon', imageUrl: null, siteUrl: null,
+          cron: '0 8 * * 1', keepLast: 5, autoDownload: 0, targetSourceId: 'demo', targetPath: 'Podcasts',
+          lastFetchAt: Date.UTC(2026, 6, 2), lastError: 'Feed answered 404 for the last 6 weeks',
+          episodeCount: 41, downloadedCount: 5 },
+      ],
+    }
+  }
   if (path === '/plugins') {
     return {
       hostApi: '1.0',

@@ -45,6 +45,7 @@ const PATHS: Record<string, string> = {
   backup:
     'M8 1.6 12 6H9.4v4.2H6.6V6H4zM2 11.4h12a.8.8 0 0 1 .8.8v1.4a.8.8 0 0 1-.8.8H2a.8.8 0 0 1-.8-.8v-1.4a.8.8 0 0 1 .8-.8zm10.4 1.1a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6z',
   eject: 'M8 2.2 13.4 9H2.6zM2.6 10.6h10.8v2.8H2.6z',
+  home: 'M8 1.4 15 7.6h-2v6.6H9.6V10H6.4v4.2H3V7.6H1z',
   // A record sleeve seen square on, and a person: the two ways a library is
   // browsed when it is not a list of songs.
   albums: 'M2.4 2.4h11.2v11.2H2.4zm5.6 3a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm0 1.8a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6z',

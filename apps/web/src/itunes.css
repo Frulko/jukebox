@@ -1763,3 +1763,39 @@ input[type="range"]::-webkit-slider-thumb {
 .dup-foot .dim { font-size: 11px; }
 .dup-foot button { margin-left: auto; }
 .dup-failed { color: var(--accent); font-size: 11px; }
+
+/* ---------------- home ---------------- */
+.home { padding: 18px 20px 28px; }
+.home section + section { margin-top: 26px; }
+.home h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 14px; }
+.home h3 em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--dim); }
+/* A strip rather than a grid: a home page is glanced at sideways, and a grid
+   invites scrolling through everything, which is what the other pages are for. */
+.home-strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
+.home-card {
+  flex: none;
+  width: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.home-card .t { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-card .s { font-size: 10.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-card .s.bad { color: var(--accent); }
+.home-art { width: 120px; height: 120px; border-radius: 6px; object-fit: cover; }
+.home-art.empty { background: var(--line-soft); display: block; }
+.home-zone-empty {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--dim);
+  max-width: 78ch;
+}
+.home-zone-empty p { margin: 0; line-height: 1.5; font-size: 12px; }
+.home-nudge { margin-top: 24px; padding: 10px 14px; border-left: 3px solid var(--accent); color: var(--dim); }

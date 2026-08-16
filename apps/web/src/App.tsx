@@ -21,6 +21,7 @@ import { PlaylistsView } from './PlaylistsView'
 import { ConvertDialog } from './ConvertDialog'
 import { AdminView } from './AdminView'
 import { DuplicatesView } from './DuplicatesView'
+import { HomeView, useRecentPlaylists } from './HomeView'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -52,6 +53,7 @@ export default function App() {
   const [browserOpen, setBrowserOpen] = useState(true)
   const [format, setFormat] = useState<string | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
+  const [recentPlaylists, rememberPlaylist] = useRecentPlaylists()
   const [converting, setConverting] = useState<string[] | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
@@ -68,6 +70,14 @@ export default function App() {
     const t = setTimeout(() => setNotice(null), 5000)
     return () => clearTimeout(t)
   }, [notice])
+
+  // Recorded where the view changes rather than at each door into it: the
+  // sidebar, the playlists wall and the home strip all open playlists, and
+  // three call sites is three chances to forget one.
+  useEffect(() => {
+    if (view.kind === 'playlist') rememberPlaylist(view.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.kind, view.id])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -343,6 +353,14 @@ export default function App() {
     missing: <MissingView />,
     admin: <AdminView />,
     duplicates: <DuplicatesView onNotice={setNotice} />,
+    home: (
+      <HomeView
+        playlists={playlists}
+        recent={recentPlaylists}
+        onOpenPlaylist={(id, smart) => setView({ kind: 'playlist', id, smart: smart ?? undefined })}
+        onGo={(id) => setView({ kind: 'library', id })}
+      />
+    ),
     playlists: (
       <PlaylistsView
         playlists={playlists}
