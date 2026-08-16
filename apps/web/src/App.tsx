@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
-  api, useDevices, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth,
+  api, useDevices, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth,
   useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
@@ -87,6 +87,9 @@ export default function App() {
   const health = useServerHealth()
   const devices = (useDevices().data?.items ?? []).filter((d) => d.connected)
   const playlists = usePlaylists().data?.items ?? []
+  // Only what is still moving: a finished scan is history, and the panel is for
+  // what is happening now.
+  const jobs = (useJobs().data?.items ?? []).filter((j) => j.state === 'running' || j.state === 'queued' || j.state === 'paused')
 
   /**
    * Search, column browser filters and device presence all go to the server —
@@ -263,6 +266,7 @@ export default function App() {
         volume={volume}
         search={search}
         browserOpen={browserOpen}
+        jobs={jobs}
         onToggle={toggle}
         onPrev={() => (audio.position > 3 ? audio.seek(0) : step(-1))}
         onNext={() => step(1)}

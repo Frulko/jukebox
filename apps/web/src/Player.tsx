@@ -1,8 +1,25 @@
+import { useEffect, useState } from 'react'
+import type { Job } from '@jukebox/client-sdk'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
 
 export type Repeat = 'off' | 'all' | 'one'
+
+/** What a job is called while it runs, in the display's own voice. */
+const JOB_LABEL: Record<string, string> = {
+  scan: 'Scanning',
+  transcode: 'Converting',
+  fingerprint: 'Fingerprinting',
+  podcast: 'Refreshing podcasts',
+  writeback: 'Writing tags',
+  sync: 'Syncing',
+  acquire: 'Downloading',
+  analyze: 'Analysing',
+  relay: 'Relaying',
+  move: 'Moving files',
+  backup: 'Backing up',
+}
 
 export function Player({
   track,
@@ -14,6 +31,7 @@ export function Player({
   volume,
   search,
   browserOpen,
+  jobs,
   onToggle,
   onPrev,
   onNext,
@@ -34,6 +52,8 @@ export function Player({
   volume: number
   search: string
   browserOpen: boolean
+  /** Everything else the server is doing. The display cycles through them. */
+  jobs: Job[]
   onToggle: () => void
   onPrev: () => void
   onNext: () => void
@@ -47,6 +67,26 @@ export function Player({
   // Fall back to the tag only until the decoder has read the file.
   const total = duration || track?.duration || 0
   const pct = total ? (position / total) * 100 : 0
+
+  // The display holds one thing at a time and there is often more than one
+  // thing: a track playing and a scan running are both "in progress". iTunes
+  // solved this by making the panel cycle, and it is still the right answer —
+  // a second panel would take space from a window that has none to give.
+  // Silence is not a task: with nothing playing the panel goes straight to the
+  // scan, and the cycle button only appears when there is somewhere to cycle to.
+  const tasks: Array<{ key: string; job?: Job }> = [
+    ...(track ? [{ key: 'now-playing' }] : []),
+    ...jobs.map((j) => ({ key: j.id, job: j })),
+  ]
+  const [at, setAt] = useState(0)
+  // A job that finishes takes its slot with it; falling back to what is playing
+  // beats leaving the panel on a task that no longer exists.
+  useEffect(() => {
+    if (at >= tasks.length) setAt(0)
+  }, [at, tasks.length])
+  const shown = tasks[Math.min(at, tasks.length - 1)]
+  const job = shown?.job
+  const done = job ? (job.progress.total ? (job.progress.done / job.progress.total) * 100 : 0) : 0
 
   return (
     <div className="topbar">
@@ -67,8 +107,28 @@ export function Player({
         </div>
       </div>
 
-      <div className={`lcd ${track ? '' : 'idle'}`}>
-        {track ? (
+      <div className={`lcd ${job ? 'job' : track ? '' : 'idle'}`}>
+        {job ? (
+          <>
+            <div className="lcd-main">
+              <div className="lcd-title">
+                {JOB_LABEL[job.kind] ?? job.kind}
+                {job.state === 'paused' && ' — paused'}
+              </div>
+              <div className="lcd-sub">
+                {job.progress.total
+                  ? `${job.progress.done.toLocaleString('en-US')} of ${job.progress.total.toLocaleString('en-US')}`
+                  : `${job.progress.done.toLocaleString('en-US')} so far`}
+                {job.error ? ` · ${job.error}` : ''}
+              </div>
+              <div className="lcd-scrub">
+                <div className="track">
+                  <div className="fill" style={{ width: `${done}%` }} />
+                </div>
+              </div>
+            </div>
+          </>
+        ) : track ? (
           <>
             <Cover seed={albumSeed(track)} size={34} className="lcd-art" />
             <div className="lcd-main">
@@ -97,6 +157,19 @@ export function Player({
           </>
         ) : (
           <span className="lcd-idle-label">iTunes</span>
+        )}
+        {tasks.length > 1 && (
+          <button
+            className="lcd-next"
+            title={`${tasks.length} things in progress — click to cycle`}
+            onClick={(e) => {
+              e.stopPropagation()
+              setAt((i) => (i + 1) % tasks.length)
+            }}
+          >
+            <Icon name="sync" size={10} />
+            <em>{tasks.length}</em>
+          </button>
         )}
       </div>
 

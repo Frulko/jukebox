@@ -81,7 +81,13 @@ export const useDevices = () =>
   useQuery({ queryKey: keys.devices, queryFn: () => api.devices.list(), staleTime: 10_000 })
 
 export const useJobs = () =>
-  useQuery({ queryKey: keys.jobs, queryFn: () => api.jobs.list({ limit: 20 }) })
+  useQuery({
+    queryKey: keys.jobs,
+    queryFn: () => api.jobs.list({ limit: 20 }),
+    // Progress arrives over SSE normally. Demo mode has no server to push it,
+    // so that one case polls — it is the only place in the app that does.
+    refetchInterval: DEMO ? 1500 : false,
+  })
 
 /**
  * Single or multi edit — it is the same call, just as it is on the server. The

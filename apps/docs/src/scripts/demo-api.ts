@@ -9,7 +9,7 @@
 // ponytail: one page per query, no cursor. The demo library is ~250 tracks; the
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
-import type { Device, DeviceTrack, Playlist, Source, Track, TrackQuery } from '@jukebox/api-types'
+import type { Device, DeviceTrack, Job, Playlist, Source, Track, TrackQuery } from '@jukebox/api-types'
 
 const tracks = makeLibrary()
 let revision = tracks.length
@@ -122,6 +122,26 @@ const SOURCES: Source[] = [
     lastScanAt: Date.UTC(2026, 7, 16), rev: 1 },
 ]
 
+// A scan in flight. The demo needs one so the display has something to cycle to
+// besides the music, and a progress bar frozen at 40 % reads as broken, so it
+// advances with the clock and starts over.
+const openedAt = Date.now()
+function scanning(): Job {
+  const total = 4200
+  const elapsed = (Date.now() - openedAt) / 1000
+  const done = Math.round(((elapsed * 40) % (total * 1.15)))
+  return {
+    id: 'job-scan',
+    kind: 'scan',
+    state: 'running',
+    progress: { done: Math.min(done, total), total, bytes: done * 7_400_000 },
+    error: null,
+    createdAt: openedAt,
+    startedAt: openedAt,
+    finishedAt: null,
+  }
+}
+
 /** Returns the body for a route, or `undefined` when the demo has nothing to say. */
 function route(path: string, params: URLSearchParams, method: string, body: string | null): unknown {
   const q = Object.fromEntries(params) as TrackQuery
@@ -147,7 +167,7 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }
   if (path === '/sources') return { items: SOURCES }
   if (path === '/devices') return { items: [DEVICE] }
-  if (path === '/jobs') return { items: [] }
+  if (path === '/jobs') return { items: [scanning()] }
   if (path === `/devices/${DEVICE.id}/tracks`) {
     const items = params.get('orphansOnly') === 'true' ? onDevice.filter((t) => !t.libraryTrackId) : onDevice
     return { items, next: null }
