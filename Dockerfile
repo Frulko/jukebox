@@ -54,6 +54,12 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/apps/server ./apps/server
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/packages ./packages
+# The plugins, which the image was shipping without. `JUKEBOX_PLUGINS` defaults
+# to ./plugins, so the host found an empty directory and activated nothing —
+# and a server with no plugins looks exactly like a server whose plugins are
+# all disabled. The smoke test could not catch it either: /health answers
+# perfectly well with none.
+COPY --from=build /app/plugins ./plugins
 
 # The music and the database are the two things worth keeping, so both are
 # mount points rather than layers.
