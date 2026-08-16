@@ -145,7 +145,10 @@ export function Player({
   // shows it — in the app's own state it re-rendered every list on every tick.
   const jobs = (useJobs().data?.items ?? []).filter(
     (j) => j.state === 'running' || j.state === 'queued' || j.state === 'paused')
-  const total = duration || track?.duration || 0
+  // Zero when there is no length to speak of — which is what a radio stream
+  // is: the element reports `Infinity`, and a progress bar over an infinity is
+  // a bar that never moves and a countdown that never means anything.
+  const total = (Number.isFinite(duration) ? duration : 0) || track?.duration || 0
   const pct = total ? (position / total) * 100 : 0
 
   // The display holds one thing at a time and there is often more than one
@@ -220,16 +223,19 @@ export function Player({
               <div className="lcd-scrub">
                 <span className="t">{fmtTime(position)}</span>
                 <div
-                  className="track"
+                  className={`track ${total ? '' : 'live'}`}
                   onMouseDown={(e) => {
+                    if (!total) return
                     const r = e.currentTarget.getBoundingClientRect()
                     onSeek(((e.clientX - r.left) / r.width) * total)
                   }}
                 >
                   <div className="fill" style={{ width: `${pct}%` }} />
-                  <div className="knob" style={{ left: `${pct}%` }} />
+                  {total > 0 && <div className="knob" style={{ left: `${pct}%` }} />}
                 </div>
-                <span className="t r">-{fmtTime(Math.max(0, total - position))}</span>
+                {/* Nothing rather than a countdown: a station has no end, and
+                    the honest answer to "how long is left" is silence. */}
+                <span className="t r">{total ? `-${fmtTime(Math.max(0, total - position))}` : t('live')}</span>
               </div>
             </div>
             <button

@@ -3,7 +3,39 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Radio } from '@jukebox/client-sdk'
 import { api } from './api'
 import { Icon } from './Icon'
-import { useScrollMemory } from './viewState'
+import { Cover } from './Artwork'
+import { useRemembered, useScrollMemory } from './viewState'
+import { t, useLocale } from './i18n'
+
+/**
+ * A station's logo, or a cover made from its name.
+ *
+ * The server has been finding these all along — off the stream's `icy-url`, off
+ * the homepage favicon, off the directory — and storing them in `imageUrl`;
+ * this page simply never drew them. A logo lives on somebody else's web server,
+ * so it is the one image in this app that can be a 404 by tomorrow: `onError`
+ * falls through to the generated cover rather than leaving a broken frame,
+ * which also covers every station the probe found nothing for.
+ */
+function StationArt({ station, size }: { station: Radio; size: number }) {
+  const [broken, setBroken] = useState(false)
+  if (station.imageUrl && !broken) {
+    return (
+      <img
+        className="st-art"
+        src={station.imageUrl}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        onError={() => setBroken(true)}
+      />
+    )
+  }
+  // Seeded on the name, not the id: two libraries holding the same station draw
+  // the same cover, and re-adding one does not change how it looks.
+  return <Cover seed={station.name || station.streamUrl} size={size} label={size >= 96 ? station.name : undefined} />
+}
 
 /**
  * Internet radio, from the server.
@@ -32,6 +64,7 @@ export function RadioView({
   onPlayStream: (station: Radio) => void
   onNotice: (message: string) => void
 }) {
+  useLocale()
   const qc = useQueryClient()
   const pane = useScrollMemory<HTMLDivElement>('radio')
   const { data, isPending } = useQuery({ queryKey: ['radios'], queryFn: () => api.radios.list(), staleTime: 60_000 })
@@ -40,6 +73,11 @@ export function RadioView({
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
+  // Two views because a station is two things at once. Browsing is visual —
+  // logos are how anyone recognises a station — while renaming, re-probing and
+  // removing are a list of rows with controls. One layout doing both makes the
+  // covers small enough to be pointless or the buttons too far apart to use.
+  const [layout, setLayout] = useRemembered<'grid' | 'list'>('radio.layout', 'grid')
 
   const stations = data?.items ?? []
   const q = search.trim().toLowerCase()
@@ -88,6 +126,14 @@ export function RadioView({
     <div className="media radio stations" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="view-head">
         <h2>Radio</h2>
+        <div className="seg">
+          <button className={layout === 'grid' ? 'on' : ''} title={t('Covers')} onClick={() => setLayout('grid')}>
+            <Icon name="albums" size={10} />
+          </button>
+          <button className={layout === 'list' ? 'on' : ''} title={t('List')} onClick={() => setLayout('list')}>
+            <Icon name="columns" size={10} />
+          </button>
+        </div>
         <form
           className="radio-add"
           onSubmit={(e) => {
@@ -126,10 +172,49 @@ export function RadioView({
               {list.length} station{list.length === 1 ? '' : 's'}
             </em>
           </h3>
-          {list.map((s) => {
+
+          {layout === 'grid' && (
+            <div className="grid stations-grid">
+              {list.map((s) => {
+                const playing = nowPlaying === `radio:${s.id}`
+                return (
+                  <div key={s.id} className={`tile ${playing ? 'on' : ''}`}>
+                    <button className="tile-art" onClick={() => onPlayStream(s)} title={s.streamUrl}>
+                      <StationArt station={s} size={148} />
+                      <span className="hover-play">
+                        <Icon name={playing ? 'volumeHigh' : 'play'} size={13} />
+                      </span>
+                    </button>
+                    <button
+                      className={`tile-fav ${s.favorite ? 'on' : ''}`}
+                      title={s.favorite ? 'A favourite' : 'Mark as a favourite'}
+                      onClick={() => void patch(s.id, { favorite: (s.favorite ? 0 : 1) as 0 | 1 })}
+                    >
+                      <Icon name="star" size={11} />
+                    </button>
+                    <span className="tile-t">{s.name}</span>
+                    {/* The same line the list shows, and just as empty when the
+                        stream said nothing — a tile that invents a bitrate to
+                        look complete is worse than one that admits the gap. */}
+                    <span className="tile-s">
+                      {[s.country, s.codec?.toUpperCase(), s.bitrate ? `${s.bitrate} kbps` : null]
+                        .filter(Boolean)
+                        .join(' · ') || 'nothing known yet'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {layout === 'list' && list.map((s) => {
             const playing = nowPlaying === `radio:${s.id}`
             return (
               <div key={s.id} className={`station ${playing ? 'playing' : ''}`}>
+                {/* The logo here too, at row height: recognising a station by
+                    its mark is the point, and it should not depend on which
+                    view you happen to be in. */}
+                <StationArt station={s} size={18} />
                 <button
                   className="st-play"
                   title={playing ? 'Playing' : 'Play this station'}

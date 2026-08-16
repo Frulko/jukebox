@@ -138,6 +138,11 @@ export function makeLibrary(): Track[] {
 }
 
 export const fmtTime = (s: number) => {
+  // A live stream reports `Infinity` for its duration, and every arithmetic
+  // path through here then produces "-Infinity:NaN" on screen. Guarded in the
+  // formatter rather than at one call site: it is shared by the LCD, the track
+  // list and the queue, and any of them can be handed a stream.
+  if (!Number.isFinite(s)) return ''
   if (!s && s !== 0) return ''
   const m = Math.floor(s / 60)
   return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`

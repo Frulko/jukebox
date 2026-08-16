@@ -28,6 +28,12 @@ export type Locale = keyof typeof LOCALES
 type Dict = Record<string, string>
 
 const fr: Dict = {
+  live: 'en direct',
+
+  '{n} stations, {genres} genres': '{n} stations, {genres} genres',
+
+  Covers: 'Pochettes', List: 'Liste',
+
   Scanning: 'Analyse', Converting: 'Conversion', Fingerprinting: 'Empreintes',
   'Refreshing podcasts': 'Actualisation des podcasts', 'Writing tags': 'Écriture des tags',
   Syncing: 'Synchronisation', Downloading: 'Téléchargement', Analysing: 'Analyse',
@@ -77,6 +83,12 @@ const fr: Dict = {
 }
 
 const it: Dict = {
+  live: 'in diretta',
+
+  '{n} stations, {genres} genres': '{n} stazioni, {genres} generi',
+
+  Covers: 'Copertine', List: 'Elenco',
+
   Scanning: 'Scansione', Converting: 'Conversione', Fingerprinting: 'Impronte',
   'Refreshing podcasts': 'Aggiornamento podcast', 'Writing tags': 'Scrittura dei tag',
   Syncing: 'Sincronizzazione', Downloading: 'Download', Analysing: 'Analisi',
@@ -122,6 +134,12 @@ const it: Dict = {
 }
 
 const es: Dict = {
+  live: 'en directo',
+
+  '{n} stations, {genres} genres': '{n} emisoras, {genres} géneros',
+
+  Covers: 'Portadas', List: 'Lista',
+
   Scanning: 'Escaneando', Converting: 'Convirtiendo', Fingerprinting: 'Huellas',
   'Refreshing podcasts': 'Actualizando pódcasts', 'Writing tags': 'Escribiendo etiquetas',
   Syncing: 'Sincronizando', Downloading: 'Descargando', Analysing: 'Analizando',
@@ -167,6 +185,12 @@ const es: Dict = {
 }
 
 const de: Dict = {
+  live: 'live',
+
+  '{n} stations, {genres} genres': '{n} Sender, {genres} Genres',
+
+  Covers: 'Cover', List: 'Liste',
+
   Scanning: 'Scannen', Converting: 'Konvertieren', Fingerprinting: 'Fingerprints',
   'Refreshing podcasts': 'Podcasts aktualisieren', 'Writing tags': 'Tags schreiben',
   Syncing: 'Synchronisieren', Downloading: 'Herunterladen', Analysing: 'Analysieren',

@@ -269,6 +269,8 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: inset 0 1px 1px rgba(0, 0, 0, .28);
 }
 .lcd-scrub .fill { height: 100%; border-radius: 3px; background: var(--accent); }
+/* A stream: nothing to scrub to, so the bar stops pretending to be a control. */
+.lcd-scrub .track.live { cursor: default; opacity: .55; }
 .lcd-scrub .knob {
   position: absolute;
   top: -3px;
@@ -2207,6 +2209,46 @@ input[type="range"]::-webkit-slider-thumb {
 .station button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
 .radio-note { margin: 6px 0 18px; padding: 9px 11px; border-radius: var(--radius); background: var(--stripe); color: var(--dim); line-height: 1.55; }
 .radio-note b { color: var(--text); }
+
+/* A station's logo. Square-cropped rather than letterboxed: these arrive as
+   favicons and directory art in every proportion, and a row of art that is not
+   the same shape reads as broken layout rather than as varied logos. */
+.st-art { flex: none; border-radius: 3px; object-fit: cover; background: var(--stripe); }
+.station .st-art { width: 18px; height: 18px; }
+
+/* The covers view. Same tiles as the album grid — a station browsed by its
+   mark is the same gesture as an album browsed by its sleeve — a step smaller,
+   because a library holds tens of stations and hundreds of albums. */
+.stations-grid { padding: 0 0 6px; gap: 14px 12px; }
+.stations-grid .tile { position: relative; }
+.stations-grid .tile-art .st-art { border-radius: 5px; box-shadow: 0 2px 8px rgba(0, 0, 0, .28); }
+.stations-grid .tile.on .tile-art .st-art,
+.stations-grid .tile.on .tile-art .cover { box-shadow: 0 0 0 3px var(--accent), 0 2px 8px rgba(0, 0, 0, .28); }
+.stations-grid .tile-t { font-weight: 600; }
+.tile-fav {
+  position: absolute;
+  top: 6px;
+  /* Right, not left: three of the four generated cover layouts set their type
+     hard against the left edge, and a star dropped on top of it turns the
+     station's own name into a smudge. */
+  right: 6px;
+  display: flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, .7);
+  color: rgba(255, 255, 255, .82);
+  opacity: 0;
+}
+.tile:hover .tile-fav, .tile-fav.on { opacity: 1; }
+.tile-fav.on { color: #ffd34d; }
+
+/* The view switch: two icons, one pressed. */
+.seg { display: flex; margin-left: 10px; }
+.seg button { display: flex; padding: 2px 7px; border-radius: 0; }
+.seg button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.seg button:last-child { border-radius: 0 var(--radius) var(--radius) 0; margin-left: -1px; }
+.seg button.on { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }
 
 /* Adding a podcast: two ways, so a dialog rather than a field with a button. */
 .add-podcast { width: 520px; max-width: 92vw; }

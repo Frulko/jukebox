@@ -413,8 +413,15 @@ for (const [book, author, chapters] of [
 
 /** A handful of stations, as the server stores them. */
 const RADIOS: Radio[] = [
+  // One station carries a logo, because that is what the probe returns when the
+  // stream or the homepage has one, and the covers view has to be shown doing
+  // both things: the real image here, a generated cover for the three below.
+  // Inline rather than a remote favicon — the demo fetches nothing off-site.
   { id: 'r-1', name: 'FIP', streamUrl: 'https://icecast.radiofrance.fr/fip-midfi.mp3',
-    homepageUrl: 'https://www.fip.fr', imageUrl: null, genre: 'Eclectic', country: 'FR',
+    homepageUrl: 'https://www.fip.fr',
+    imageUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#e3253d"/><text x="50" y="62" font-family="Helvetica,Arial,sans-serif" font-size="34" font-weight="700" fill="#fff" text-anchor="middle">FIP</text></svg>`),
+    genre: 'Eclectic', country: 'FR',
     bitrate: 128, codec: 'mp3', favorite: 1 },
   { id: 'r-2', name: 'NTS 1', streamUrl: 'https://stream-relay-geo.ntslive.net/stream',
     homepageUrl: 'https://www.nts.live', imageUrl: null, genre: 'Eclectic', country: 'GB',

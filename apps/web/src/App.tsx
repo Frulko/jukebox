@@ -170,6 +170,15 @@ export default function App() {
     shows: podcasts.data?.items.length ?? 0,
     episodes: (podcasts.data?.items ?? []).reduce((a, p) => a + p.episodeCount, 0),
   }
+  // The same query the radio page runs, so this is free — and it replaces a
+  // count that came from the invented station list: "25 streams in 8 genres"
+  // under a page showing four.
+  const radios = useQuery({
+    queryKey: ['radios'],
+    queryFn: () => api.radios.list(),
+    staleTime: 60_000,
+    enabled: view.kind === 'library' && view.id === 'radio',
+  }).data?.items ?? []
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
   /**
@@ -996,6 +1005,11 @@ export default function App() {
                 // replaced would have gone on saying "4 podcasts" to someone
                 // subscribed to one.
                 ? `${podcastCount.shows} podcast${podcastCount.shows === 1 ? '' : 's'}, ${podcastCount.episodes.toLocaleString(getLocale())} episodes`
+                : view.id === 'radio'
+                ? t('{n} stations, {genres} genres', {
+                    n: radios.length,
+                    genres: new Set(radios.map((r) => r.genre || 'Unfiled')).size,
+                  })
                 : mediaSummary(view.id)
               : media ? '' : summarize(tracks))}
         </span>
