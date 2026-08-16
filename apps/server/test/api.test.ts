@@ -243,6 +243,39 @@ test('presence travels with the page, and the filters run in SQL', { skip }, asy
   } finally { await h.cleanup() }
 })
 
+test('streaming answers ranges, which is what makes seeking cheap', { skip }, async () => {
+  const h = await harness()
+  try {
+    const t = (await h.call('GET', '/tracks?limit=1')).body.items[0]
+
+    const whole = await h.raw('GET', `/stream/${t.id}`)
+    assert.equal(whole.status, 200)
+    assert.equal(whole.headers.get('accept-ranges'), 'bytes', 'without this the player never even tries a range')
+    assert.match(whole.headers.get('content-type') ?? '', /^audio\//)
+    const body = new Uint8Array(await whole.arrayBuffer())
+    assert.equal(body.length, Number(whole.headers.get('content-length')))
+
+    const part = await h.raw('GET', `/stream/${t.id}`, { range: 'bytes=10-19' })
+    assert.equal(part.status, 206)
+    assert.equal(part.headers.get('content-length'), '10', 'inclusive at both ends')
+    assert.equal(part.headers.get('content-range'), `bytes 10-19/${body.length}`)
+    // The bytes must be the ones asked for, not the first ten of the file.
+    assert.deepEqual([...new Uint8Array(await part.arrayBuffer())], [...body.slice(10, 20)])
+
+    const tail = await h.raw('GET', `/stream/${t.id}`, { range: 'bytes=-16' })
+    assert.equal(tail.status, 206)
+    assert.deepEqual([...new Uint8Array(await tail.arrayBuffer())], [...body.slice(-16)],
+      'a suffix range is the end of the file, not the start')
+
+    const past = await h.raw('GET', `/stream/${t.id}`, { range: `bytes=${body.length + 10}-` })
+    assert.equal(past.status, 416)
+    assert.equal(past.headers.get('content-range'), `bytes */${body.length}`,
+      '416 carries the real size so the client can correct itself')
+
+    assert.equal((await h.raw('GET', '/stream/no-such-track')).status, 404)
+  } finally { await h.cleanup() }
+})
+
 test('the scanned format is a codec name a device can be compared against', { skip }, async () => {
   const h = await harness()
   try {

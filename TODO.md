@@ -60,13 +60,14 @@ hands out a URL.
 - [x] **2.5** **`onDevice` / `notOnDevice` filters** — computed in SQL, never over a page already
       received. They combine with `kind=` for playlists, audiobooks, podcasts
 - [x] **2.6** Sync job + `dryRun` (plan before writing) + atomic iTunesDB commit
-- [ ] **2.7** Device management — rename, sync options, eject, stats, orphans
+- [x] **2.7** Device management — rename, sync options, eject, stats, orphans, plan preview
 - [x] **2.8** Add by right-click and by dropzone — `device_wanted`, joined to the sync rules
 - [x] **2.9** Drop Movies and TV Shows
 
 ## M3 · Audio output
 
-- [ ] **3.1** `GET /stream/:id` — `Range`, token, **per-renderer profile**, transcode cache
+- [~] **3.1** `GET /stream/:id` — `Range` done. Left: per-renderer profile, transcode cache,
+      and the token (nothing is authenticated yet, so it would guard nothing)
 - [ ] **3.2** `output` contract + browser renderer
 - [ ] **3.3** UPnP/DLNA (SSDP + `SetAVTransportURI`) then Sonos
 - [ ] **3.4** Play queue shared between controllers

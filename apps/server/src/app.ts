@@ -2,6 +2,9 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { compress } from 'hono/compress'
 import { randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import { join } from 'node:path'
 import { open, revision, nextRev, type DB } from './db.ts'
 import { JobQueue, publicJob, type JobKind } from './jobs.ts'
@@ -13,10 +16,14 @@ import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
 import { WRITABLE } from './tags.ts'
+import { mimeFor, parseRange } from './stream.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
 } from './playlists.ts'
+
+/** Node stream to the web stream Hono returns. Never buffers the file. */
+const toWeb = (s: import('node:fs').ReadStream) => Readable.toWeb(s) as unknown as ReadableStream
 
 export function createApp(dbFile: string) {
   const db: DB = open(dbFile)
@@ -431,6 +438,68 @@ export function createApp(dbFile: string) {
   })
 
   api.get('/devices/:id/stats', (c) => withETag(c, deviceStats(db, c.req.param('id'))))
+
+  /* ---------------- audio ---------------- */
+
+  /**
+   * The bytes of a track.
+   *
+   * `Range` is the entire point: seeking in a 40 MB file must cost kilobytes,
+   * not a fresh download. The size and mtime come from the row rather than a
+   * `stat` per request, and are checked against the file only when it is opened.
+   *
+   * No token yet — nothing on this server is authenticated, so a stream token
+   * would guard nothing. It goes in with the rest of auth, and the URL shape
+   * already has room for it.
+   */
+  api.get('/stream/:id', async (c) => {
+    const t = db.prepare(
+      `SELECT t.path, t.format, t.size, t.mtime, s.root FROM tracks t
+       JOIN sources s ON s.id = t.sourceId
+       WHERE t.id = ? AND t.deletedAt IS NULL`).get(c.req.param('id')) as any
+    if (!t) return fail(c, 404, 'not_found', 'unknown track')
+
+    const abs = join(t.root, t.path)
+    let size: number
+    try {
+      // The row can be stale -- a file re-encoded since the last scan has a
+      // different length, and serving ranges against the old one hands the
+      // player garbage. The file on disk is the authority.
+      size = (await stat(abs)).size
+    } catch {
+      return fail(c, 410, 'gone', 'the file behind this track is no longer readable')
+    }
+
+    const type = mimeFor(t.format)
+    const etag = `"s-${t.mtime}-${size}"`
+    const base = {
+      'Content-Type': type,
+      'Accept-Ranges': 'bytes',
+      ETag: etag,
+      'Cache-Control': 'private, max-age=3600',
+    }
+
+    const range = parseRange(c.req.header('range'), size)
+    if (range === 'unsatisfiable') {
+      // 416 has to carry the real size, or the client cannot correct itself.
+      return c.body(null, 416, { ...base, 'Content-Range': `bytes */${size}` })
+    }
+
+    if (c.req.method === 'HEAD') {
+      return c.body(null, 200, { ...base, 'Content-Length': String(size) })
+    }
+
+    if (!range) {
+      return c.body(toWeb(createReadStream(abs)), 200, { ...base, 'Content-Length': String(size) })
+    }
+
+    const length = range.end - range.start + 1
+    return c.body(toWeb(createReadStream(abs, { start: range.start, end: range.end })), 206, {
+      ...base,
+      'Content-Length': String(length),
+      'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
+    })
+  })
 
   /* ---------------- cover art ---------------- */
 
