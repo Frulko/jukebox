@@ -233,6 +233,13 @@ export const SCHEMAS: Record<string, any> = {
         },
         "description": "Ids of the devices holding this track. Delivered with the page."
       },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Tags the listener wrote, delivered with the page. Not the tags in the file: `genre`, `grouping` and `comments` are the file's own fields and are written back to disk. These are this library's opinion of the track and stay in the database, so a rescan cannot lose them and no audio file is rewritten to hold one."
+      },
       "renditions": {
         "type": "array",
         "items": {
@@ -277,6 +284,7 @@ export const SCHEMAS: Record<string, any> = {
       "lastPlayed",
       "artwork",
       "devices",
+      "tags",
       "renditions",
       "rev"
     ]
@@ -2100,6 +2108,10 @@ export const SCHEMAS: Record<string, any> = {
       "format": {
         "type": "string",
         "description": "Codec name, as the scanner stores it: `mp3`, `aac`, `alac`, `flac`, `opus`, `vorbis`, `wav`, `aiff`. Not a container — an `.m4a` is `aac` or `alac`, and an `.ogg` is `opus` or `vorbis`. Matched case-insensitively."
+      },
+      "tag": {
+        "type": "string",
+        "description": "Carries this tag. One at a time: a second one is a smart playlist."
       },
       "sourceId": {
         "type": "string"
