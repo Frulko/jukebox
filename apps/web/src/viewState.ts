@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 /**
  * Where each pane was left, and what each view had chosen.
@@ -45,4 +45,70 @@ export function useRemembered<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => (chosen.has(key) ? (chosen.get(key) as T) : initial))
   useEffect(() => { chosen.set(key, value) }, [key, value])
   return [value, setValue] as const
+}
+
+/**
+ * `useState` written through to localStorage — this one *does* survive a reload,
+ * because a column layout or a sidebar order is a preference, not a place in a
+ * list.
+ *
+ * `merge` reconciles what was stored with today's defaults. Without it, adding a
+ * column leaves every existing user without it forever: their saved map predates
+ * it, and nothing ever puts it back.
+ */
+export function usePersisted<T>(key: string, initial: T, merge?: (stored: T, fresh: T) => T) {
+  const [v, setV] = useState<T>(() => {
+    const raw = localStorage.getItem(key)
+    if (!raw) return initial
+    try {
+      const stored = JSON.parse(raw) as T
+      return merge ? merge(stored, initial) : stored
+    } catch {
+      return initial
+    }
+  })
+  const set = useCallback(
+    (next: T | ((old: T) => T)) =>
+      setV((old) => {
+        const val = typeof next === 'function' ? (next as (o: T) => T)(old) : next
+        localStorage.setItem(key, JSON.stringify(val))
+        return val
+      }),
+    [key],
+  )
+  return [v, set] as const
+}
+
+/**
+ * A hand-sorted order over a list that the app still owns.
+ *
+ * The stored order is merged with today's ids *at render*, not at mount: a
+ * playlist created five minutes ago has to appear at the end of the sidebar
+ * without waiting for a reload, and a deleted one has to disappear without
+ * leaving a hole. Only the ids the user actually moved are persisted.
+ *
+ * ponytail: localStorage, so the order is per browser rather than per account.
+ * It becomes a server field the day playlists need to look the same on the
+ * tablet as on the desktop.
+ */
+export function useOrder(key: string, ids: string[]) {
+  const [stored, setStored] = usePersisted<string[]>(key, [])
+
+  const order = useMemo(
+    () => [...stored.filter((id) => ids.includes(id)), ...ids.filter((id) => !stored.includes(id))],
+    [stored, ids],
+  )
+
+  /** Moves `dragged` before `target`, or after it when the drop landed low. */
+  const move = useCallback(
+    (dragged: string, target: string, after: boolean) => {
+      const next = order.filter((id) => id !== dragged)
+      const at = next.indexOf(target)
+      next.splice(at < 0 ? next.length : after ? at + 1 : at, 0, dragged)
+      setStored(next)
+    },
+    [order, setStored],
+  )
+
+  return [order, move] as const
 }

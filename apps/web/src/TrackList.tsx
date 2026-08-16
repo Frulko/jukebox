@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTable } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Icon } from './Icon'
@@ -7,36 +7,9 @@ import { features } from './tableFeatures'
 import { COLUMN_LABELS, DEFAULT_VISIBLE, makeColumns, NUMERIC } from './columns'
 import type { Playlist, Track } from './data'
 import type { View } from './App'
-import { useScrollMemory } from './viewState'
+import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
-//
-// `merge` reconciles what was stored with today's defaults. Without it, adding a
-// column leaves every existing user without it forever: their saved order and
-// visibility map predate it, and nothing ever puts it back.
-function usePersisted<T>(key: string, initial: T, merge?: (stored: T, fresh: T) => T) {
-  const [v, setV] = useState<T>(() => {
-    const raw = localStorage.getItem(key)
-    if (!raw) return initial
-    try {
-      const stored = JSON.parse(raw) as T
-      return merge ? merge(stored, initial) : stored
-    } catch {
-      return initial
-    }
-  })
-  const set = useCallback(
-    (next: T | ((old: T) => T)) =>
-      setV((old) => {
-        const val = typeof next === 'function' ? (next as (o: T) => T)(old) : next
-        localStorage.setItem(key, JSON.stringify(val))
-        return val
-      }),
-    [key],
-  )
-  return [v, set] as const
-}
-
 const ALL_IDS = Object.keys(COLUMN_LABELS)
 const defaultVisibility = Object.fromEntries(ALL_IDS.map((id) => [id, DEFAULT_VISIBLE.has(id)]))
 

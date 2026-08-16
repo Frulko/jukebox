@@ -1420,3 +1420,10 @@ input[type="range"]::-webkit-slider-thumb {
 [data-theme="studio"] .modal-titlebar .close { border-color: transparent; background: #2a303b; }
 [data-theme="studio"] .modal-backdrop { background: rgba(0, 0, 0, .55); }
 [data-theme="studio"] .cap-bar { background: #2a303b; }
+
+/* ---------------- sidebar: drag to reorder ----------------
+   The line is drawn on the entry the pointer is over, on the edge the drop
+   would land — the same language the track list uses for its own reordering,
+   so a drag means the same thing in both places. */
+.sidebar .src.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.sidebar .src.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
