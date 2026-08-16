@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 is the floor: it is the last Node line with an official armv7l
+        # binary, so the only one that runs on 32-bit NAS boxes and Pis.
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+
+      - name: Types
+        run: npm run check
+
+      # ffmpeg builds real audio files: testing tag writing against a stub
+      # proves nothing, taglib rejects anything that is not a real file.
+      - name: Audio fixtures
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libchromaprint-tools
+          npm run fixtures -- .fixtures
+
+      - name: Tests
+        run: JUKEBOX_FIXTURES=.fixtures npm test
+
+      - name: Build the front end
+        run: npm run build --workspace @jukebox/web
