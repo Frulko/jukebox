@@ -186,3 +186,27 @@ test('closing the stream unsubscribes it', async () => {
     assert.equal(stream.events.length, after)
   } finally { await h.cleanup() }
 })
+
+test('the coalescing timer survives the database closing under it', async () => {
+  // The delay that makes coalescing work also makes "is it still open" a
+  // question: the timer fires 250ms after the change, and a server shut down in
+  // between leaves it reading a closed database from inside a timer — an
+  // uncaught exception nobody can catch. Found by a test that failed about one
+  // run in four under load, which is the third bug of this shape tonight.
+  const h = await harness(1)
+  const uncaught: Error[] = []
+  const onUncaught = (err: Error) => uncaught.push(err)
+  process.on('uncaughtException', onUncaught)
+  try {
+    const t = (await h.call('GET', '/tracks?limit=5')).body.items[0]
+    await h.call('PATCH', '/tracks', { ids: [t.id], patch: { rating: 4 } })
+
+    // Closed immediately, well inside the coalescing window.
+    await h.cleanup()
+    await wait(500)
+
+    assert.deepEqual(uncaught.map((e) => e.message), [])
+  } finally {
+    process.off('uncaughtException', onUncaught)
+  }
+})

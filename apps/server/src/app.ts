@@ -279,7 +279,17 @@ export function createApp(dbFile: string) {
     if (revisionPending) return
     revisionPending = setTimeout(() => {
       revisionPending = null
-      events.emit('library', { revision: revision(db) })
+      try {
+        events.emit('library', { revision: revision(db) })
+      } catch {
+        // The database closed during the 250ms this waited. Reading it here
+        // throws from inside a timer, which is an uncaught exception rather
+        // than something a caller could catch — the same shape as the job
+        // queue writing after stop(), and for the same reason: a delay makes
+        // "is it still open" a question the code has to ask rather than assume.
+        //
+        // Nothing is lost. A closed database has no connections left to notify.
+      }
     }, 250)
     revisionPending.unref?.()
     void rev
