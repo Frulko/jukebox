@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Playlist } from './data'
 import { api, useSources } from './api'
@@ -14,7 +15,12 @@ import { usePersisted, useScrollMemory } from './viewState'
  */
 export function useRecentPlaylists() {
   const [recent, setRecent] = usePersisted<string[]>('jukebox.recent.playlists', [])
-  const remember = (id: string) => setRecent((old) => [id, ...old.filter((x) => x !== id)].slice(0, 12))
+  // Stable, because navigation is built on top of it: an identity that changed
+  // every render would make every consumer of `setView` re-render with it.
+  const remember = useCallback(
+    (id: string) => setRecent((old) => [id, ...old.filter((x) => x !== id)].slice(0, 12)),
+    [setRecent],
+  )
   return [recent, remember] as const
 }
 

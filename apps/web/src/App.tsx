@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import type { Episode, Podcast } from '@jukebox/client-sdk'
 import {
@@ -55,7 +55,7 @@ const NO_QUEUE: string[] = []
 
 export default function App() {
   const qc = useQueryClient()
-  const [view, setView] = useState<View>({ kind: 'library', id: 'music' })
+  const [view, setViewState] = useState<View>({ kind: 'library', id: 'music' })
   const [browse, setBrowse] = useState<Browse>({ genre: null, artist: null, album: null })
   const [browserOpen, setBrowserOpen] = useState(true)
   const [format, setFormat] = useState<string | null>(null)
@@ -84,26 +84,50 @@ export default function App() {
   // A drop on a device moves nothing yet, so it has to say what it did. The
   // status bar already holds a line of text; a toast would be a new component
   // for the same sentence.
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, showNotice] = useState<string | null>(null)
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  /**
+   * Say something in the status bar for five seconds.
+   *
+   * The clearing belongs to the act of saying it, not to an effect watching the
+   * value afterwards: two notices in a row have to restart the clock rather
+   * than let the first one's timer cut the second one short, and that is a
+   * property of *this* call, which an effect keyed on the message cannot see —
+   * the same message twice does not even re-run it.
+   */
+  const setNotice = useCallback((message: string | null) => {
+    clearTimeout(noticeTimer.current)
+    showNotice(message)
+    if (message) noticeTimer.current = setTimeout(() => showNotice(null), 5000)
+  }, [])
 
-  useEffect(() => {
-    if (!notice) return
-    const t = setTimeout(() => setNotice(null), 5000)
-    return () => clearTimeout(t)
-  }, [notice])
-
-  // Recorded where the view changes rather than at each door into it: the
-  // sidebar, the playlists wall and the home strip all open playlists, and
-  // three call sites is three chances to forget one.
-  useEffect(() => {
-    if (view.kind === 'playlist') rememberPlaylist(view.id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view.kind, view.id])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('itunes.theme', theme)
   }, [theme])
+
+  /**
+   * Going somewhere, with everything that means.
+   *
+   * There are a dozen doors into a source — the sidebar, the playlists wall,
+   * the home strip, a plugin answering with tracks — and what has to happen on
+   * arrival was previously two effects watching `view` afterwards. An effect
+   * that watches state to react to the *action* that set it is a detour: it
+   * runs after the render, cannot see what the old view was without keeping a
+   * copy, and is invisible from the call site. One function does it in the
+   * order it happens.
+   */
+  const setView = useCallback(
+    (next: View) => {
+      setViewState(next)
+      // Leaving the album detour: the album is not a source, so nothing else
+      // would close it.
+      setAlbumOpen(null)
+      if (next.kind === 'playlist') rememberPlaylist(next.id)
+    },
+    [rememberPlaylist],
+  )
 
   const openAlbum = (album: string, artist?: string) => setAlbumOpen({ album, artist })
 
@@ -114,10 +138,6 @@ export default function App() {
     shows: podcasts.data?.items.length ?? 0,
     episodes: (podcasts.data?.items ?? []).reduce((a, p) => a + p.episodeCount, 0),
   }
-
-  // Going anywhere leaves the album. Here rather than at each door into a
-  // source, for the same reason as the line above: there are a dozen of them.
-  useEffect(() => setAlbumOpen(null), [view])
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
   /**
@@ -145,8 +165,14 @@ export default function App() {
    * a queue built from a list you were looking at costs nothing to display.
    */
   const known = useRef(new Map<string, Track>())
-  // The playing track can fall outside the current view, so keep it separately.
-  const [nowPlayingTrack, setNowPlayingTrack] = useState<Track | null>(null)
+  /**
+   * A podcast episode that is only in its feed, dressed as a track.
+   *
+   * The one thing the server cannot be asked for: it is not in the library, so
+   * there is no id to fetch. Everything else that plays is a library track and
+   * is looked up with a query rather than kept here — see `current`.
+   */
+  const [playingEpisode, setPlayingEpisode] = useState<Track | null>(null)
   const shuffle = player?.shuffle ?? false
   const repeat = (player?.repeat ?? 'off') as Repeat
   const [volume, setVolume] = useState(75)
@@ -344,11 +370,11 @@ export default function App() {
   const playTrack = useCallback(
     (id: string, from?: string[]) => {
       setNowPlaying(id)
+      setPlayingEpisode(null)
       // Started before the round trip, and deliberately: the element must be
       // told inside the click's own call stack or the browser stops counting it
       // as the gesture that authorises playback.
       audio.play(id)
-      api.tracks.get(id).then(setNowPlayingTrack).catch(() => setNowPlayingTrack(null))
       // A view that knows what it is playing out of says so; the queue only
       // changes when playback starts somewhere new.
       if (from) void control.setQueue(from, Math.max(0, from.indexOf(id)))
@@ -375,7 +401,7 @@ export default function App() {
       const id = `ep:${ep.id}`
       audio.play(id, ep.enclosureUrl)
       setNowPlaying(id)
-      setNowPlayingTrack(episodeAsTrack(ep, show))
+      setPlayingEpisode(episodeAsTrack(ep, show))
       setNotice(`Streaming “${ep.title}” from ${hostOf(ep.enclosureUrl)} — it is not in your library`)
     },
     [audio, playTrack],
@@ -455,12 +481,29 @@ export default function App() {
     const id = player?.trackId ?? null
     if (!id || id === nowPlaying) return
     setNowPlaying(id)
-    api.tracks.get(id).then(setNowPlayingTrack).catch(() => setNowPlayingTrack(null))
+    setPlayingEpisode(null)
     if (audio.playing) audio.play(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player?.trackId])
 
-  const current = tracks.find((t) => t.id === nowPlaying) ?? nowPlayingTrack
+  /**
+   * What is playing, as something to display.
+   *
+   * Three sources, in order of how little they cost. The page in hand almost
+   * always holds it — you pressed play on a row that is right there. A podcast
+   * episode outside the library is the only thing that has to be carried in
+   * state. Everything else is one query, keyed the same way the queue panel
+   * keys its rows, so walking away from the list that started a track does not
+   * cost a second request for it.
+   */
+  const fetched = useQuery({
+    queryKey: ['tracks', nowPlaying],
+    queryFn: () => api.tracks.get(nowPlaying!),
+    enabled: !!nowPlaying && !nowPlaying.startsWith('ep:') && !tracks.some((t) => t.id === nowPlaying),
+    staleTime: 60_000,
+    retry: 1,
+  })
+  const current = tracks.find((t) => t.id === nowPlaying) ?? playingEpisode ?? fetched.data ?? null
   const toggleShuffle = () => void control.set({ shuffle: !shuffle })
   const cycleRepeat = () => void control.set({ repeat: repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off' })
 

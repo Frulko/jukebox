@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 /**
  * Where each pane was left, and what each view had chosen.
@@ -43,8 +43,18 @@ export function useScrollMemory<T extends HTMLElement>(key: string) {
  */
 export function useRemembered<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => (chosen.has(key) ? (chosen.get(key) as T) : initial))
-  useEffect(() => { chosen.set(key, value) }, [key, value])
-  return [value, setValue] as const
+  // Written in the setter, not in an effect watching the value. The store is
+  // the point of this hook, so writing it *is* the update — deferring it to
+  // after the render leaves a window where the component and the store
+  // disagree, and unmounting inside that window loses the change entirely.
+  const set = useCallback((next: T | ((old: T) => T)) => {
+    setValue((old) => {
+      const v = typeof next === 'function' ? (next as (o: T) => T)(old) : next
+      chosen.set(key, v)
+      return v
+    })
+  }, [key])
+  return [value, set] as const
 }
 
 /**

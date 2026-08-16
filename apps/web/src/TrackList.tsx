@@ -150,13 +150,22 @@ export function TrackList(p: Props) {
     overscan: 12,
   })
 
-  // The list is no longer remounted per view, so what the remount used to reset
-  // has to be reset here: a selection belongs to the list you made it in.
-  useLayoutEffect(() => {
+  /**
+   * A selection belongs to the list it was made in.
+   *
+   * The list is no longer remounted per view — that remount was the flash —
+   * so what the remount used to throw away has to go by hand. During render
+   * rather than in an effect, which is React's own answer for "reset state when
+   * a prop changes": an effect renders the new view once holding the old view's
+   * selection, and the row it highlights for that frame is a row of a different
+   * list.
+   */
+  const shownView = useRef(p.viewKey)
+  if (shownView.current !== p.viewKey) {
+    shownView.current = p.viewKey
     table.resetRowSelection()
     anchor.current = null
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.viewKey])
+  }
 
   // A plugin answered with tracks: show them as a selection rather than as a
   // playlist nobody asked to keep.
