@@ -298,6 +298,28 @@ test('hand-picking tracks for a device shows up in its plan', { skip }, async ()
   } finally { await h.cleanup() }
 })
 
+test('ejecting disconnects the device without forgetting anything', { skip }, async () => {
+  const h = await harness()
+  try {
+    await h.call('POST', '/devices', { id: 'ipod-1', name: 'iPod', kind: 'ipod-classic' })
+    const ids = (await h.call('GET', '/tracks?limit=2')).body.items.map((t: any) => t.id)
+    await h.call('POST', '/devices/ipod-1/wanted', { trackIds: ids })
+    await h.call('PUT', '/devices/ipod-1/tracks', {
+      items: [{ deviceLocalId: 'F1', name: 'Something', artist: 'Someone', duration: 100 }],
+    })
+
+    assert.equal((await h.call('POST', '/devices/ipod-1/eject')).body.ejected, true)
+    const dev = (await h.call('GET', '/devices')).body.items[0]
+    assert.equal(dev.connected, 0)
+    // Plugging the same iPod back in must show what it showed before, not an
+    // empty device waiting for a first scan.
+    assert.equal((await h.call('GET', '/devices/ipod-1/tracks')).body.items.length, 1)
+    assert.equal((await h.call('POST', '/devices/ipod-1/sync', { dryRun: true })).body.add.length, ids.length)
+
+    assert.equal((await h.call('POST', '/devices/nope/eject')).status, 404)
+  } finally { await h.cleanup() }
+})
+
 test('importing from a device refuses a read-only target before creating a job', { skip }, async () => {
   const h = await harness(false) // source declared read-only
   try {

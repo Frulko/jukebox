@@ -371,6 +371,20 @@ export function createApp(dbFile: string) {
     return c.json(publicJob(job), 202)
   })
 
+  /**
+   * Eject — the device stops being connected, nothing about it is forgotten.
+   *
+   * Its contents, its sync rules and its hand-picked tracks all stay: plugging
+   * the same iPod back in must show what it showed before, not an empty device
+   * waiting for a first scan.
+   */
+  api.post('/devices/:id/eject', (c) => {
+    const r = db.prepare(`UPDATE devices SET connected = 0, rev = ? WHERE id = ?`)
+      .run(nextRev(db), c.req.param('id'))
+    if (!r.changes) return fail(c, 404, 'not_found', 'unknown device')
+    return c.json({ ejected: true })
+  })
+
   api.post('/devices/:id/backup', async (c) => {
     const id = c.req.param('id')
     if (!db.prepare(`SELECT id FROM devices WHERE id = ?`).get(id)) {

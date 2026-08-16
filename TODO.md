@@ -61,7 +61,7 @@ hands out a URL.
       received. They combine with `kind=` for playlists, audiobooks, podcasts
 - [x] **2.6** Sync job + `dryRun` (plan before writing) + atomic iTunesDB commit
 - [ ] **2.7** Device management — rename, sync options, eject, stats, orphans
-- [ ] **2.8** Add by right-click and by dropzone
+- [x] **2.8** Add by right-click and by dropzone — `device_wanted`, joined to the sync rules
 - [x] **2.9** Drop Movies and TV Shows
 
 ## M3 · Audio output

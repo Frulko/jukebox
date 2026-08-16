@@ -67,7 +67,7 @@ export default function App() {
 
   useServerEvents(qc)
   const health = useServerHealth()
-  const devices = useDevices().data?.items ?? []
+  const devices = (useDevices().data?.items ?? []).filter((d) => d.connected)
   const playlists = usePlaylists().data?.items ?? []
 
   /**
@@ -263,7 +263,12 @@ export default function App() {
 
         <div className="content">
           {device ? (
-            <DeviceView device={device} playlists={playlists} onDevices={() => qc.invalidateQueries({ queryKey: ['devices'] })} />
+            <DeviceView
+              device={device}
+              playlists={playlists}
+              onDevices={() => qc.invalidateQueries({ queryKey: ['devices'] })}
+              onEject={() => setView({ kind: 'library', id: 'music' })}
+            />
           ) : media ? (
             media
           ) : (

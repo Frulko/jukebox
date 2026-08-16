@@ -178,6 +178,8 @@ export function createClient(opts: ClientOptions = {}) {
       syncPlan: (id: string) =>
         request<SyncPlan>(`/devices/${id}/sync`, { method: 'POST', body: JSON.stringify({ dryRun: true }) }),
       backup: (id: string) => request<Job>(`/devices/${id}/backup`, { method: 'POST', body: '{}' }),
+      /** Disconnects without forgetting: contents, rules and picks all survive. */
+      eject: (id: string) => request<{ ejected: boolean }>(`/devices/${id}/eject`, { method: 'POST' }),
     },
 
     /**
