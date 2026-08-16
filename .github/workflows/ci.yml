@@ -34,5 +34,12 @@ jobs:
       - name: Tests
         run: JUKEBOX_FIXTURES=.fixtures npm test
 
+      # The rule this project is built around, checked where it can actually
+      # stop something: a dependency that pulls a native module is only a
+      # problem on the machines nobody develops on, so enforcing it solely in a
+      # local `npm run verify` means it is enforced by whoever remembers.
+      - name: No native modules
+        run: npm run no-native
+
       - name: Build the front end
         run: npm run build --workspace @jukebox/web
