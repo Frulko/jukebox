@@ -12,6 +12,8 @@ export type TrackQuery = {
   album?: string
   /** Codec name as stored: `mp3`, `aac`, `alac`, `flac`, `opus`, `vorbis`, `wav`, `aiff`. */
   format?: string
+  /** A tag the listener wrote. One at a time; two of them is a smart playlist. */
+  tag?: string
   sourceId?: string
   /**
    * The sources this request may see at all, or absent for every one.
@@ -235,6 +237,14 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
   // get nothing back.
   if (qs.format) { sql.push(`lower(t.format) = lower(?)`); params.push(qs.format) }
 
+  // Tags are a table, so this is an EXISTS rather than a join: a join would
+  // multiply the row by its tags and turn a page of 300 into a page of 300
+  // repeated as many times as anyone was thorough.
+  if (qs.tag) {
+    sql.push(`EXISTS (SELECT 1 FROM track_tags tt WHERE tt.trackId = t.id AND tt.tag = ?)`)
+    params.push(qs.tag)
+  }
+
   if (qs.sourceIds) {
     // An empty list is "no sources", not "no filter". Reading it as the latter
     // would show a narrowed account the entire library the moment its last
@@ -317,8 +327,19 @@ function withPresence(db: DB, rows: any[]): any[] {
   // turn one page into three hundred queries.
   const byRendition = renditionsFor(db, rows.map((r) => r.id))
 
+  // Same one-query-per-page rule: a tag column, or a window that shows the tags
+  // of a track, must not cost a request each.
+  const byTag = new Map<string, string[]>()
+  for (const t of db
+    .prepare(`SELECT trackId, tag FROM track_tags WHERE trackId IN (${placeholders}) ORDER BY tag`)
+    .all(...(rows.map((r) => r.id) as never[])) as { trackId: string; tag: string }[]) {
+    const cur = byTag.get(t.trackId)
+    cur ? cur.push(t.tag) : byTag.set(t.trackId, [t.tag])
+  }
+
   for (const r of rows) {
     r.devices = byTrack.get(r.id) ?? []
+    r.tags = byTag.get(r.id) ?? []
     r.renditions = byRendition.get(r.id) ?? []
     r.loved = !!r.loved
     r.enabled = !!r.enabled
@@ -395,7 +416,75 @@ export function facets(db: DB, qs: TrackQuery) {
     // question, and narrowing it by the browser selection would offer a filter
     // that empties itself as soon as it is used.
     formats: distinct('format', base),
+    // From the table, so the answer is "every tag in the library" rather than
+    // "every tag on this page" -- the whole reason the column browser asks the
+    // server. Not cascaded, for the same reason as formats.
+    tags: tagFacet(db, base),
   }
+}
+
+/** Every tag in scope, with how many tracks carry it. */
+function tagFacet(db: DB, scope: TrackQuery): { value: string; count: number }[] {
+  const f = filters(scope)
+  return db
+    .prepare(`SELECT tt.tag AS value, COUNT(*) AS count
+              FROM track_tags tt JOIN tracks t ON t.id = tt.trackId
+              WHERE ${f.sql.join(' AND ')}
+              GROUP BY tt.tag ORDER BY tt.tag COLLATE NOCASE ASC`)
+    .all(...(f.params as never[])) as { value: string; count: number }[]
+}
+
+/**
+ * Adds and removes tags on a set of tracks in one call.
+ *
+ * Add-and-remove rather than "here are the tags now", because the interface
+ * offers this on a selection: replacing would mean a hundred tracks silently
+ * losing every tag they did not have in common. Tags are trimmed and lowercased
+ * on the way in — "Chill", "chill " and "chill" are one tag, and a library that
+ * treats them as three is a library where filtering by tag finds a third of
+ * what it should.
+ */
+export function tagTracks(
+  db: DB,
+  ids: string[],
+  add: string[] = [],
+  remove: string[] = [],
+  /** Stamped on every track that changed, so `/tracks/delta` carries tags too. */
+  rev?: number,
+): { tagged: number; untagged: number } {
+  const clean = (list: string[]) =>
+    [...new Set(list.map((t) => t.trim().toLowerCase()).filter(Boolean))]
+  const put = db.prepare(`INSERT OR IGNORE INTO track_tags (trackId, tag, addedAt) VALUES (?, ?, ?)`)
+  const drop = db.prepare(`DELETE FROM track_tags WHERE trackId = ? AND tag = ?`)
+  const known = db.prepare(`SELECT 1 FROM tracks WHERE id = ? AND deletedAt IS NULL`)
+  const stamp = db.prepare(`UPDATE tracks SET rev = ? WHERE id = ?`)
+
+  let tagged = 0
+  let untagged = 0
+  const now = Date.now()
+  db.exec('BEGIN')
+  try {
+    for (const id of ids) {
+      // A tag on a track that is not there would be a row nothing ever reads
+      // and nothing ever deletes, since the cascade needs the track to exist.
+      if (!known.get(id)) continue
+      let changed = 0
+      for (const tag of clean(add)) changed += Number(put.run(id, tag, now).changes)
+      tagged += changed
+      let gone = 0
+      for (const tag of clean(remove)) gone += Number(drop.run(id, tag).changes)
+      untagged += gone
+      // Only when something actually moved: bumping the revision of a track
+      // that was already tagged would make every client re-fetch it to find
+      // nothing new.
+      if (rev !== undefined && (changed || gone)) stamp.run(rev, id)
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+  return { tagged, untagged }
 }
 
 export function countTracks(db: DB, qs: TrackQuery): number {

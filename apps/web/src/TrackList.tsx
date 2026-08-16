@@ -60,6 +60,10 @@ type Props = {
   onGetInfo: (ids: string[]) => void
   /** Opens the album of a track — the album name and its album artist. */
   onOpenAlbum: (album: string, artist: string) => void
+  /** Every tag in the library, with counts, so the menu can offer them. */
+  tags: { value: string; count: number }[]
+  /** Adds and removes the listener's own tags on a selection. */
+  onTag: (ids: string[], add: string[], remove: string[]) => void
   onNewPlaylistFrom: (ids: string[]) => void
 }
 
@@ -683,6 +687,44 @@ export function TrackList(p: Props) {
                       {n ? '★'.repeat(n) : 'None'}
                     </button>
                   ))}
+                </div>
+              </div>
+              {/* Tags the listener wrote, which are not the file's own fields.
+                  A tag is ticked only when *every* selected track carries it,
+                  so choosing it on a mixed selection adds it to the rest rather
+                  than toggling half of them off. */}
+              <div className="ctx-sub">
+                Tag
+                <div className="ctx-flyout">
+                  <input
+                    className="tag-new"
+                    placeholder="New tag…"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      const value = (e.target as HTMLInputElement).value.trim()
+                      if (!value) return
+                      p.onTag(selectedIds, [value], [])
+                      setMenu(null)
+                    }}
+                  />
+                  {p.tags.length > 0 && <hr />}
+                  {p.tags.map((t) => {
+                    const all = selectedIds.every((id) => table.getRow(id)?.original.tags.includes(t.value))
+                    return (
+                      <button
+                        key={t.value}
+                        className={all ? 'on' : ''}
+                        onClick={() =>
+                          (p.onTag(selectedIds, all ? [] : [t.value], all ? [t.value] : []), setMenu(null))
+                        }
+                      >
+                        {all ? '✓' : ' '}&nbsp;&nbsp;{t.value}
+                        <em className="dim">{t.count.toLocaleString('en-US')}</em>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <div className="ctx-sub">

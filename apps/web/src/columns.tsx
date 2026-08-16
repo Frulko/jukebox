@@ -203,6 +203,14 @@ export const makeColumns = (a: CellActions) =>
       size: 46,
       cell: (c) => <span className="num">{c.getValue() || ''}</span>,
     }),
+    h.accessor('tags', {
+      header: 'Tags',
+      size: 130,
+      // Joined rather than drawn as pills: this is a table cell that can be
+      // narrowed to nothing, and the tooltip that reveals a clipped cell works
+      // on text. Pills would clip to half a pill.
+      cell: (c) => c.getValue().join(', '),
+    }),
   ])
 
 /** Columns iTunes shows out of the box; everything else lives in View Options. */
@@ -219,7 +227,7 @@ export const COLUMN_LABELS: Record<string, string> = {
   discNumber: 'Disc Number', albumArtist: 'Album Artist', composer: 'Composer', grouping: 'Grouping',
   comments: 'Comments', bpm: 'BPM', kind: 'Kind', format: 'Format', size: 'Size', bitRate: 'Bit Rate',
   sampleRate: 'Sample Rate', dateAdded: 'Date Added', lastPlayed: 'Last Played', skipCount: 'Skips',
-  devices: 'On device',
+  devices: 'On device', tags: 'Tags',
 }
 
 /** Columns whose values are right-aligned in iTunes. */

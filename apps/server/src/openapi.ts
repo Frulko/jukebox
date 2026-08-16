@@ -90,7 +90,6 @@ const DOCS: Record<string, Doc> = {
   'GET /tracks/:id/memberships': { summary: 'Every playlist and device holding this track. Smart playlists are asked, not read.', returns: 'Memberships', tag: 'library' },
   'GET /tracks/:id': { summary: 'One track.', returns: 'Track', tag: 'library' },
   'PATCH /tracks': { summary: 'Edits one or many. Tag writing to disk becomes a job.', tag: 'library', body: '{ ids, patch, writeToFiles? }' },
-  'POST /tracks/tags': { summary: "Adds and removes the listener's own tags on a set of tracks. Never written to the file.", tag: 'library', body: '{ ids, add?, remove? }' },
   'POST /tracks/tags': { summary: 'Adds and removes tags on a set of tracks. Add/remove rather than replace, so tagging a selection cannot silently clear what the tracks did not have in common.', tag: 'library', body: '{ ids, add?, remove? }' },
   'POST /tracks/:id/play': { summary: 'Records a listen. Half the length or four minutes, never under thirty seconds.', tag: 'library', body: '{ played, startedAt? }' },
   'GET /facets': { summary: 'Distinct genres, artists, albums and formats, with counts.', tag: 'library' },

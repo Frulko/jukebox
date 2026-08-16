@@ -17,7 +17,7 @@ import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandl
 import { createRadio, deleteRadio, discover, getRadio, listRadios, updateRadio } from './radio.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, membershipsOf,
-  pickRendition, playlistTracks, smartTracks, tracksDelta,
+  pickRendition, playlistTracks, smartTracks, tagTracks, tracksDelta,
 } from './library.ts'
 import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
@@ -608,6 +608,25 @@ export function createApp(dbFile: string) {
   api.get('/tracks/:id', (c) => {
     const track = getTrack(db, c.req.param('id'))
     return track ? c.json(track) : fail(c, 404, 'not_found', 'unknown track')
+  })
+
+  /**
+   * Tags on a set of tracks.
+   *
+   * Add and remove rather than "here are the tags now": the interface offers
+   * this on a selection, and a replace would mean a hundred tracks quietly
+   * losing every tag they did not have in common. One call does both, so
+   * swapping a tag on a selection is one request and not two states.
+   */
+  api.post('/tracks/tags', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.ids) || !b.ids.length) return fail(c, 400, 'bad_body', 'expected { ids: [], add?: [], remove?: [] }')
+    const add = Array.isArray(b.add) ? b.add.map(String) : []
+    const remove = Array.isArray(b.remove) ? b.remove.map(String) : []
+    if (!add.length && !remove.length) return fail(c, 400, 'no_change', 'nothing to add or remove')
+
+    const rev = nextRev(db)
+    return c.json({ ...tagTracks(db, b.ids.map(String), add, remove, rev), revision: rev })
   })
 
   /** Bulk edit — this is what the "Multiple Item Information" modal calls. */

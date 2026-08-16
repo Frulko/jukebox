@@ -119,11 +119,23 @@ export function createClient(opts: ClientOptions = {}) {
       list: (q: TrackQuery = {}) => request<Page<Track>>(`/tracks${qs(q)}`, {}, true),
       /** Distinct values for the column browser, cascading. */
       facets: (q: TrackQuery = {}) =>
-        request<{ genres: Facet[]; artists: Facet[]; albums: Facet[]; formats: Facet[] }>(`/facets${qs(q)}`, {}, true),
+        request<{ genres: Facet[]; artists: Facet[]; albums: Facet[]; formats: Facet[]; tags: Facet[] }>(
+          `/facets${qs(q)}`, {}, true),
       count: (q: TrackQuery = {}) => request<{ count: number }>(`/tracks/count${qs(q)}`, {}, true),
       /** Fetches only what changed since `since`. The main network win. */
       delta: (since: number, limit = 500) => request<TracksDelta>(`/tracks/delta${qs({ since, limit })}`),
       get: (id: string) => request<Track>(`/tracks/${id}`),
+      /**
+       * Adds and removes the listener's own tags on a set of tracks.
+       *
+       * Both in one call, and never "here are the tags now": this is offered on
+       * a selection, and replacing would take every tag the selected tracks did
+       * not have in common.
+       */
+      tag: (ids: string[], add: string[] = [], remove: string[] = []) =>
+        request<{ tagged: number; untagged: number; revision: number }>('/tracks/tags', {
+          method: 'POST', body: JSON.stringify({ ids, add, remove }),
+        }),
       /**
        * Records that a track was listened to. Half its length or four minutes,
        * whichever comes first, and never under thirty seconds — anything less

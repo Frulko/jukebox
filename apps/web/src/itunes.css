@@ -1981,3 +1981,16 @@ input[type="range"]::-webkit-slider-thumb {
   line-height: 1.5;
 }
 .plugin-from { margin: 12px 0 0; font-size: 10px; }
+
+/* ---------------- tags the listener wrote ----------------
+   The input sits inside the context menu's flyout, so it has to look like a
+   menu row rather than a form field dropped into one. */
+.ctx-flyout .tag-new {
+  width: calc(100% - 12px);
+  margin: 4px 6px;
+  padding: 2px 5px;
+  font: inherit;
+  font-size: 11px;
+}
+.td.tags { color: var(--dim); }
+.tr.sel .td.tags { color: var(--sel-text); }

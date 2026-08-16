@@ -19,12 +19,32 @@ a header — `<audio src>` being the reason that exists. A server with no
 accounts answers everything, so a fresh install is usable before anyone has
 created a login.
 
+## accounts
+
+| | Path | What it does |
+|---|---|---|
+| `GET` | `/users` | Every account. Admin only; no secret ever leaves here. |
+| `POST` | `/users` | Creates an account. Roles: admin, user, guest — a guest plays and nothing else. |
+| `DELETE` | `/users/{id}` | Removes an account and its tokens. Not the last admin. |
+| `PATCH` | `/users/{id}` | Changes a role or a password. Refuses to demote the last admin. |
+| `GET` | `/users/{id}/sources` | Which sources this account may see. `all` when it has not been narrowed. |
+| `PUT` | `/users/{id}/sources` | Narrows an account to some sources. An empty list restores all of them. |
+
+**`POST /users`**  
+Body: `{ username, password, role? }`  
+
+**`PATCH /users/{id}`**  
+Body: `{ role?, password? }`  
+
+**`PUT /users/{id}/sources`**  
+Body: `{ sourceIds: [] }`  
+
 ## auth
 
 | | Path | What it does |
 |---|---|---|
 | `POST` | `/auth/login` | Exchanges a password for a token. |
-| `GET` | `/auth/me` | The signed-in user. |
+| `GET` | `/auth/me` | The signed-in user, with the capabilities it has and the sources it may see. |
 | `POST` | `/auth/setup` | Claims a fresh install. Refused once any account exists. |
 | `GET` | `/auth/state` | Whether this install has been claimed yet. |
 | `GET` | `/auth/tokens` | Tokens belonging to the signed-in user. Secrets are never returned. |
@@ -81,20 +101,22 @@ Query: `secrets`
 |---|---|---|
 | `GET` | `/artwork/{id}` | Cover art, extracted on demand and ETagged on the file. |
 | `GET` | `/facets` | Distinct genres, artists, albums and formats, with counts. |
-| `GET` | `/stream/{id}` | The audio, honouring Range. |
+| `GET` | `/stream/{id}` | The audio, honouring Range. Converts on the fly when the library holds nothing the client accepts — that response carries no Range and an X-Jukebox-Transcoded header. |
 | `GET` | `/tracks` | One page of tracks, with device presence and renditions. |
 | `PATCH` | `/tracks` | Edits one or many. Tag writing to disk becomes a job. |
 | `GET` | `/tracks/{id}` | One track. |
+| `GET` | `/tracks/{id}/memberships` | Every playlist and device holding this track. Smart playlists are asked, not read. |
 | `POST` | `/tracks/{id}/play` | Records a listen. Half the length or four minutes, never under thirty seconds. |
 | `GET` | `/tracks/count` | How many tracks a query matches. |
 | `GET` | `/tracks/delta` | What changed since a revision. The main network win. |
 | `GET` | `/tracks/missing` | Tracks whose file the scanner can no longer find. |
+| `POST` | `/tracks/tags` | Adds and removes tags on a set of tracks. Add/remove rather than replace, so tagging a selection cannot silently clear what the tracks did not have in common. |
 
 **`GET /stream/{id}`**  
-Query: `rendition`, `format`, `accept`  
+Query: `rendition`, `format`, `accept`, `seek`  
 
 **`GET /tracks`**  
-Query: `sort`, `cursor`, `limit`, `q`, `genre`, `artist`, `album`, `format`, `kind`, `sourceId`, `onDevice`, `notOnDevice`, `match`  
+Query: `sort`, `cursor`, `limit`, `q`, `genre`, `artist`, `album`, `format`, `tag`, `kind`, `sourceId`, `rating`, `ratingMin`, `lossless`, `onDevice`, `notOnDevice`, `match`  
 
 **`PATCH /tracks`**  
 Body: `{ ids, patch, writeToFiles? }`  
@@ -105,18 +127,26 @@ Body: `{ played, startedAt? }`
 **`GET /tracks/delta`**  
 Query: `since`, `limit`  
 
+**`POST /tracks/tags`**  
+Body: `{ ids, add?, remove? }`  
+
 ## outputs
 
 | | Path | What it does |
 |---|---|---|
-| `GET` | `/outputs` | Renderers on the network, found by SSDP. |
+| `GET` | `/outputs` | Renderers on the network — UPnP by SSDP, AirPlay by multicast DNS — plus satellites that registered themselves. |
+| `DELETE` | `/outputs/{id}` | Forgets a registered output. Discovered ones come back on their own. |
 | `POST` | `/outputs/{id}/pause` | Pauses it. |
 | `POST` | `/outputs/{id}/play` | Points a renderer at a track and starts it. |
 | `POST` | `/outputs/{id}/stop` | Stops it. |
-| `POST` | `/outputs/{id}/volume` | Sets its volume, 0 to 100. |
+| `POST` | `/outputs/{id}/volume` | Sets its volume, 0 to 100. AirPlay answers 501: its volume lives in RTSP, not this protocol. |
+| `POST` | `/outputs/register` | A satellite announcing it can play. Re-registering is also its heartbeat. |
 
 **`GET /outputs`**  
 Query: `refresh`  
+
+**`POST /outputs/register`**  
+Body: `{ id, name, url, formats? }`  
 
 ## player
 
@@ -247,7 +277,8 @@ Body: `{ feedUrl, cron?, keepLast?, autoDownload? }`
 | `GET` | `/organize/log` | Every file a reorganisation moved. |
 | `GET` | `/sources` | Where the music lives. |
 | `POST` | `/sources` | Adds a source. `rclone` sources carry `config: { url, fs }`. |
-| `POST` | `/sources/{id}/scan` | Indexes it. `?full=true` re-reads files an incremental scan would skip. |
+| `POST` | `/sources/{id}/scan` | Indexes a source. `full` re-reads every file; `prune` confirms deleting every track when the source turns up empty, which an unmounted share also does. |
+| `POST` | `/sources/{id}/test` | Does this source answer? Better asked before a scan than read from its error afterwards. |
 | `POST` | `/transcode` | Converts a selection. `replace: false` keeps both as renditions. |
 | `GET` | `/transcode/capabilities` | Whether ffmpeg is present, and what it can write. |
 
@@ -258,7 +289,7 @@ Body: `{ keeperId, ids }`
 Body: `{ sourceId, pattern, apply? }`  
 
 **`POST /sources/{id}/scan`**  
-Query: `full`  
+Query: `full`, `prune`  
 
 **`POST /transcode`**  
 Body: `{ ids, format, quality?, replace }`  

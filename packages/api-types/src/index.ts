@@ -86,6 +86,15 @@ export type Track = {
   /** Ids of the devices holding this track. Delivered with the page. */
   devices: string[]
   /**
+   * Tags the listener wrote, delivered with the page.
+   *
+   * Not the tags in the file: `genre`, `grouping` and `comments` are the file's
+   * own fields and are written back to disk. These are this library's opinion
+   * of the track and stay in the database, so a rescan cannot lose them and no
+   * audio file is rewritten to hold one.
+   */
+  tags: string[]
+  /**
    * Every file of this track, preferred first. Delivered with the page.
    *
    * The flat `format`, `size` and `bitRate` above are the preferred one's, so a
@@ -536,6 +545,8 @@ export type TrackQuery = {
    * and an `.ogg` is `opus` or `vorbis`. Matched case-insensitively.
    */
   format?: string
+  /** Carries this tag. One at a time: a second one is a smart playlist. */
+  tag?: string
   sourceId?: string
   /** Exactly this many stars, 0–5. `0` is "never rated", which is a real query. */
   rating?: number

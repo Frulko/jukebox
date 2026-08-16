@@ -471,6 +471,30 @@ const MIGRATIONS: Migration[] = [
       .some((c) => c.name === 'ownerId')
     if (!has) db.exec(`ALTER TABLE playlists ADD COLUMN ownerId TEXT`)
   },
+
+  // 6 — tags the listener writes, which are not the tags in the file.
+  //
+  // A row per pair rather than a list in a column, because every question worth
+  // asking about a tag is a question about the set: how many tracks carry it,
+  // which tags exist, which tracks carry this one. A comma-separated column
+  // answers all three with a LIKE that also matches "chill" inside "chillout".
+  //
+  // Deliberately not written to the file. `grouping` and `comments` are the
+  // file's own fields and belong to whoever else reads it; these are this
+  // library's opinion of the track, and rewriting somebody's audio files to
+  // store an opinion is not a trade a tag is worth. The scanner therefore
+  // never clears them either — a rescan cannot lose them.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS track_tags (
+        trackId TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        tag     TEXT NOT NULL,
+        addedAt INTEGER NOT NULL,
+        PRIMARY KEY (trackId, tag)
+      );
+      -- "everything tagged live" reads the tag, not the track.
+      CREATE INDEX IF NOT EXISTS track_tags_tag ON track_tags (tag, trackId)`)
+  },
 ]
 
 /**

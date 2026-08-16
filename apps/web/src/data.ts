@@ -52,6 +52,9 @@ const FIRST = ['Jean', 'Marcus', 'Lena', 'Otis', 'Yuki', 'Carla', 'Dmitri', 'Ros
 const LAST = ['Moreau', 'Coleman', 'Vasquez', 'Okafor', 'Lindqvist', 'Baptiste', 'Ferrer', 'Nakamura', 'Weiss', 'Duval']
 const KINDS = ['mp3', 'aac', 'alac', 'flac']
 
+/** What a listener might have written on their own tracks. Invented, like the rest. */
+const TAGS = ['chill', 'workout', 'late night', 'road trip', 'to sort']
+
 export function makeLibrary(): Track[] {
   const r = rng(20260816)
   const tracks: Track[] = []
@@ -106,6 +109,10 @@ export function makeLibrary(): Track[] {
           loved: r() < 0.1,
           artwork: null,
           devices: [],
+          // A few tracks carry a tag, most carry none: a library where
+          // everything is tagged is a library nobody has, and the filter would
+          // never show the empty case it has to handle.
+          tags: r() < 0.22 ? [TAGS[Math.floor(r() * TAGS.length)]] : [],
           // One file per track here. The demo does not fabricate several
           // formats of the same song: that is the conversion feature's story to
           // tell, and inventing it now would show a library nobody could have.

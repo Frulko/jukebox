@@ -128,6 +128,49 @@ export function useUpdateTracks() {
   })
 }
 
+/**
+ * Tags on a selection.
+ *
+ * Optimistic like the patch above, and for the same reason: ticking a tag in a
+ * menu has to look done before the round trip. The facets go too — a tag that
+ * has just appeared in the library belongs in the filter that lists them.
+ */
+export function useTagTracks() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, add = [], remove = [] }: { ids: string[]; add?: string[]; remove?: string[] }) =>
+      api.tracks.tag(ids, add, remove),
+    onMutate: async ({ ids, add = [], remove = [] }) => {
+      await qc.cancelQueries({ queryKey: ['tracks'] })
+      const snapshot = qc.getQueriesData<{ items: Track[] }>({ queryKey: ['tracks'] })
+      const set = new Set(ids)
+      // The same cleaning the server does, or the optimistic row shows "Chill"
+      // for the second it takes the answer to say "chill".
+      const clean = (l: string[]) => l.map((t) => t.trim().toLowerCase()).filter(Boolean)
+      const added = clean(add)
+      const removed = new Set(clean(remove))
+      for (const [key, data] of snapshot) {
+        if (!data?.items) continue
+        qc.setQueryData(key, {
+          ...data,
+          items: data.items.map((t) =>
+            set.has(t.id)
+              ? { ...t, tags: [...new Set([...t.tags.filter((x) => !removed.has(x)), ...added])].sort() }
+              : t),
+        })
+      }
+      return { snapshot }
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.snapshot ?? []) qc.setQueryData(key, data)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['tracks'] })
+      qc.invalidateQueries({ queryKey: ['facets'] })
+    },
+  })
+}
+
 export function useScanSource() {
   const qc = useQueryClient()
   return useMutation({
@@ -182,6 +225,8 @@ export function useTrackQuery(input: {
   /** '0'..'5' exact, '4+' for four and up, null for no filter. */
   rating?: string | null
   lossless?: string | null
+  /** One of the listener's own tags, or null. */
+  tag?: string | null
   sort?: TrackQuery['sort']
   deviceFilter?: { deviceId: string; mode: 'on' | 'not' } | null
 }): TrackQuery {
@@ -199,6 +244,7 @@ export function useTrackQuery(input: {
       else q.rating = Number(input.rating)
     }
     if (input.lossless) q.lossless = input.lossless === 'yes'
+    if (input.tag) q.tag = input.tag
     // Only the ids that are actually a kind of track. The library also holds
     // places — albums, artists, playlists, missing — and sending one of those
     // as `kind` would ask the server for a kind of music that does not exist.
@@ -211,5 +257,6 @@ export function useTrackQuery(input: {
     }
     return q
   }, [input.view.kind, input.view.id, input.search, input.browse.genre, input.browse.artist,
-      input.browse.album, input.format, input.rating, input.lossless, input.sort, input.deviceFilter?.deviceId, input.deviceFilter?.mode])
+      input.browse.album, input.format, input.rating, input.lossless, input.tag, input.sort,
+      input.deviceFilter?.deviceId, input.deviceFilter?.mode])
 }

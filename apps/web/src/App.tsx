@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
   api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
-  useTrackQuery, useTracks, useUpdateTracks,
+  useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
 import { Sidebar } from './Sidebar'
@@ -58,6 +58,8 @@ export default function App() {
   const [format, setFormat] = useState<string | null>(null)
   const [rating, setRating] = useState<string | null>(null)
   const [lossless, setLossless] = useState<string | null>(null)
+  /** One of the listener's own tags. A query parameter, like every other chip. */
+  const [tag, setTag] = useState<string | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
   const [artOpen, setArtOpen] = useState(false)
   /**
@@ -151,14 +153,19 @@ export default function App() {
    * locally can end up rendering three, and the UI looks empty while 40,000
    * tracks are still sitting behind it.
    */
-  const query = useTrackQuery({ view, search, browse, format, rating, lossless, deviceFilter })
+  const query = useTrackQuery({ view, search, browse, format, rating, lossless, tag, deviceFilter })
   // Which formats the library holds is asked without the format filter applied:
   // computed through it, picking FLAC would leave FLAC as the only choice.
   const formatQuery = useMemo(() => {
     const { format: _skip, ...rest } = query
     return rest
   }, [query])
-  const formats = useFacets(formatQuery).data?.formats ?? []
+  const allFacets = useFacets(formatQuery).data
+  const formats = allFacets?.formats ?? []
+  // Asked without the tag filter applied, for the same reason as formats:
+  // computed through it, picking "chill" would leave "chill" as the only tag
+  // left to pick.
+  const tags = allFacets?.tags ?? []
   // Songs, Albums and Artists are three ways of drawing one query: the same
   // page of tracks, grouped differently. Only the drawing changes with the view.
   const isLibraryList =
@@ -228,6 +235,16 @@ export default function App() {
       onChange: setLossless,
     },
     {
+      id: 'tag',
+      label: 'Tag',
+      value: tag,
+      // The counts come from the server: "chill (38)" is the library's answer,
+      // not this page's.
+      options: tags.map((t) => ({ value: t.value, label: t.value, count: t.count })),
+      onChange: setTag,
+      emptyHint: 'Nothing tagged yet',
+    },
+    {
       id: 'device',
       label: 'Device',
       value: deviceFilter ? `${deviceFilter.mode}:${deviceFilter.deviceId}` : null,
@@ -249,9 +266,25 @@ export default function App() {
     setFormat(null)
     setRating(null)
     setLossless(null)
+    setTag(null)
     setDeviceFilter(null)
   }
 
+  const tagTracks = useTagTracks()
+  const applyTags = useCallback(
+    (ids: string[], add: string[] = [], remove: string[] = []) => {
+      tagTracks.mutate({ ids, add, remove })
+      // The Tags column is off by default, so without this the only feedback
+      // for tagging a row would be a tick in a menu that has already closed.
+      // Quoted as it will be stored, not as it was typed: the row is about to
+      // show "late night" and the line saying "Late Night" would look like a
+      // different tag.
+      const what = [...add, ...remove][0]?.trim().toLowerCase()
+      const n = ids.length > 1 ? `${ids.length} tracks` : 'track'
+      setNotice(add.length ? `Tagged ${n} “${what}”` : `Removed “${what}” from ${n}`)
+    },
+    [tagTracks],
+  )
   const patchTracks = useUpdateTracks()
   const update = useCallback(
     (ids: string[], patch: Partial<Track>) => patchTracks.mutate({ ids, patch }),
@@ -641,6 +674,8 @@ export default function App() {
                 onReorder={reorder}
                 onGetInfo={setInfoIds}
                 onOpenAlbum={openAlbum}
+                tags={tags}
+                onTag={applyTags}
                 onNewPlaylistFrom={(ids) => newPlaylist(ids)}
               />
               )}

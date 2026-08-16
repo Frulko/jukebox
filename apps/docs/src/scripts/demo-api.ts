@@ -69,6 +69,7 @@ function match(t: Track, q: TrackQuery) {
     const isLossless = ['flac', 'alac', 'wav', 'aiff'].includes(t.format.toLowerCase())
     if (isLossless !== want) return false
   }
+  if (q.tag && !t.tags.includes(q.tag)) return false
   if (q.onDevice && !t.devices.includes(q.onDevice)) return false
   if (q.notOnDevice && t.devices.includes(q.notOnDevice)) return false
   if (q.q) {
@@ -114,6 +115,10 @@ function facets(q: TrackQuery) {
     // Not cascaded, on purpose: computed through the format filter, picking
     // FLAC would leave FLAC as the only choice.
     formats: count(tracks, (t) => t.format),
+    // A track carries several, so this counts pairs rather than tracks — the
+    // one facet where a track can appear under more than one value.
+    tags: count(tracks.flatMap((t) => t.tags.map((tag) => ({ ...t, tag }))) as (Track & { tag: string })[],
+      (t) => (t as Track & { tag: string }).tag),
   }
 }
 
@@ -339,6 +344,26 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
           episodeCount: 41, downloadedCount: 5 },
       ],
     }
+  }
+  if (path === '/tracks/tags' && method === 'POST') {
+    const b = JSON.parse(body ?? '{}') as { ids?: string[]; add?: string[]; remove?: string[] }
+    const clean = (l: string[] = []) => [...new Set(l.map((t) => t.trim().toLowerCase()).filter(Boolean))]
+    const add = clean(b.add)
+    const remove = new Set(clean(b.remove))
+    let tagged = 0
+    let untagged = 0
+    for (const id of b.ids ?? []) {
+      const t = tracks.find((x) => x.id === id)
+      if (!t) continue
+      const before = t.tags.length
+      t.tags = t.tags.filter((x) => !remove.has(x))
+      untagged += before - t.tags.length
+      for (const tag of add) {
+        if (!t.tags.includes(tag)) { t.tags.push(tag); tagged++ }
+      }
+      t.tags.sort()
+    }
+    return { tagged, untagged, revision: ++revision }
   }
   const cmd = path.match(/^\/plugins\/([^/]+)\/command$/)
   if (cmd && method === 'POST') {
