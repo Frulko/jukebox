@@ -96,7 +96,14 @@ hands out a URL.
 - [x] **2.4** **Presence column** — one dot per device, hidden when none is connected
 - [x] **2.5** **`onDevice` / `notOnDevice` filters** — computed in SQL, never over a page already
       received. They combine with `kind=` for playlists, audiobooks, podcasts
-- [x] **2.6** Sync job + `dryRun` (plan before writing) + atomic iTunesDB commit
+- [~] **2.6** Sync job + `dryRun` (plan before writing) + a commit that is atomic **by
+      contract, not yet in fact**. The server side is real: the plan, the wanted list, the
+      per-item reporting, resume-by-Range, the job that survives a restart. What does not
+      exist is an iTunesDB writer — the satellite copies into a folder and its "commit" is a
+      50 ms pause followed by re-reading that folder. Deliberate and documented at the top of
+      `apps/satellite/src/serve.ts`, but it means **no real iPod has ever been written to**.
+      Swapping in hardware replaces `readDevice` and the job runner; the contract, the queue
+      and the state machine stay as they are
 - [x] **2.7** Device management — rename, sync options, eject, stats, orphans, plan preview
 - [x] **2.8** Add by right-click and by dropzone — `device_wanted`, joined to the sync rules
 - [x] **2.9** Drop Movies and TV Shows
