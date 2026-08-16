@@ -28,7 +28,13 @@ hands out a URL.
       Those collections now key on the answer itself. `apps/server/test/etag.test.ts` asks the
       only version of the question worth asking — *does the ETag change when the answer does* —
       and reads the collection list off the router, so one added later is covered without
-      anyone remembering
+      anyone remembering. The delta had a worse one: `PUT /devices/:id/tracks` bumped the
+      global counter without stamping any track, so `delta?since=` returned an empty list
+      *with a higher revision* — the client concluded it was up to date and kept presence data
+      that was wrong from then on. Device presence travels with the track, so it is a change
+      to the track; the symmetric difference is stamped, so a satellite re-reporting the same
+      contents on every heartbeat still costs nothing. `apps/server/test/delta.test.ts` replays
+      every delta from zero and asserts the result equals the page
 - [x] **1.4** Raw SQL schema on `node:sqlite` — WAL, covering indexes, FTS5. Drizzle evaluated
       then dropped (see `docs/stack.md`)
 - [x] **1.4b** Migration runner — an ordered array + `PRAGMA user_version`, one transaction each.

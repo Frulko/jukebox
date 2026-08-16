@@ -1751,6 +1751,12 @@ export function createApp(dbFile: string) {
     const b = await c.req.json().catch(() => null)
     if (!Array.isArray(b?.items)) return fail(c, 400, 'bad_body', 'expected { items: [] }')
 
+    // What the device held before, so that afterwards we can stamp exactly the
+    // tracks whose presence changed -- see the end of this handler.
+    const before = new Set((db.prepare(
+      `SELECT trackId FROM device_tracks WHERE deviceId = ? AND trackId IS NOT NULL`)
+      .all(id) as { trackId: string }[]).map((r) => r.trackId))
+
     db.prepare(`DELETE FROM device_tracks WHERE deviceId = ?`).run(id)
     const ins = db.prepare(`
       INSERT INTO device_tracks (deviceId, deviceLocalId, trackId, name, artist, album,
@@ -1762,16 +1768,37 @@ export function createApp(dbFile: string) {
          AND abs(duration - ?) <= 3 AND deletedAt IS NULL LIMIT 1`)
 
     let matched = 0
+    const after = new Set<string>()
     for (const it of b.items) {
       const hit = (it.fingerprint ? byFp.get(it.fingerprint) : null)
         ?? byMeta.get(it.artist ?? '', it.name ?? '', it.duration ?? 0)
       const trackId = (hit as any)?.id ?? null
-      if (trackId) matched++
+      if (trackId) { matched++; after.add(trackId) }
       ins.run(id, it.deviceLocalId, trackId, it.name ?? '', it.artist ?? '', it.album ?? '',
         it.duration ?? 0, it.size ?? 0, it.format ?? '', it.fingerprint ?? null,
         it.sourceUrl ?? null, Date.now())
     }
-    nextRev(db)
+
+    /*
+     * Stamp the tracks whose presence changed, not just the counter.
+     *
+     * `devices` travels with the track in every page, so a track arriving on or
+     * leaving a device *is* a change to that track as far as any client is
+     * concerned. Bumping only the global revision was the worst possible
+     * version of this: `delta?since=` selects on the track's own `rev`, so it
+     * returned nothing while reporting a higher revision — the client concluded
+     * it was up to date and kept presence data that was wrong from then on.
+     *
+     * The symmetric difference, so a resync that changed nothing costs nothing:
+     * a satellite re-reporting the same 10,000 tracks on every heartbeat must
+     * not push a delta of 10,000 rows to every client.
+     */
+    const moved = [...new Set([...before, ...after])].filter((t) => before.has(t) !== after.has(t))
+    if (moved.length) {
+      const rev = nextRev(db)
+      const stamp = db.prepare(`UPDATE tracks SET rev = ? WHERE id = ?`)
+      for (const trackId of moved) stamp.run(rev, trackId)
+    }
     return c.json({ received: b.items.length, matched, orphans: b.items.length - matched })
   })
 
