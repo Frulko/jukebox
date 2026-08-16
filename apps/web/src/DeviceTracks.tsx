@@ -7,6 +7,7 @@ import type { DeviceTrack, Source } from '@jukebox/client-sdk'
 import { fmtSize, fmtTime } from './data'
 import type { Play } from './App'
 import { DataTable } from './DataTable'
+import { FilterBar, type FilterChip } from './FilterBar'
 import type { features } from './tableFeatures'
 
 const h = createColumnHelper<typeof features, DeviceTrack>()
@@ -52,6 +53,18 @@ export function DeviceTracks({
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+
+  // The same chips over a list the page holds entirely — which is what makes
+  // filtering it here honest, where doing so in the library would not be.
+  const chips: FilterChip[] = [
+    {
+      id: 'orphans',
+      label: 'Shows',
+      value: orphansOnly ? 'orphans' : null,
+      options: [{ value: 'orphans', label: 'Only what the library has lost' }],
+      onChange: (v) => setOrphansOnly(v === 'orphans'),
+    },
+  ]
 
   const columns = useMemo(
     () => [
@@ -119,10 +132,7 @@ export function DeviceTracks({
   return (
     <div className="devtracks">
       <div className="devtracks-bar">
-        <label className="dev-check">
-          <input type="checkbox" checked={orphansOnly} onChange={(e) => setOrphansOnly(e.target.checked)} />
-          <span>Only tracks missing from the library</span>
-        </label>
+        <FilterBar chips={chips} />
 
         <span className="spacer" />
 

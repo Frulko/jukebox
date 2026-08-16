@@ -23,6 +23,7 @@ import { AdminView } from './AdminView'
 import { DuplicatesView } from './DuplicatesView'
 import { HomeView, useRecentPlaylists } from './HomeView'
 import { usePluginMenu } from './pluginMenu'
+import { FilterBar, type FilterChip } from './FilterBar'
 import { NowPlayingPanel } from './NowPlayingPanel'
 import './itunes.css'
 
@@ -170,6 +171,43 @@ export default function App() {
       setSelectIds(ids)
     },
   })
+
+  /**
+   * The library's filters, as chips. Every one of them is a query parameter —
+   * the page in hand is a window onto the library, so a filter it applied
+   * itself would answer with a number that is not the library's.
+   */
+  const libraryFilters: FilterChip[] = [
+    {
+      id: 'format',
+      label: 'Format',
+      value: format,
+      options: formats.map((f) => ({ value: f.value, label: f.value.toUpperCase(), count: f.count })),
+      onChange: setFormat,
+      emptyHint: 'Nothing scanned yet',
+    },
+    {
+      id: 'device',
+      label: 'Device',
+      value: deviceFilter ? `${deviceFilter.mode}:${deviceFilter.deviceId}` : null,
+      options: devices.flatMap((d) => [
+        { value: `on:${d.id}`, label: `On ${d.name}` },
+        // "What is left to sync" is the question people actually open this for.
+        { value: `not:${d.id}`, label: `Missing from ${d.name}` },
+      ]),
+      onChange: (v) => {
+        if (!v) return setDeviceFilter(null)
+        const [mode, deviceId] = v.split(':')
+        setDeviceFilter({ deviceId, mode: mode as 'on' | 'not' })
+      },
+      emptyHint: 'No device connected',
+    },
+  ]
+
+  const clearFilters = () => {
+    setFormat(null)
+    setDeviceFilter(null)
+  }
 
   const patchTracks = useUpdateTracks()
   const update = useCallback(
@@ -474,34 +512,11 @@ export default function App() {
             media
           ) : (
             <>
-              {devices.length > 0 && (
-                <div className="devicebar">
-                  <button
-                    className={deviceFilter === null ? 'on' : ''}
-                    onClick={() => setDeviceFilter(null)}
-                  >
-                    All
-                  </button>
-                  {devices.map((d) => (
-                    <span key={d.id} className="devicebar-group">
-                      <button
-                        className={deviceFilter?.deviceId === d.id && deviceFilter.mode === 'on' ? 'on' : ''}
-                        onClick={() => setDeviceFilter({ deviceId: d.id, mode: 'on' })}
-                        title={`Tracks already on ${d.name}`}
-                      >
-                        On {d.name}
-                      </button>
-                      <button
-                        className={deviceFilter?.deviceId === d.id && deviceFilter.mode === 'not' ? 'on' : ''}
-                        onClick={() => setDeviceFilter({ deviceId: d.id, mode: 'not' })}
-                        title={`Tracks missing from ${d.name}`}
-                      >
-                        Missing
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              {/* One filter control rather than a bespoke bar per dimension: the
+                  device buttons were the only filter with their own furniture,
+                  and a second one would have needed its own again. */}
+              <FilterBar chips={libraryFilters} onClear={clearFilters} />
+
               {theme !== 'classic' && (
                 <div className="modebar">
                   {(['songs', 'albums', 'artists'] as const).map((m) => (

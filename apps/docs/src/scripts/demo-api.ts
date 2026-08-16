@@ -55,6 +55,11 @@ function match(t: Track, q: TrackQuery) {
   if (q.artist && t.albumArtist !== q.artist && t.artist !== q.artist) return false
   if (q.album && t.album !== q.album) return false
   if (q.format && t.format.toLowerCase() !== q.format.toLowerCase()) return false
+  // "What is already there" and "what is left to sync" — the filter the device
+  // chip exists for, and the reason it has to be answered where the whole
+  // library is rather than over the page in hand.
+  if (q.onDevice && !t.devices.includes(q.onDevice)) return false
+  if (q.notOnDevice && t.devices.includes(q.notOnDevice)) return false
   if (q.q) {
     const needle = norm(q.q)
     if (![t.name, t.artist, t.album, t.albumArtist, t.genre].some((f) => norm(f).includes(needle))) return false

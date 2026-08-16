@@ -1922,3 +1922,28 @@ input[type="range"]::-webkit-slider-thumb {
 .data-table .tbody { max-height: 46vh; }
 .data-table .tr.orphan .td { opacity: .72; }
 .data-table .tr.playing .td.name { color: var(--accent); font-weight: 600; }
+
+/* ---------------- filter chips ----------------
+   One control for every dimension a listing can be narrowed by, so a second
+   dimension does not arrive with its own furniture the way the device buttons
+   did. */
+.filter-bar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--panel);
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.chip b { font-weight: 600; color: var(--text); }
+.chip .tri { width: 0; height: 0; border: 3px solid transparent; border-top-color: currentColor; margin-top: 3px; opacity: .7; }
+.chip.clear { margin-left: 4px; border-style: dashed; }
+.chip-menu button { display: flex; align-items: center; width: 100%; }
+.chip-menu button em { margin-left: auto; padding-left: 14px; font-style: normal; font-size: 10px; }
