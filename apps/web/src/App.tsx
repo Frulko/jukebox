@@ -25,6 +25,7 @@ import { PlaylistsView } from './PlaylistsView'
 import { ConvertDialog } from './ConvertDialog'
 import { AdminView } from './AdminView'
 import { SourcesView } from './SourcesView'
+import { SharingView } from './SharingView'
 import { DuplicatesView } from './DuplicatesView'
 import { HomeView, useRecentPlaylists } from './HomeView'
 import { usePluginMenu } from './pluginMenu'
@@ -658,6 +659,7 @@ export default function App() {
     missing: <MissingView />,
     admin: <AdminView />,
     sources: <SourcesView onNotice={setNotice} />,
+    sharing: <SharingView onGoToSources={() => setView({ kind: 'library', id: 'sources' })} />,
     duplicates: <DuplicatesView onNotice={setNotice} />,
     home: (
       <HomeView

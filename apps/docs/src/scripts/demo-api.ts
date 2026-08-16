@@ -372,6 +372,11 @@ const SOURCES: Source[] = [
   // Writable, so importing off the iPod is something the demo can actually
   // show: with no writable source the page can only explain why the button is
   // not there, which is the one thing the page is for.
+  // Somebody else's server, which is what "a library shared with you" is until
+  // the peer-to-peer version exists.
+  { id: 'friend', kind: 'jellyfin', name: "Camille's Jellyfin", root: 'https://jelly.camille.invalid',
+    writable: 0, lastScanAt: Date.UTC(2026, 7, 15), rev: 1,
+    config: { url: 'https://jelly.camille.invalid' } } as Source,
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 1,
     lastScanAt: Date.UTC(2026, 7, 16), rev: 1,
     mount: { device: '/dev/disk3s5', type: 'apfs', network: false, readOnly: false, point: '/' } } as Source,
@@ -811,6 +816,18 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   if (path === '/facets') return facets(q)
   if (path.startsWith('/tracks/')) return tracks.find((t) => t.id === path.slice(8))
   if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }
+  if (path === '/users') {
+    return {
+      items: [
+        { id: 'u1', username: 'mowmow', role: 'admin', subsonic: 1,
+          createdAt: Date.UTC(2026, 0, 4), lastSeenAt: Date.now() - 3600_000 },
+        // Someone the library is shared *with*: narrowed, read-only, and using
+        // a Subsonic client rather than this interface.
+        { id: 'u2', username: 'camille', role: 'guest', subsonic: 1,
+          createdAt: Date.UTC(2026, 5, 12), lastSeenAt: Date.now() - 4 * 864e5 },
+      ],
+    }
+  }
   if (path === '/sources') return { items: SOURCES }
   // A rescan in the demo has nothing to walk, so it answers with the job it
   // would have started and the scan job already on display keeps running.

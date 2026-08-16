@@ -2126,3 +2126,25 @@ input[type="range"]::-webkit-slider-thumb {
 .source-add p { flex-basis: 100%; margin: 0; line-height: 1.5; }
 .sources-note { margin: 14px 0 20px; padding: 10px 12px; border-radius: var(--radius); background: var(--stripe); color: var(--dim); line-height: 1.55; }
 .sources-note b { color: var(--text); }
+
+/* ---------------- sharing ----------------
+   Organised by direction rather than by feature, because the model is the
+   point: who may read this library, and whose this one may read. */
+.share-lead { margin: 0 0 16px; padding: 10px 12px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line-soft); line-height: 1.55; }
+.share-h { margin: 18px 0 6px; font-size: 12px; }
+.sharing > p.dim { margin: 0 0 10px; line-height: 1.55; max-width: 70ch; }
+.share-row { display: flex; align-items: center; gap: 10px; padding: 7px 11px; margin-bottom: 6px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel); }
+.share-row .n { font-weight: 600; }
+.share-row .host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30ch; }
+.share-row .spacer { flex: 1; }
+.share-flag { flex: none; padding: 1px 7px; border-radius: 9px; font-size: 10px; background: var(--stripe); color: var(--dim); }
+.share-empty { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 6px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--dim); }
+.share-empty p { margin: 0; }
+.share-endpoint { margin: 8px 0 0; color: var(--dim); line-height: 1.55; }
+.share-endpoint code { padding: 1px 5px; border-radius: 3px; background: var(--stripe); color: var(--text); }
+/* Marked as a plan, not as a panel of things that work. */
+.share-plan { padding: 11px 13px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--dim); }
+.share-plan p { margin: 0 0 8px; line-height: 1.55; }
+.share-plan ul { margin: 0; padding-left: 18px; }
+.share-plan li { margin-bottom: 4px; line-height: 1.5; }
+.share-plan b { color: var(--text); }

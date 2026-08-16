@@ -1,4 +1,5 @@
 import type {
+  Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
@@ -322,6 +323,26 @@ export function createClient(opts: ClientOptions = {}) {
         request<void>(`/playlists/${id}/order`, { method: 'PUT', body: JSON.stringify({ ids, toIndex }) }),
     },
 
+    /**
+     * Accounts. Admin only, and the server answers `403` rather than an empty
+     * list to anyone else — which is the honest shape: "you may not see this"
+     * and "there is nothing" are different answers.
+     */
+    users: {
+      list: () => request<{ items: Account[] }>('/users', {}, true),
+      create: (u: { username: string; password: string; role?: Role }) =>
+        request<Account>('/users', { method: 'POST', body: JSON.stringify(u) }),
+      update: (id: string, patch: { role?: Role; password?: string; subsonic?: boolean }) =>
+        request<Account>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+      remove: (id: string) => request<void>(`/users/${id}`, { method: 'DELETE' }),
+      /** `null` means every source — an account that has never been narrowed. */
+      sources: (id: string) => request<{ sourceIds: string[] | null }>(`/users/${id}/sources`),
+      setSources: (id: string, sourceIds: string[]) =>
+        request<{ sourceIds: string[] | null }>(`/users/${id}/sources`, {
+          method: 'PUT', body: JSON.stringify({ sourceIds }),
+        }),
+    },
+
     sources: {
       list: () => request<{ items: Source[] }>('/sources', {}, true),
       create: (s: { id?: string; name: string; root: string; kind?: string; writable?: boolean }) =>
@@ -549,6 +570,7 @@ export function createClient(opts: ClientOptions = {}) {
 
 export type Client = ReturnType<typeof createClient>
 export type {
+  Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
