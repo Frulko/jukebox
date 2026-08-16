@@ -226,14 +226,22 @@ test('streaming serves the rendition it is asked for', { skip }, async () => {
     assert.equal(Number(profiled.headers.get('content-length')), aac.size)
     await profiled.body?.cancel()
 
-    // Asking for one that does not exist is a 404, not a quiet fallback: a
-    // client that named a file should hear that it is gone.
-    assert.equal((await h.raw('GET', `/stream/${flac.id}?format=opus`)).status, 404)
+    // Naming a *rendition* that does not exist is still a 404: a client that
+    // asked for one specific file should hear that it is gone.
+    assert.equal((await h.raw('GET', `/stream/${flac.id}?rendition=nope`)).status, 404)
 
-    // A profile nothing satisfies still plays something -- converting on the
-    // fly needs a source file, and silence is the wrong answer.
+    // Naming a *format* the library does not hold is a different request, and
+    // since this one can be made, it is made rather than refused.
+    const opus = await h.raw('GET', `/stream/${flac.id}?format=opus`)
+    assert.equal(opus.status, 200)
+    assert.equal(opus.headers.get('x-jukebox-transcoded'), 'opus')
+    await opus.body?.cancel()
+
+    // A profile nothing satisfies and nothing can produce still plays
+    // something: silence is the wrong answer, and wma has no encoder here.
     const unmatched = await h.raw('GET', `/stream/${flac.id}?accept=wma`)
     assert.equal(unmatched.status, 200)
+    assert.equal(unmatched.headers.get('x-jukebox-transcoded'), null)
     await unmatched.body?.cancel()
   } finally { await h.cleanup() }
 })

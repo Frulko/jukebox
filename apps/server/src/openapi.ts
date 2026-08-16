@@ -86,7 +86,7 @@ const DOCS: Record<string, Doc> = {
   'POST /tracks/:id/play': { summary: 'Records a listen. Half the length or four minutes, never under thirty seconds.', tag: 'library', body: '{ played, startedAt? }' },
   'GET /facets': { summary: 'Distinct genres, artists, albums and formats, with counts.', tag: 'library' },
   'GET /artwork/:id': { summary: 'Cover art, extracted on demand and ETagged on the file.', tag: 'library' },
-  'GET /stream/:id': { summary: 'The audio, honouring Range.', tag: 'library', query: ['rendition', 'format', 'accept'] },
+  'GET /stream/:id': { summary: 'The audio, honouring Range. Converts on the fly when the library holds nothing the client accepts — that response carries no Range and an X-Jukebox-Transcoded header.', tag: 'library', query: ['rendition', 'format', 'accept', 'seek'] },
 
   'GET /playlists': { summary: 'Every playlist, manual and smart.', returns: 'Playlist[]', tag: 'playlists' },
   'POST /playlists': { summary: 'Creates one.', tag: 'playlists', body: '{ name, smart?, rules?, trackIds? }' },

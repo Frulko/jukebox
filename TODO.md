@@ -73,9 +73,15 @@ hands out a URL.
 
 ## M3 · Audio output
 
-- [~] **3.1** `GET /stream/:id` — `Range` and the per-renderer profile (`?accept=`) are done.
-      Left: transcoding on the fly for a format the library does not hold, and the token
-      (nothing is authenticated yet, so it would guard nothing)
+- [x] **3.1** `GET /stream/:id` — `Range`, the per-renderer profile (`?accept=`), and now
+      conversion on the fly when the library holds nothing the client can play. Piped rather
+      than written to disk, which is what makes the container the interesting part: an `.m4a`
+      is an MP4 and MP4 rewrites its index at the front on close, so AAC goes out as ADTS and
+      ALAC is refused outright rather than dying halfway through a 200. No `Content-Length`
+      and `Accept-Ranges: none`, because a player told it can seek would restart the track;
+      `?seek=` re-encodes from an offset instead. The encoder is killed when the client hangs
+      up — three abandoned ffmpegs is a Raspberry Pi. Local sources only: a remote one would
+      mean ffmpeg opening an authenticated URL, and it answers 501 saying so
 - [~] **3.2** Browser renderer done — one `<audio>` on `/stream/:id`, state read from the
       element. Left: the `output` contract that lets a renderer live elsewhere
 - [x] **3.3** UPnP/DLNA — SSDP discovery, description parsing, `SetAVTransportURI`, play,

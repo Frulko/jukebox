@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const run = promisify(execFile)
@@ -104,4 +104,77 @@ export async function transcode(
     const reason = String(err?.stderr ?? '').trim().split('\n').pop()
     throw new Error(reason ? `ffmpeg: ${reason}` : `ffmpeg failed converting to ${format}`)
   }
+}
+
+/**
+ * The container to write when the output is a pipe.
+ *
+ * Not the same question as "which file extension", and this is where a
+ * streaming transcode goes wrong: an `.m4a` is an MP4, MP4 needs to seek back
+ * and write the index at the front, and a pipe cannot be seeked. ffmpeg says
+ * "muxer does not support non seekable output" and the request dies.
+ *
+ * ADTS is AAC without that problem, and Ogg is the streamable Opus container.
+ * ALAC has no streamable container at all here, so it is refused rather than
+ * attempted.
+ */
+const MUXERS: Record<string, { muxer: string; mime: string } | null> = {
+  mp3: { muxer: 'mp3', mime: 'audio/mpeg' },
+  aac: { muxer: 'adts', mime: 'audio/aac' },
+  opus: { muxer: 'ogg', mime: 'audio/ogg' },
+  flac: { muxer: 'flac', mime: 'audio/flac' },
+  wav: { muxer: 'wav', mime: 'audio/wav' },
+  alac: null,
+}
+
+export const streamableFormats = Object.entries(MUXERS)
+  .filter(([, v]) => v !== null)
+  .map(([k]) => k)
+
+export const canStreamTo = (format: string) => Boolean(MUXERS[format.toLowerCase()])
+
+export const streamMimeFor = (format: string) => MUXERS[format.toLowerCase()]?.mime ?? 'application/octet-stream'
+
+/**
+ * Transcodes into a pipe, for a device that cannot play what the library holds.
+ *
+ * Returns the child rather than a promise, because the caller has to be able to
+ * **kill it**. A browser that closes the tab, a speaker that drops off the
+ * wifi, a `<audio>` element that switches track — each abandons a running
+ * encoder, and on a Raspberry Pi three abandoned encoders is the whole machine.
+ * Ownership of that process is the point of this signature.
+ */
+export async function transcodeStream(
+  input: string,
+  format: string,
+  quality?: string,
+  seconds = 0,
+): Promise<ChildProcess> {
+  const enc = encoderFor(format)
+  const mux = MUXERS[format.toLowerCase()]
+  if (!enc || !mux) throw new Error(`cannot stream ${format} on the fly`)
+
+  const { ffmpeg } = await tools()
+  if (!ffmpeg) throw new Error('ffmpeg is not installed on this server')
+
+  const args = ['-hide_banner', '-loglevel', 'error']
+  // Seeking before the input is the cheap form: ffmpeg jumps rather than
+  // decoding everything up to that point and throwing it away.
+  if (seconds > 0) args.push('-ss', String(seconds))
+  args.push(
+    '-i', input,
+    '-map', '0:a:0',
+    '-map_metadata', '0',
+    '-c:a', enc.codec,
+  )
+  if (!enc.lossless) args.push('-b:a', quality || enc.defaultQuality || '256k')
+  args.push('-f', mux.muxer, 'pipe:1')
+
+  const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+
+  // stderr has to be drained even though nothing reads it: a full pipe buffer
+  // blocks ffmpeg mid-encode, and the symptom is a stream that stops partway
+  // through a long track for no visible reason.
+  child.stderr?.resume()
+  return child
 }

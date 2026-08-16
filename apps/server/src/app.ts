@@ -26,6 +26,7 @@ import { configOf as jfConfigOf, info as jfInfo, open as jfOpen } from './jellyf
 import { configOf as plexConfigOf, info as plexInfo, open as plexOpen } from './plex.ts'
 import * as airplay from './airplay.ts'
 import * as cast from './chromecast.ts'
+import { canStreamTo, streamMimeFor, transcodeStream } from './ffmpeg.ts'
 
 /**
  * A renderer, whichever protocol found it.
@@ -145,6 +146,84 @@ async function streamUpstream(
     if (v) headers[h === 'content-length' ? 'Content-Length' : 'Content-Range'] = v
   }
   return c.body(upstream.body, upstream.status === 206 ? 206 : 200, headers)
+}
+
+/**
+ * Which format to make, when the library holds nothing the client can play.
+ *
+ * Returns null in the overwhelmingly common case: the file on disk is already
+ * fine, and transcoding it would burn CPU to produce something worse.
+ */
+function transcodeTarget(have: string, q: { format?: string; accept?: string }): string | null {
+  const format = String(have).toLowerCase()
+
+  // An explicit format the library does not hold. Asking for the one it does
+  // hold is not a conversion request.
+  if (q.format) {
+    const want = q.format.toLowerCase()
+    return want !== format && canStreamTo(want) ? want : null
+  }
+
+  if (!q.accept) return null
+  const accepted = q.accept.split(',').map((f) => f.trim().toLowerCase()).filter(Boolean)
+  if (!accepted.length || accepted.includes(format)) return null
+
+  // The first thing it accepts that can actually be produced into a pipe. The
+  // client's order is its preference, and it knows its own hardware better than
+  // a table here would.
+  return accepted.find((f) => canStreamTo(f)) ?? null
+}
+
+/**
+ * Converts while sending.
+ *
+ * No `Content-Length` and no `Range`: neither is knowable before the encode
+ * finishes, and inventing one produces a player whose scrubber lies. Seeking a
+ * transcoded stream means asking for it again from a different offset, which is
+ * what `?seek=` is for.
+ *
+ * The encoder is killed when the client goes away. That is the whole risk in
+ * this route — a tab closed mid-song, a speaker dropping off the wifi, a player
+ * switching track all abandon a running ffmpeg, and on a Raspberry Pi three of
+ * those is the machine.
+ */
+async function streamTranscoded(c: any, input: string, format: string): Promise<Response> {
+  let child: Awaited<ReturnType<typeof transcodeStream>>
+  try {
+    child = await transcodeStream(input, format, undefined, Number(c.req.query('seek')) || 0)
+  } catch (err) {
+    return c.json({ error: {
+      code: 'not_supported',
+      message: err instanceof Error ? err.message : 'cannot convert',
+    } }, 501)
+  }
+
+  const stdout = child.stdout!
+  const body = new ReadableStream({
+    start(controller) {
+      stdout.on('data', (chunk: Buffer) => controller.enqueue(chunk))
+      stdout.on('end', () => {
+        try { controller.close() } catch { /* already closed by a cancel */ }
+      })
+      stdout.on('error', (err) => {
+        try { controller.error(err) } catch { /* the client is already gone */ }
+      })
+    },
+    cancel() {
+      // The client hung up. Everything else in this function exists so that
+      // this line runs.
+      child.kill('SIGKILL')
+    },
+  })
+
+  return c.body(body, 200, {
+    'Content-Type': streamMimeFor(format),
+    // Explicitly *not* bytes: a player told it can seek will send a Range and
+    // get the start of a fresh encode, which sounds like the track restarting.
+    'Accept-Ranges': 'none',
+    'Cache-Control': 'no-store',
+    'X-Jukebox-Transcoded': format,
+  })
 }
 
 function parseUpstreamRange(header: string): { start: number; end?: number } | undefined {
@@ -1615,11 +1694,39 @@ export function createApp(dbFile: string) {
     // one specific file should hear that it is gone.
     const wanted = q.rendition ?? q.format
     const chosen = pickRendition(db, id, q)
-    if (wanted && !chosen) return fail(c, 404, 'not_found', `this track has no ${wanted} rendition`)
+    // A named *rendition* that does not exist is a 404 rather than a silent
+    // fallback: a client that asked for one specific file should hear it is
+    // gone. A named *format* is a different request -- see below, it can be
+    // made rather than found.
+    if (q.rendition && !chosen) return fail(c, 404, 'not_found', `this track has no ${wanted} rendition`)
 
     // The flat columns are the preferred rendition's copy and always present,
     // so a track whose rendition rows are missing still plays.
     const t = chosen ?? flat
+
+    // Nothing here plays what was asked for. Rather than handing a speaker a
+    // file it cannot decode -- which is silence, and looks like a broken
+    // server -- make one.
+    const target = transcodeTarget(t.format, q)
+    if (target) {
+      if (t.kind !== 'local') {
+        // A remote source would mean ffmpeg opening an authenticated URL, which
+        // is a different problem than this one. Saying so beats a stream that
+        // fails halfway.
+        return fail(c, 501, 'not_supported',
+          `on-the-fly conversion needs a local file; this track lives on a ${t.kind} source`)
+      }
+      return streamTranscoded(c, join(t.root, t.path), target)
+    }
+
+    // Asked for one specific format, and it is neither on disk nor something
+    // ffmpeg can pipe. Serving the file we happen to have instead would be the
+    // silent fallback this endpoint refuses everywhere else: a client that
+    // named a format and got a different one has no way to know.
+    if (q.format && String(t.format).toLowerCase() !== q.format.toLowerCase()) {
+      return fail(c, 501, 'not_supported',
+        `this track is ${t.format} and cannot be served as ${q.format}`)
+    }
 
     // A remote source is proxied rather than read: the range goes upstream and
     // the body flows straight back out. Nothing is copied to local disk, which
