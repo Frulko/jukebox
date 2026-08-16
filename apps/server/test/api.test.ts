@@ -182,3 +182,63 @@ test('the artwork URL has a route behind it', { skip }, async () => {
     assert.equal(err.error.code, 'no_artwork', 'the route exists and knows how to say there is no image')
   } finally { await h.cleanup() }
 })
+
+test('a satellite registers a device and reports its real contents', { skip }, async () => {
+  const h = await harness()
+  try {
+    const dev = await h.call('POST', '/devices', {
+      id: 'ipod-1', name: "Mowmow's iPod", kind: 'ipod-classic',
+      capacity: 160e9, acceptedFormats: ['mp3', 'aac', 'alac'], battery: 68,
+    })
+    assert.equal(dev.status, 201)
+    assert.equal(dev.body.connected, 1)
+
+    // Registering twice must not create a second iPod: a satellite restarts.
+    await h.call('POST', '/devices', { id: 'ipod-1', name: 'Renamed', kind: 'ipod-classic' })
+    assert.equal((await h.call('GET', '/devices')).body.items.length, 1)
+
+    const library = (await h.call('GET', '/tracks?limit=100')).body.items
+    const onDevice = library.filter((t: any) => t.artist === 'Daft Punk').slice(0, 2)
+
+    const report = await h.call('PUT', '/devices/ipod-1/tracks', {
+      items: [
+        // Matched by artist + title + duration, never by path: no two systems
+        // agree on where a file lives.
+        ...onDevice.map((t: any, i: number) => ({
+          deviceLocalId: `F0${i}`, name: t.name, artist: t.artist, duration: t.duration,
+        })),
+        // Present on the device, absent from the library: this is what makes
+        // recovering an old iPod possible.
+        { deviceLocalId: 'F99', name: 'Lost Track', artist: 'Unknown', duration: 200 },
+      ],
+    })
+    assert.equal(report.body.received, 3)
+    assert.equal(report.body.matched, 2)
+    assert.equal(report.body.orphans, 1)
+  } finally { await h.cleanup() }
+})
+
+test('presence travels with the page, and the filters run in SQL', { skip }, async () => {
+  const h = await harness()
+  try {
+    await h.call('POST', '/devices', { id: 'ipod-1', name: 'iPod', kind: 'ipod-classic' })
+    const library = (await h.call('GET', '/tracks?limit=100')).body.items
+    const two = library.filter((t: any) => t.artist === 'Daft Punk').slice(0, 2)
+    await h.call('PUT', '/devices/ipod-1/tracks', {
+      items: two.map((t: any, i: number) => ({
+        deviceLocalId: `F0${i}`, name: t.name, artist: t.artist, duration: t.duration,
+      })),
+    })
+
+    const page = (await h.call('GET', '/tracks?limit=100')).body.items
+    const held = page.filter((t: any) => t.devices.includes('ipod-1'))
+    assert.equal(held.length, 2, 'presence ships with the track, no extra request')
+
+    const missing = (await h.call('GET', '/tracks?notOnDevice=ipod-1')).body.items
+    assert.equal(missing.length, library.length - 2)
+    assert.ok(!missing.some((t: any) => t.devices.includes('ipod-1')))
+
+    const present = (await h.call('GET', '/tracks?onDevice=ipod-1')).body.items
+    assert.equal(present.length, 2)
+  } finally { await h.cleanup() }
+})

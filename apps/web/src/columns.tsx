@@ -8,6 +8,31 @@ const h = createColumnHelper<typeof features, Track>()
 export type CellActions = {
   toggleChecked: (id: string) => void
   rate: (id: string, rating: number) => void
+  /** Connected devices, so the presence column can label its dots. */
+  devices: { id: string; name: string }[]
+}
+
+/**
+ * Device presence.
+ *
+ * One dot per device holding the track, with the device's initial. This answers
+ * "where is this track?" — a passive question you glance at. "What do I still
+ * need to sync?" is the filter's job, and that one runs in SQL.
+ */
+function Presence({ ids, devices }: { ids: string[]; devices: { id: string; name: string }[] }) {
+  if (ids.length === 0) return null
+  return (
+    <span className="presence">
+      {ids.map((id) => {
+        const d = devices.find((x) => x.id === id)
+        return (
+          <i key={id} title={d?.name ?? id}>
+            {(d?.name ?? '?').trim()[0]?.toUpperCase()}
+          </i>
+        )
+      })}
+    </span>
+  )
 }
 
 function Stars({ value, onRate }: { value: number; onRate: (n: number) => void }) {
@@ -116,6 +141,11 @@ export const makeColumns = (a: CellActions) =>
       size: 100,
       cell: (c) => fmtDate(c.getValue()),
     }),
+    h.accessor('devices', {
+      header: 'On device',
+      size: 74,
+      cell: (c) => <Presence ids={c.getValue()} devices={a.devices} />,
+    }),
     h.accessor('skipCount', {
       header: 'Skips',
       size: 46,
@@ -126,6 +156,9 @@ export const makeColumns = (a: CellActions) =>
 /** Columns iTunes shows out of the box; everything else lives in View Options. */
 export const DEFAULT_VISIBLE = new Set([
   'checked', 'index', 'name', 'time', 'artist', 'album', 'genre', 'rating', 'playCount',
+  // Shown by default, but TrackList hides it while no device is connected —
+  // a column that cannot have content is just wasted width.
+  'devices',
 ])
 
 export const COLUMN_LABELS: Record<string, string> = {
@@ -134,6 +167,7 @@ export const COLUMN_LABELS: Record<string, string> = {
   discNumber: 'Disc Number', albumArtist: 'Album Artist', composer: 'Composer', grouping: 'Grouping',
   comments: 'Comments', bpm: 'BPM', kind: 'Kind', size: 'Size', bitRate: 'Bit Rate',
   sampleRate: 'Sample Rate', dateAdded: 'Date Added', lastPlayed: 'Last Played', skipCount: 'Skips',
+  devices: 'On device',
 }
 
 /** Columns whose values are right-aligned in iTunes. */

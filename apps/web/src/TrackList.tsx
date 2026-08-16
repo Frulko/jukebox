@@ -9,10 +9,20 @@ import type { Playlist, Track } from './data'
 import type { View } from './App'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
-function usePersisted<T>(key: string, initial: T) {
+//
+// `merge` reconciles what was stored with today's defaults. Without it, adding a
+// column leaves every existing user without it forever: their saved order and
+// visibility map predate it, and nothing ever puts it back.
+function usePersisted<T>(key: string, initial: T, merge?: (stored: T, fresh: T) => T) {
   const [v, setV] = useState<T>(() => {
     const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : initial
+    if (!raw) return initial
+    try {
+      const stored = JSON.parse(raw) as T
+      return merge ? merge(stored, initial) : stored
+    } catch {
+      return initial
+    }
   })
   const set = useCallback(
     (next: T | ((old: T) => T)) =>
@@ -43,6 +53,8 @@ type Props = {
   rowHeight: number
   /** iTunes 12 onward put a cover thumbnail in the Name column. */
   showArtwork: boolean
+  /** Connected devices — the presence column labels its dots with them. */
+  devices: { id: string; name: string }[]
   playlists: Playlist[]
   nowPlaying: string | null
   onPlay: (id: string) => void
@@ -55,9 +67,19 @@ type Props = {
 }
 
 export function TrackList(p: Props) {
-  const [columnVisibility, setColumnVisibility] = usePersisted('itunes.cols', defaultVisibility)
-  const [columnOrder, setColumnOrder] = usePersisted<string[]>('itunes.order', ALL_IDS)
-  const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('itunes.sizes', {})
+  const [columnVisibility, setColumnVisibility] = usePersisted(
+    'jukebox.cols',
+    defaultVisibility,
+    // A column added since the layout was saved keeps its default visibility.
+    (stored, fresh) => ({ ...fresh, ...stored }),
+  )
+  const [columnOrder, setColumnOrder] = usePersisted<string[]>(
+    'jukebox.order',
+    ALL_IDS,
+    // Keep the user's order, append anything new at the end, drop what is gone.
+    (stored, fresh) => [...stored.filter((id) => fresh.includes(id)), ...fresh.filter((id) => !stored.includes(id))],
+  )
+  const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('jukebox.sizes', {})
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'row' | 'header' } | null>(null)
   const [dropRow, setDropRow] = useState<number | null>(null)
   const [dragCol, setDragCol] = useState<string | null>(null)
@@ -71,10 +93,18 @@ export function TrackList(p: Props) {
       toggleChecked: (id: string) =>
         p.onUpdate([id], { enabled: !p.tracks.find((t) => t.id === id)?.enabled }),
       rate: (id: string, rating: number) => p.onUpdate([id], { rating }),
+      devices: p.devices,
     }),
     [p],
   )
   const columns = useMemo(() => makeColumns(actions), [actions])
+
+  // The presence column is pointless with no device connected, and iTunes never
+  // showed a column that could not have content.
+  const visibility = useMemo(
+    () => (p.devices.length ? columnVisibility : { ...columnVisibility, devices: false }),
+    [columnVisibility, p.devices.length],
+  )
 
   const table = useTable({
     features,
@@ -83,7 +113,7 @@ export function TrackList(p: Props) {
     getRowId: (t) => t.id,
     columnResizeMode: 'onChange',
     enableSortingRemoval: false,
-    state: { columnVisibility, columnOrder, columnSizing },
+    state: { columnVisibility: visibility, columnOrder, columnSizing },
     onColumnVisibilityChange: setColumnVisibility,
     onColumnOrderChange: setColumnOrder,
     onColumnSizingChange: setColumnSizing,

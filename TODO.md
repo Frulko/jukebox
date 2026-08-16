@@ -51,17 +51,17 @@ hands out a URL.
 
 ## M2 · Devices — the feature that sets us apart
 
-- [ ] **2.1** Satellite contract + local fake satellite (before your real API)
-- [ ] **2.2** `GET /devices/:id/tracks` — **see the device independently of the library**
+- [~] **2.1** Satellite contract + local fake satellite (before your real API)
+- [x] **2.2** `GET /devices/:id/tracks` — **see the device independently of the library**
 - [ ] **2.3** **Import from the device** — the tracks with `libraryTrackId: null` are the
       feature: pulling music back off an old iPod. Matched by fingerprint.
-- [ ] **2.4** **Presence column** — one dot per device, hidden when none is connected
-- [ ] **2.5** **`onDevice` / `notOnDevice` filters** — computed in SQL, never over a page already
+- [x] **2.4** **Presence column** — one dot per device, hidden when none is connected
+- [x] **2.5** **`onDevice` / `notOnDevice` filters** — computed in SQL, never over a page already
       received. They combine with `kind=` for playlists, audiobooks, podcasts
 - [ ] **2.6** Sync job + `dryRun` (plan before writing) + atomic iTunesDB commit
 - [ ] **2.7** Device management — rename, sync options, eject, stats, orphans
 - [ ] **2.8** Add by right-click and by dropzone
-- [ ] **2.9** Drop Movies and TV Shows *(quick, visible)*
+- [x] **2.9** Drop Movies and TV Shows
 
 ## M3 · Audio output
 

@@ -145,6 +145,14 @@ export function createClient(opts: ClientOptions = {}) {
       /** What is actually on the device, without going through the library. */
       tracks: (id: string, q: { cursor?: string; limit?: number; orphansOnly?: boolean } = {}) =>
         request<Page<DeviceTrack>>(`/devices/${id}/tracks${qs(q)}`),
+      /** Satellite registration. Idempotent on the device id. */
+      register: (d: Partial<Device> & { id: string; name: string; kind: string }) =>
+        request<Device>('/devices', { method: 'POST', body: JSON.stringify(d) }),
+      /** The satellite reports the device's real contents; the server matches. */
+      report: (id: string, items: unknown[]) =>
+        request<{ received: number; matched: number; orphans: number }>(`/devices/${id}/tracks`, {
+          method: 'PUT', body: JSON.stringify({ items }),
+        }),
       stats: (id: string) => request<DeviceStats>(`/devices/${id}/stats`, {}, true),
       update: (id: string, patch: Partial<Pick<Device, 'name' | 'autoSync' | 'syncMode' | 'syncPlaylistIds'>>) =>
         request<Device>(`/devices/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),

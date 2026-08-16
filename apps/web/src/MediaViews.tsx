@@ -5,55 +5,15 @@ import {
   AUDIOBOOKS,
   fmtBytes,
   fmtMin,
-  MOVIES,
   PODCAST_LIST,
   RADIO_GENRES,
   STORE_CHARTS,
   STORE_FEATURED,
-  TV_SHOWS,
   type Show,
 } from './media'
 
 const art = (hue: number) => ({ background: `linear-gradient(150deg, hsl(${hue} 52% 58%), hsl(${(hue + 40) % 360} 46% 38%))` })
 const day = (ms: number) => new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
-
-/* ---------------- Movies: poster shelf ---------------- */
-
-export function MoviesView() {
-  const [sel, setSel] = useState<string | null>(null)
-  const current = MOVIES.find((m) => m.id === sel)
-  return (
-    <div className="media">
-      <div className="shelf">
-        {MOVIES.map((m) => (
-          <button key={m.id} className={`poster ${sel === m.id ? 'on' : ''}`} onClick={() => setSel(m.id)}>
-            <div className="art tall" style={art(m.hue)}>
-              {m.unwatched && <span className="dot" />}
-              {m.hd && <span className="hd">HD</span>}
-            </div>
-            <span className="t">{m.title}</span>
-            <span className="s">{m.year}</span>
-          </button>
-        ))}
-      </div>
-      {current && (
-        <div className="inspector">
-          <div className="art tall big" style={art(current.hue)} />
-          <div>
-            <h3>{current.title}</h3>
-            <p className="dim">
-              {current.year} · {current.genre} · {current.rated} · {fmtMin(current.runtime)} · {fmtBytes(current.size)}
-            </p>
-            <p>{current.summary}</p>
-            <button className="prim">
-              <Icon name="play" size={10} /> Play
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 /* ---------------- TV / Podcasts / Audiobooks: shows + episodes ---------------- */
 
@@ -103,7 +63,6 @@ function ShowsView({ shows, unit }: { shows: Show[]; unit: string }) {
   )
 }
 
-export const TVView = () => <ShowsView shows={TV_SHOWS} unit="episodes" />
 export const PodcastsView = () => <ShowsView shows={PODCAST_LIST} unit="episodes" />
 export const AudiobooksView = () => <ShowsView shows={AUDIOBOOKS} unit="chapters" />
 
@@ -228,10 +187,6 @@ export function StoreView({ purchased }: { purchased: boolean }) {
 export function mediaSummary(id: string) {
   const total = (xs: Show[]) => xs.reduce((a, s) => a + s.episodes.length, 0)
   switch (id) {
-    case 'movies':
-      return `${MOVIES.length} movies, ${fmtMin(MOVIES.reduce((a, m) => a + m.runtime, 0))}, ${fmtBytes(MOVIES.reduce((a, m) => a + m.size, 0))}`
-    case 'tv':
-      return `${TV_SHOWS.length} shows, ${total(TV_SHOWS)} episodes`
     case 'podcasts':
       return `${PODCAST_LIST.length} podcasts, ${total(PODCAST_LIST)} episodes`
     case 'audiobooks':

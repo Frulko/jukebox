@@ -1102,3 +1102,45 @@ input[type="range"]::-webkit-slider-thumb {
 [data-theme="music"] .tile-art .cover, [data-theme="music"] .album-detail > .cover { border-radius: 7px; }
 [data-theme="music"] .grid { gap: 24px 18px; padding: 20px; }
 [data-theme="itunes12"] .modebar { border-bottom: 1px solid var(--line-soft); }
+
+/* ---------------- device presence ---------------- */
+
+.presence { display: inline-flex; gap: 3px; }
+.presence i {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-style: normal;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+.tr.sel .presence i { background: #fff; color: var(--accent); }
+
+/* The filter bar only exists when a device is connected — "what is left to
+   sync" is meaningless otherwise. */
+.devicebar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--content);
+  border-bottom: 1px solid var(--line-soft);
+}
+.devicebar-group { display: flex; }
+.devicebar button {
+  padding: 3px 10px;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius);
+  background: var(--btn);
+  color: var(--btn-text);
+  font-size: 10px;
+}
+.devicebar-group button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.devicebar-group button:last-child { border-radius: 0 var(--radius) var(--radius) 0; margin-left: -1px; }
+.devicebar button.on { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }

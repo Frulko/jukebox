@@ -58,3 +58,33 @@ scripts/       guardrails and fixtures
 | `PORT` | server port, 8787 by default |
 | `JUKEBOX_DB` | database path, `./data/library.db` by default |
 | `JUKEBOX_FIXTURES` | audio fixture folder for tests — `npm test` handles it |
+
+## Credits
+
+Standing on: [Hono](https://hono.dev) and `node:sqlite` for the server,
+[Zod](https://zod.dev) for the contracts, [croner](https://github.com/hexagon/croner)
+for the scheduler, [music-metadata](https://github.com/borewit/music-metadata) and
+[node-taglib-sharp](https://github.com/benrr101/node-taglib-sharp) for tags,
+[React](https://react.dev), [TanStack](https://tanstack.com) and
+[Vite](https://vite.dev) for the interface.
+
+Off-process: [ffmpeg](https://ffmpeg.org) for transcoding and test fixtures,
+[Chromaprint](https://acoustid.org/chromaprint) for acoustic fingerprints.
+
+Planned sidecars and satellites lean on
+[soco-cli](https://pypi.org/project/soco-cli/) for Sonos,
+[iOpenPod](https://github.com/TheRealSavi/iOpenPod) for iPods, and
+[AudioMuse](https://github.com/NeptuneHub/AudioMuse-AI) for sonic analysis.
+
+The interface owes its shape to iTunes — Apple's, not ours.
+
+## Commits
+
+[Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`.
+
+Types in use: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`,
+`chore`. Scopes follow the workspace: `server`, `web`, `sdk`, `devices`,
+`playlists`.
+
+The body is where the value is. Record *why* a decision was taken and which trap
+it avoids, not what the diff already shows.

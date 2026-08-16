@@ -12,7 +12,7 @@ import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
-import { AppsView, AudiobooksView, mediaSummary, MoviesView, PodcastsView, RadioView, StoreView, TVView } from './MediaViews'
+import { AppsView, AudiobooksView, mediaSummary, PodcastsView, RadioView, StoreView } from './MediaViews'
 import { AlbumsView, ArtistsView, type LibraryMode } from './LibraryViews'
 import './itunes.css'
 
@@ -38,6 +38,8 @@ export default function App() {
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
   const [mode, setMode] = useState<LibraryMode>('songs')
+  /** "What is left to put on the iPod" — computed server-side, never on a page. */
+  const [deviceFilter, setDeviceFilter] = useState<{ deviceId: string; mode: 'on' | 'not' } | null>(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -64,7 +66,7 @@ export default function App() {
    * locally can end up rendering three, and the UI looks empty while 40,000
    * tracks are still sitting behind it.
    */
-  const query = useTrackQuery({ view, search, browse })
+  const query = useTrackQuery({ view, search, browse, deviceFilter })
   const libraryPage = useTracks(query, view.kind === 'library' && view.id === 'music')
   const playlistPage = usePlaylistTracks(view.kind === 'playlist' ? view.id : null, query)
 
@@ -174,8 +176,6 @@ export default function App() {
   const viewKey = `${view.kind}:${view.id}`
 
   const MEDIA: Record<string, React.ReactNode> = {
-    movies: <MoviesView />,
-    tv: <TVView />,
     podcasts: <PodcastsView />,
     audiobooks: <AudiobooksView />,
     apps: <AppsView />,
@@ -238,6 +238,34 @@ export default function App() {
             media
           ) : (
             <>
+              {devices.length > 0 && (
+                <div className="devicebar">
+                  <button
+                    className={deviceFilter === null ? 'on' : ''}
+                    onClick={() => setDeviceFilter(null)}
+                  >
+                    All
+                  </button>
+                  {devices.map((d) => (
+                    <span key={d.id} className="devicebar-group">
+                      <button
+                        className={deviceFilter?.deviceId === d.id && deviceFilter.mode === 'on' ? 'on' : ''}
+                        onClick={() => setDeviceFilter({ deviceId: d.id, mode: 'on' })}
+                        title={`Tracks already on ${d.name}`}
+                      >
+                        On {d.name}
+                      </button>
+                      <button
+                        className={deviceFilter?.deviceId === d.id && deviceFilter.mode === 'not' ? 'on' : ''}
+                        onClick={() => setDeviceFilter({ deviceId: d.id, mode: 'not' })}
+                        title={`Tracks missing from ${d.name}`}
+                      >
+                        Missing
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               {theme !== 'classic' && (
                 <div className="modebar">
                   {(['songs', 'albums', 'artists'] as LibraryMode[]).map((m) => (
@@ -260,6 +288,7 @@ export default function App() {
                 viewKey={viewKey}
                 rowHeight={THEME_ROW_H[theme]}
                 showArtwork={theme !== 'classic'}
+                devices={devices}
                 tracks={tracks}
                 view={view}
                 playlists={playlists}

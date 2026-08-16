@@ -8,8 +8,6 @@ import type { View } from './App'
 
 const LIBRARY: Array<[string, string, string]> = [
   ['music', 'music', 'Music'],
-  ['movies', 'movie', 'Movies'],
-  ['tv', 'tv', 'TV Shows'],
   ['podcasts', 'podcast', 'Podcasts'],
   ['audiobooks', 'book', 'Audiobooks'],
   ['apps', 'apps', 'Apps'],

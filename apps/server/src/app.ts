@@ -222,6 +222,63 @@ export function createApp(dbFile: string) {
   api.get('/devices', (c) =>
     withETag(c, { items: (db.prepare(`SELECT * FROM devices`).all() as any[]).map(hydrateDevice) }))
 
+  /**
+   * Device registration — what a satellite calls when it sees hardware appear.
+   * Idempotent on the device id: a satellite restarting must not create a
+   * duplicate iPod.
+   */
+  api.post('/devices', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.id || !b?.name || !b?.kind) return fail(c, 400, 'bad_body', 'expected { id, name, kind }')
+    db.prepare(`
+      INSERT INTO devices (id, satelliteId, name, kind, model, serial, firmware, capacity, used,
+        battery, acceptedFormats, charging, connected, rev)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?)
+      ON CONFLICT (id) DO UPDATE SET
+        satelliteId=excluded.satelliteId, name=excluded.name, model=excluded.model,
+        serial=excluded.serial, firmware=excluded.firmware, capacity=excluded.capacity,
+        used=excluded.used, battery=excluded.battery, acceptedFormats=excluded.acceptedFormats,
+        charging=excluded.charging, connected=1, rev=excluded.rev`)
+      .run(b.id, b.satelliteId ?? null, b.name, b.kind, b.model ?? '', b.serial ?? '', b.firmware ?? '',
+        b.capacity ?? 0, JSON.stringify(b.used ?? {}), b.battery ?? null,
+        JSON.stringify(b.acceptedFormats ?? []), b.charging ? 1 : 0, nextRev(db))
+    const d = db.prepare(`SELECT * FROM devices WHERE id = ?`).get(b.id) as any
+    return c.json(hydrateDevice(d), 201)
+  })
+
+  /**
+   * The satellite reports what is actually on the device. Matching against the
+   * library happens here, by fingerprint when we have one and by artist+title
+   * otherwise — never by file path, which no two systems agree on.
+   */
+  api.put('/devices/:id/tracks', async (c) => {
+    const id = c.req.param('id')
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.items)) return fail(c, 400, 'bad_body', 'expected { items: [] }')
+
+    db.prepare(`DELETE FROM device_tracks WHERE deviceId = ?`).run(id)
+    const ins = db.prepare(`
+      INSERT INTO device_tracks (deviceId, deviceLocalId, trackId, name, artist, album,
+        duration, size, format, fingerprint, syncedAt)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+    const byFp = db.prepare(`SELECT id FROM tracks WHERE fingerprint = ? AND deletedAt IS NULL LIMIT 1`)
+    const byMeta = db.prepare(
+      `SELECT id FROM tracks WHERE lower(artist) = lower(?) AND lower(name) = lower(?)
+         AND abs(duration - ?) <= 3 AND deletedAt IS NULL LIMIT 1`)
+
+    let matched = 0
+    for (const it of b.items) {
+      const hit = (it.fingerprint ? byFp.get(it.fingerprint) : null)
+        ?? byMeta.get(it.artist ?? '', it.name ?? '', it.duration ?? 0)
+      const trackId = (hit as any)?.id ?? null
+      if (trackId) matched++
+      ins.run(id, it.deviceLocalId, trackId, it.name ?? '', it.artist ?? '', it.album ?? '',
+        it.duration ?? 0, it.size ?? 0, it.format ?? '', it.fingerprint ?? null, Date.now())
+    }
+    nextRev(db)
+    return c.json({ received: b.items.length, matched, orphans: b.items.length - matched })
+  })
+
   api.patch('/devices/:id', async (c) => {
     const b = await c.req.json().catch(() => ({}))
     const ALLOWED = ['name', 'autoSync', 'syncMode', 'syncPlaylistIds'] as const

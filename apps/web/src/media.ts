@@ -11,20 +11,6 @@ function rng(seed: number) {
   }
 }
 
-export type Movie = {
-  id: string
-  title: string
-  year: number
-  runtime: number // minutes
-  genre: string
-  rated: string
-  hd: boolean
-  unwatched: boolean
-  size: number
-  hue: number
-  summary: string
-}
-
 export type Episode = {
   id: string
   title: string
@@ -57,28 +43,6 @@ export type App = {
 
 export type Station = { id: string; name: string; bitrate: number; listeners: number }
 export type RadioGenre = { name: string; stations: Station[] }
-
-const MOVIE_TITLES: Array<[string, string, string]> = [
-  ['The Circle of Lights', 'Drama', 'PG-13'],
-  ['Northern Drift', 'Documentary', 'G'],
-  ['Sixteen Corridors', 'Thriller', 'R'],
-  ['The Paper Astronaut', 'Sci-Fi', 'PG'],
-  ['Hollow Coast', 'Drama', 'R'],
-  ['Marguerite & Sons', 'Comedy', 'PG-13'],
-  ['Analogue Summer', 'Documentary', 'G'],
-  ['Rust and Radio', 'Drama', 'PG-13'],
-  ['The Long Exposure', 'Thriller', 'R'],
-  ['Cassette Country', 'Music', 'G'],
-  ['Blue Hour Runners', 'Action', 'PG-13'],
-  ['A Quiet Frequency', 'Drama', 'PG'],
-]
-
-const SHOWS: Array<[string, string, number, number]> = [
-  ['Signal & Noise', 'Season 2', 2, 11],
-  ['The Archivists', 'Season 1', 1, 8],
-  ['Night Shift Radio', 'Season 4', 4, 13],
-  ['Cold Open', 'Season 1', 1, 6],
-]
 
 const PODCASTS: Array<[string, string, number]> = [
   ['Song Exploder Redux', 'Weekly · Music', 14],
@@ -116,23 +80,6 @@ const EP_WORDS = ['Signal', 'Static', 'Reel', 'Cutting Room', 'Feedback', 'Black
 const r = rng(4242)
 const MIN = 60
 
-export const MOVIES: Movie[] = MOVIE_TITLES.map(([title, genre, rated], i) => {
-  const runtime = 82 + Math.floor(r() * 68)
-  return {
-    id: `mv${i}`,
-    title,
-    year: 1998 + Math.floor(r() * 26),
-    runtime,
-    genre,
-    rated,
-    hd: r() > 0.4,
-    unwatched: r() > 0.65,
-    size: Math.round(runtime * MIN * (r() > 0.4 ? 1.6e6 : 0.7e6)),
-    hue: Math.floor(r() * 360),
-    summary: 'Acquired from the iTunes Store. Extras and subtitles included.',
-  }
-})
-
 function makeEpisodes(prefix: string, season: number, count: number, base: number): Episode[] {
   return Array.from({ length: count }, (_, i) => {
     const runtime = 22 + Math.floor(r() * 38)
@@ -151,14 +98,6 @@ function makeEpisodes(prefix: string, season: number, count: number, base: numbe
 }
 
 const NOW = Date.UTC(2026, 7, 16)
-
-export const TV_SHOWS: Show[] = SHOWS.map(([title, subtitle, season, count], i) => ({
-  id: `tv${i}`,
-  title,
-  subtitle,
-  hue: Math.floor(r() * 360),
-  episodes: makeEpisodes(`tv${i}`, season, count, NOW),
-}))
 
 export const PODCAST_LIST: Show[] = PODCASTS.map(([title, subtitle, count], i) => ({
   id: `pc${i}`,
@@ -210,10 +149,6 @@ export const STORE_CHARTS = [
   {
     title: 'Top Albums',
     rows: ['Discovery — Daft Punk', 'Dummy — Portishead', 'Moon Safari — Air', 'Homogenic — Björk', 'Donuts — J Dilla', 'Untrue — Burial', 'Mezzanine — Massive Attack', 'Kid A — Radiohead'],
-  },
-  {
-    title: 'Top Movies',
-    rows: MOVIE_TITLES.slice(0, 8).map(([t]) => t),
   },
 ]
 
