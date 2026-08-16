@@ -12,6 +12,7 @@ import type { PluginEntry } from './pluginMenu'
 import { useMenuPosition } from './useMenuPosition'
 import { titleIfClipped } from './Tooltip'
 import { MembershipsPopover } from './MembershipsPopover'
+import { Submenu } from './Submenu'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -679,23 +680,18 @@ export function TrackList(p: Props) {
                 </button>
               ))}
               <hr />
-              <div className="ctx-sub">
-                Rating
-                <div className="ctx-flyout">
-                  {[0, 1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} onClick={() => (p.onUpdate(selectedIds, { rating: n }), setMenu(null))}>
-                      {n ? '★'.repeat(n) : 'None'}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <Submenu label="Rating">
+                {[0, 1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => (p.onUpdate(selectedIds, { rating: n }), setMenu(null))}>
+                    {n ? '★'.repeat(n) : 'None'}
+                  </button>
+                ))}
+              </Submenu>
               {/* Tags the listener wrote, which are not the file's own fields.
                   A tag is ticked only when *every* selected track carries it,
                   so choosing it on a mixed selection adds it to the rest rather
                   than toggling half of them off. */}
-              <div className="ctx-sub">
-                Tag
-                <div className="ctx-flyout">
+              <Submenu label="Tag">
                   <input
                     className="tag-new"
                     placeholder="New tag…"
@@ -725,11 +721,8 @@ export function TrackList(p: Props) {
                       </button>
                     )
                   })}
-                </div>
-              </div>
-              <div className="ctx-sub">
-                Add to Playlist
-                <div className="ctx-flyout">
+              </Submenu>
+              <Submenu label="Add to Playlist">
                   <button onClick={() => (p.onNewPlaylistFrom(selectedIds), setMenu(null))}>New Playlist…</button>
                   <hr />
                   {p.playlists
@@ -739,21 +732,17 @@ export function TrackList(p: Props) {
                         {pl.name}
                       </button>
                     ))}
-                </div>
-              </div>
+              </Submenu>
               {/* Absent with nothing connected -- iTunes never showed a menu
                   entry that could not do anything. */}
               {p.devices.length > 0 && (
-                <div className="ctx-sub">
-                  Add to Device
-                  <div className="ctx-flyout">
-                    {p.devices.map((d) => (
-                      <button key={d.id} onClick={() => (p.onAddToDevice(d.id, selectedIds), setMenu(null))}>
-                        {d.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <Submenu label="Add to Device">
+                  {p.devices.map((d) => (
+                    <button key={d.id} onClick={() => (p.onAddToDevice(d.id, selectedIds), setMenu(null))}>
+                      {d.name}
+                    </button>
+                  ))}
+                </Submenu>
               )}
               <hr />
               <button onClick={() => (p.onUpdate(selectedIds, { enabled: true }), setMenu(null))}>Check Selection</button>
