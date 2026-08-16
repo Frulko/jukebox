@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
-  api, useDevices, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth,
+  api, useDevices, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useStats,
   useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
@@ -14,6 +14,7 @@ import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
 import { AppsView, AudiobooksView, mediaSummary, PodcastsView, RadioView, StoreView } from './MediaViews'
+import { MissingView } from './MissingView'
 import { AlbumsView, ArtistsView, type LibraryMode } from './LibraryViews'
 import './itunes.css'
 
@@ -90,6 +91,9 @@ export default function App() {
   // Only what is still moving: a finished scan is history, and the panel is for
   // what is happening now.
   const jobs = (useJobs().data?.items ?? []).filter((j) => j.state === 'running' || j.state === 'queued' || j.state === 'paused')
+  // Counted in SQL over the whole library: the front only ever holds a page, so
+  // it cannot know how much is missing by looking at what it has.
+  const missing = useStats().data?.missing ?? 0
 
   /**
    * Search, column browser filters and device presence all go to the server —
@@ -246,6 +250,7 @@ export default function App() {
     audiobooks: <AudiobooksView search={search} />,
     apps: <AppsView search={search} />,
     radio: <RadioView search={search} />,
+    missing: <MissingView />,
   }
   const media =
     view.kind === 'store'
@@ -286,6 +291,7 @@ export default function App() {
       <div className="main">
         <Sidebar
           view={view}
+          missing={missing}
           playlists={playlists}
           playlistArt={theme === 'music'}
           devices={devices}

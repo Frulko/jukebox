@@ -80,6 +80,13 @@ export const useSources = () =>
 export const useDevices = () =>
   useQuery({ queryKey: keys.devices, queryFn: () => api.devices.list(), staleTime: 10_000 })
 
+/** Library totals, from SQL. The front cannot add these up: it only ever holds a page. */
+export const useStats = () => useQuery({ queryKey: ['stats'], queryFn: () => api.stats(), staleTime: 30_000 })
+
+/** Tracks whose file the last complete scan could not find. */
+export const useMissing = (enabled = true) =>
+  useQuery({ queryKey: ['tracks', 'missing'], queryFn: () => api.tracks.missing(), enabled })
+
 export const useJobs = () =>
   useQuery({
     queryKey: keys.jobs,

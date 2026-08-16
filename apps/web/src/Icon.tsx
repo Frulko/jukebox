@@ -45,6 +45,8 @@ const PATHS: Record<string, string> = {
   backup:
     'M8 1.6 12 6H9.4v4.2H6.6V6H4zM2 11.4h12a.8.8 0 0 1 .8.8v1.4a.8.8 0 0 1-.8.8H2a.8.8 0 0 1-.8-.8v-1.4a.8.8 0 0 1 .8-.8zm10.4 1.1a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6z',
   eject: 'M8 2.2 13.4 9H2.6zM2.6 10.6h10.8v2.8H2.6z',
+  // A file the scanner could not find: a warning, not an error — nothing was lost.
+  alert: 'M8 1.6 15 14H1zm-.9 4.4h1.8v4.4H7.1zm0 5.4h1.8v1.8H7.1z',
 }
 
 export function Icon({ name, size = 12, className = '' }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {

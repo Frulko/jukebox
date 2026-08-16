@@ -1500,3 +1500,47 @@ input[type="range"]::-webkit-slider-thumb {
 .scope-menu button:hover { background: var(--accent); color: #fff; }
 .scope-menu button.on { font-weight: 600; }
 .search { position: relative; }
+
+/* ---------------- missing: what the last scan could not find ---------------- */
+.missing { padding: 16px 18px 24px; }
+.missing-lead {
+  max-width: 72ch;
+  margin: 0 0 18px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+.missing-group + .missing-group { margin-top: 22px; }
+.missing-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.missing-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+.missing-head h3 .icon { color: var(--accent); }
+.missing-head h3 em { font-style: normal; font-weight: 400; color: var(--dim); font-size: 11px; }
+.missing-head button { margin-left: auto; }
+.missing .ep-head, .missing .ep-body { border: 1px solid var(--line-soft); border-radius: var(--radius); }
+.missing .ep-head { border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; }
+.missing .ep-body { border-radius: 0 0 var(--radius) var(--radius); max-height: 320px; }
+.missing-row .c-artist { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The path is the actionable column — it names the drive to plug back in — so it
+   gets the room, and the ellipsis falls at the front where the prefix repeats. */
+.missing .c-path {
+  flex: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  color: var(--dim);
+  font-size: 10.5px;
+}
+.missing-error { margin-left: auto; color: var(--accent); font-size: 11px; }
+.missing-head .missing-error + button { margin-left: 10px; }

@@ -9,10 +9,16 @@
 // ponytail: one page per query, no cursor. The demo library is ~250 tracks; the
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
-import type { Device, DeviceTrack, Job, Playlist, Source, Track, TrackQuery } from '@jukebox/api-types'
+import type { Device, DeviceTrack, Job, MissingTrack, Playlist, Source, Stats, Track, TrackQuery } from '@jukebox/api-types'
 
-const tracks = makeLibrary()
-let revision = tracks.length
+const all = makeLibrary()
+
+// A handful whose files "went away": the demo has to show the Missing view with
+// something in it, and they are excluded from the library exactly as the server
+// excludes soft-deleted rows.
+const gone = new Set(all.filter((_, i) => i % 47 === 13).map((t) => t.id))
+const tracks = all.filter((t) => !gone.has(t.id))
+let revision = all.length
 
 const norm = (s: string) => s.toLowerCase()
 
@@ -142,6 +148,41 @@ function scanning(): Job {
   }
 }
 
+const MISSING: MissingTrack[] = all
+  .filter((t) => gone.has(t.id))
+  .map((t) => ({
+    id: t.id,
+    sourceId: 'demo',
+    sourceName: 'Demo library',
+    path: `/music/${t.path}`,
+    name: t.name,
+    artist: t.artist,
+    album: t.album,
+    duration: t.duration,
+    rating: t.rating,
+    playCount: t.playCount,
+    deletedAt: Date.UTC(2026, 7, 12),
+  }))
+
+function stats(): Stats {
+  const albums = new Set(tracks.map((t) => `${t.albumArtist} — ${t.album}`))
+  const artists = new Set(tracks.map((t) => t.albumArtist))
+  return {
+    tracks: tracks.length,
+    albums: albums.size,
+    artists: artists.size,
+    bytes: tracks.reduce((a, t) => a + t.size, 0),
+    seconds: tracks.reduce((a, t) => a + t.duration, 0),
+    missing: MISSING.length,
+    playlists: PLAYLISTS.length,
+    podcasts: 0,
+    radios: 0,
+    sources: SOURCES.length,
+    devices: 1,
+    jobs: { running: 1 },
+  }
+}
+
 /** Returns the body for a route, or `undefined` when the demo has nothing to say. */
 function route(path: string, params: URLSearchParams, method: string, body: string | null): unknown {
   const q = Object.fromEntries(params) as TrackQuery
@@ -162,10 +203,16 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     return { updated, revision, job: null }
   }
   if (path === '/tracks/count') return { count: select(q).length }
+  // Before the single-track lookup below, which would otherwise swallow it.
+  if (path === '/tracks/missing') return { items: MISSING }
+  if (path === '/stats') return stats()
   if (path === '/facets') return facets(q)
   if (path.startsWith('/tracks/')) return tracks.find((t) => t.id === path.slice(8))
   if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }
   if (path === '/sources') return { items: SOURCES }
+  // A rescan in the demo has nothing to walk, so it answers with the job it
+  // would have started and the scan job already on display keeps running.
+  if (path.startsWith('/sources/') && path.endsWith('/scan') && method === 'POST') return scanning()
   if (path === '/devices') return { items: [DEVICE] }
   if (path === '/jobs') return { items: [scanning()] }
   if (path === `/devices/${DEVICE.id}/tracks`) {
