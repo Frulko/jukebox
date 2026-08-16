@@ -60,6 +60,7 @@ const DOCS: Record<string, Doc> = {
 
   'GET /sources': { summary: 'Where the music lives.', tag: 'sources' },
   'POST /sources': { summary: 'Adds a source. `rclone` sources carry `config: { url, fs }`.', tag: 'sources' },
+  'POST /sources/:id/test': { summary: 'Does this source answer? Better asked before a scan than read from its error afterwards.', tag: 'sources' },
   'POST /sources/:id/scan': { summary: 'Indexes it. `?full=true` re-reads files an incremental scan would skip.', tag: 'sources', query: ['full'] },
   'GET /duplicates': { summary: 'Rows that look like one song. Proposes; never merges.', tag: 'sources' },
   'POST /duplicates/merge': { summary: 'Folds tracks into one, moving their files across as renditions.', tag: 'sources', body: '{ keeperId, ids }' },

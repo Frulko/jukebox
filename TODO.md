@@ -102,7 +102,8 @@ hands out a URL.
       Scanning and `/stream/:id` both work against a remote; tested against a real daemon.
       Left: artwork extraction for remote tracks, and writing back to a remote
 - [ ] **4.2** Optional OS mount (NFS, pre-existing mounts)
-- [ ] **4.3** Plex / Emby / Jellyfin — read + metadata import
+- [x] **4.3** Jellyfin / Emby — indexed from their own metadata, so it downloads nothing;
+      streaming proxied with Range. Plex speaks a different API and is still to come
 - [x] **4.4** **Reorganization tool** — pattern with padding, dry run by default, conflicts
       refused rather than resolved, every move logged, undo in reverse order. Local sources
       only for now; the two-column preview is the front session's

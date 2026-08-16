@@ -7,6 +7,7 @@ import { nextRev } from './db.ts'
 import type { JobContext } from './jobs.ts'
 import { shortFormat } from './tags.ts'
 import { configOf, open as rcOpen, walk as rcWalk } from './rclone.ts'
+import { configOf as jfConfig, items as jfItems } from './jellyfin.ts'
 
 const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.flac', '.alac', '.ogg', '.opus', '.wav', '.aiff', '.aif', '.wma', '.m4b'])
 
@@ -36,7 +37,22 @@ async function* walk(root: string, rel = ''): AsyncGenerator<string> {
 // contain: without it, source `a` + path `b/c` and source `a/b` + path `c`
 // would hash to the same track. Written as an escape, not as a raw byte -- a
 // literal NUL in the file makes git treat the whole source as binary.
-type Entry = { path: string; size: number; mtime: number; mimeType?: string }
+type Entry = {
+  path: string
+  size: number
+  mtime: number
+  mimeType?: string
+  /**
+   * Metadata the source already knew.
+   *
+   * Jellyfin has an artist, an album and a duration its own scanner worked out,
+   * so indexing it downloads nothing. Every other source leaves this undefined
+   * and the tags are read from the bytes.
+   */
+  meta?: Record<string, unknown>
+  /** The source's own id for this item, when it has one. */
+  externalId?: string
+}
 
 /**
  * Every file under a source, whatever kind it is.
@@ -51,6 +67,29 @@ async function* entries(source: any): AsyncGenerator<Entry> {
     for await (const e of rcWalk(cfg)) {
       if (!AUDIO.has(extname(e.name).toLowerCase())) continue
       yield { path: e.path, size: e.size, mtime: e.modTime, mimeType: e.mimeType }
+    }
+    return
+  }
+
+  if (source.kind === 'jellyfin' || source.kind === 'emby') {
+    const cfg = jfConfig(source)
+    for await (const item of jfItems(cfg)) {
+      yield {
+        path: item.path,
+        size: item.size,
+        // Jellyfin does not expose a file mtime, so the scan cannot skip on it.
+        // Zero means "always re-read", which costs nothing here because
+        // re-reading is one field copy rather than a download.
+        mtime: 0,
+        externalId: item.itemId,
+        meta: {
+          title: item.name, artist: item.artist, albumartist: item.albumArtist,
+          album: item.album, genre: [item.genre], year: item.year,
+          track: { no: item.trackNumber }, disk: { no: item.discNumber },
+          duration: item.duration, bitrate: item.bitRate * 1000,
+          container: item.format, codec: item.format,
+        },
+      }
     }
     return
   }
@@ -73,6 +112,10 @@ async function* entries(source: any): AsyncGenerator<Entry> {
 const TAG_HEAD = 512 * 1024
 
 async function readMeta(source: any, e: Entry): Promise<any> {
+  // Already known. A source that carries its own metadata is the one case where
+  // indexing costs no bytes at all.
+  if (e.meta) return e.meta
+
   if (source.kind !== 'rclone') {
     const parsed = await parseFile(join(source.root, e.path), { duration: true, skipCovers: true })
     return { ...parsed.common, ...parsed.format }
@@ -105,15 +148,16 @@ export function makeScanHandler(db: DB) {
     const upsert = db.prepare(`
       INSERT INTO tracks (id, sourceId, path, kind, name, artist, albumArtist, album, genre,
         composer, year, trackNumber, trackCount, discNumber, duration, bitRate, sampleRate,
-        channels, format, size, mtime, compilation, dateAdded, rev)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        channels, format, size, mtime, compilation, dateAdded, rev, externalId)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT (sourceId, path) DO UPDATE SET
         name=excluded.name, artist=excluded.artist, albumArtist=excluded.albumArtist,
         album=excluded.album, genre=excluded.genre, composer=excluded.composer,
         year=excluded.year, trackNumber=excluded.trackNumber, trackCount=excluded.trackCount,
         discNumber=excluded.discNumber, duration=excluded.duration, bitRate=excluded.bitRate,
         sampleRate=excluded.sampleRate, format=excluded.format, size=excluded.size,
-        mtime=excluded.mtime, deletedAt=NULL, rev=excluded.rev`)
+        mtime=excluded.mtime, deletedAt=NULL, rev=excluded.rev,
+        externalId=excluded.externalId`)
 
     const known = db.prepare(`SELECT mtime, size FROM tracks WHERE sourceId = ? AND path = ?`)
     // `lastSeenAt` is stamped rather than `rev`: bumping the revision for a file
@@ -179,7 +223,7 @@ export function makeScanHandler(db: DB) {
         Math.round((meta.bitrate ?? 0) / 1000), meta.sampleRate ?? 0, meta.numberOfChannels ?? 2,
         shortFormat(meta.container, meta.codec) || extname(rel).slice(1).toLowerCase(),
         entry.size, entry.mtime,
-        meta.compilation ? 1 : 0, Date.now(), nextRev(db),
+        meta.compilation ? 1 : 0, Date.now(), nextRev(db), entry.externalId ?? null,
       )
 
       seen.run(startedAt, source.id, rel)

@@ -418,6 +418,7 @@ const MIGRATIONS: Migration[] = [
     db.exec(`CREATE INDEX IF NOT EXISTS tracks_seen ON tracks (sourceId, lastSeenAt)`)
   },
 
+  // 4 is below; 3 first.
   // 3 — every existing track becomes a track with one rendition. Backfilled
   // rather than left empty, or a library scanned before this would have no
   // playable file at all until someone rescanned it.
@@ -428,6 +429,14 @@ const MIGRATIONS: Migration[] = [
       SELECT 'r-' || t.id, t.id, t.sourceId, t.path, t.format, t.bitRate, t.sampleRate,
              t.channels, t.size, t.mtime, 1, t.dateAdded
       FROM tracks t`)
+  },
+
+  // 4 — the id a source of its own gives an item. Jellyfin keys its stream and
+  // artwork URLs on it, and a path is not enough to find a track there.
+  (db) => {
+    const has = (db.prepare(`PRAGMA table_info(tracks)`).all() as any[])
+      .some((c) => c.name === 'externalId')
+    if (!has) db.exec(`ALTER TABLE tracks ADD COLUMN externalId TEXT`)
   },
 ]
 

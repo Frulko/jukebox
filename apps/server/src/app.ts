@@ -21,7 +21,8 @@ import {
 } from './library.ts'
 import { WRITABLE } from './tags.ts'
 import { mimeFor, parseRange } from './stream.ts'
-import { configOf, open as rcOpen, RcloneError } from './rclone.ts'
+import { configOf, open as rcOpen, RcloneError, version as rcVersion } from './rclone.ts'
+import { configOf as jfConfigOf, info as jfInfo, open as jfOpen } from './jellyfin.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
@@ -91,6 +92,35 @@ async function streamRemote(c: any, t: any): Promise<Response> {
  * nothing here and letting the header pass: resolving it needs the file size,
  * which only the remote knows.
  */
+/**
+ * Serves a track that lives on a Jellyfin or Emby server.
+ *
+ * `Static=true` in the upstream URL is what stops Jellyfin transcoding on its
+ * own initiative: a server asked for a file it already has should send that
+ * file, not spend CPU converting one that was already playable.
+ */
+async function streamJellyfin(c: any, t: any): Promise<Response> {
+  const range = c.req.header('range')
+  let upstream: Response
+  try {
+    upstream = await jfOpen(jfConfigOf(t), t.externalId ?? t.path, range ? parseUpstreamRange(range) : undefined)
+  } catch (err) {
+    return c.json(
+      { error: { code: 'gone', message: err instanceof Error ? err.message : 'unreachable' } }, 502)
+  }
+
+  const headers: Record<string, string> = {
+    // Their content type, not ours: they know what they are actually sending.
+    'Content-Type': upstream.headers.get('content-type') ?? mimeFor(t.format, t.path),
+    'Accept-Ranges': 'bytes',
+  }
+  for (const h of ['content-length', 'content-range']) {
+    const v = upstream.headers.get(h)
+    if (v) headers[h === 'content-length' ? 'Content-Length' : 'Content-Range'] = v
+  }
+  return c.body(upstream.body, upstream.status === 206 ? 206 : 200, headers)
+}
+
 function parseUpstreamRange(header: string): { start: number; end?: number } | undefined {
   const m = /^bytes=(\d+)-(\d*)/.exec(header.trim())
   if (!m) return undefined
@@ -916,9 +946,43 @@ export function createApp(dbFile: string) {
     const b = await c.req.json().catch(() => null)
     if (!b?.name || !b?.root) return fail(c, 400, 'bad_body', 'expected { name, root }')
     const id = b.id ?? randomUUID().slice(0, 8)
-    db.prepare(`INSERT INTO sources (id, kind, name, root, writable, rev) VALUES (?, ?, ?, ?, ?, ?)`)
-      .run(id, b.kind ?? 'local', b.name, b.root, b.writable ? 1 : 0, nextRev(db))
+    // `config` carries what a source needs beyond its root: an rclone daemon
+    // URL, a Jellyfin API key. Dropping it silently meant no remote source
+    // could ever be created through the API at all -- only by writing the row
+    // by hand, which is how every test of one had been doing it.
+    db.prepare(
+      `INSERT INTO sources (id, kind, name, root, writable, config, rev) VALUES (?,?,?,?,?,?,?)`)
+      .run(id, b.kind ?? 'local', b.name, b.root, b.writable ? 1 : 0,
+        JSON.stringify(b.config ?? {}), nextRev(db))
     return c.json(db.prepare(`SELECT * FROM sources WHERE id = ?`).get(id), 201)
+  })
+
+  /**
+   * Does this source actually answer?
+   *
+   * Worth its own route because the alternative is starting a scan and reading
+   * the job's error afterwards, which is a poor way to find out an API key is
+   * wrong.
+   */
+  api.post('/sources/:id/test', async (c) => {
+    const src = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(c.req.param('id')) as any
+    if (!src) return fail(c, 404, 'not_found', 'unknown source')
+
+    try {
+      if (src.kind === 'jellyfin' || src.kind === 'emby') {
+        const server = await jfInfo(jfConfigOf(src))
+        return c.json({ ok: true, kind: src.kind, name: server.ServerName, version: server.Version })
+      }
+      if (src.kind === 'rclone') {
+        const v = await rcVersion(configOf(src))
+        return c.json({ ok: true, kind: src.kind, name: 'rclone', version: v.version })
+      }
+      const { accessSync, constants } = await import('node:fs')
+      accessSync(src.root, constants.R_OK)
+      return c.json({ ok: true, kind: src.kind, name: src.root, version: null })
+    } catch (err) {
+      return c.json({ ok: false, reason: err instanceof Error ? err.message : 'unreachable' }, 200)
+    }
   })
 
   api.post('/sources/:id/scan', (c) => {
@@ -1408,10 +1472,11 @@ export function createApp(dbFile: string) {
     // so a track whose rendition rows are missing still plays.
     const t = chosen ?? flat
 
-    // A remote source is proxied rather than read: the range goes to rclone and
+    // A remote source is proxied rather than read: the range goes upstream and
     // the body flows straight back out. Nothing is copied to local disk, which
     // is the whole reason the source is userspace in the first place.
     if (t.kind === 'rclone') return streamRemote(c, t)
+    if (t.kind === 'jellyfin' || t.kind === 'emby') return streamJellyfin(c, t)
 
     const abs = join(t.root, t.path)
     let size: number
