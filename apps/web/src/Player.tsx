@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Job } from '@jukebox/client-sdk'
+import { useAudioTime, type Audio } from './audio'
+import { useJobs } from './api'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
@@ -76,15 +78,13 @@ const JOB_LABEL: Record<string, string> = {
 export function Player({
   track,
   playing,
-  position,
-  duration,
+  audio,
   shuffle,
   repeat,
   volume,
   search,
   scope,
   browserOpen,
-  jobs,
   queueLength,
   queueOpen,
   artOpen,
@@ -103,9 +103,13 @@ export function Player({
 }: {
   track: Track | null
   playing: boolean
-  position: number
-  /** The decoder's duration, which beats the tag's on a VBR file whose header lies. */
-  duration: number
+  /**
+   * The element, for the two things only this bar draws: where the track is and
+   * how long it is. Subscribed here rather than passed down as numbers, so a
+   * `timeupdate` four times a second re-renders this bar and nothing else —
+   * it used to re-render the entire application, tooltips included.
+   */
+  audio: Audio
   shuffle: boolean
   repeat: Repeat
   volume: number
@@ -114,7 +118,7 @@ export function Player({
   scope: string
   browserOpen: boolean
   /** Everything else the server is doing. The display cycles through them. */
-  jobs: Job[]
+
   queueLength: number
   queueOpen: boolean
   artOpen: boolean
@@ -132,6 +136,13 @@ export function Player({
   onToggleBrowser: () => void
 }) {
   // Fall back to the tag only until the decoder has read the file.
+  // The decoder's duration beats the tag's on a VBR file whose header lies.
+  const { position, duration } = useAudioTime(audio)
+  // Only what is still moving: a finished scan is history, and this display is
+  // for what is happening now. Asked here because this is the only thing that
+  // shows it — in the app's own state it re-rendered every list on every tick.
+  const jobs = (useJobs().data?.items ?? []).filter(
+    (j) => j.state === 'running' || j.state === 'queued' || j.state === 'paused')
   const total = duration || track?.duration || 0
   const pct = total ? (position / total) * 100 : 0
 

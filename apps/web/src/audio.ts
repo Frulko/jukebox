@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 /**
  * Real playback.
@@ -25,8 +25,19 @@ export type Audio = {
    * worse than one that admits nothing happened.
    */
   playing: boolean
-  position: number
-  duration: number
+  /**
+   * Where the track is, as a store rather than as state.
+   *
+   * `timeupdate` fires four times a second. Holding that in the component that
+   * owns playback re-rendered the whole application at that rate — every list,
+   * every menu, and every tooltip, which is why an open tooltip flickered while
+   * music played. Whoever draws a scrubber subscribes with `useAudioTime` and
+   * re-renders alone; everybody else reads `get()` when they need a number.
+   */
+  time: {
+    subscribe: (onChange: () => void) => () => void
+    get: () => { position: number; duration: number }
+  }
   /** Non-null when the browser refused the file — a codec it cannot decode, usually. */
   error: string | null
   play: (id: string, src?: string) => void
@@ -56,9 +67,29 @@ export function useAudio({
 }): Audio {
   const el = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [position, setPosition] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
+
+  // The snapshot is replaced, never mutated: `useSyncExternalStore` compares
+  // identity, and a mutated object would leave every subscriber convinced
+  // nothing had changed.
+  const snapshot = useRef({ position: 0, duration: 0 })
+  const listeners = useRef(new Set<() => void>())
+  const setTime = useCallback((next: { position?: number; duration?: number }) => {
+    const now = { ...snapshot.current, ...next }
+    if (now.position === snapshot.current.position && now.duration === snapshot.current.duration) return
+    snapshot.current = now
+    for (const cb of listeners.current) cb()
+  }, [])
+  const time = useMemo(
+    () => ({
+      subscribe: (onChange: () => void) => {
+        listeners.current.add(onChange)
+        return () => listeners.current.delete(onChange)
+      },
+      get: () => snapshot.current,
+    }),
+    [],
+  )
 
   // `onEnded` closes over the queue, which changes on every view; keeping it in
   // a ref means the listener is attached once instead of being torn down and
@@ -103,9 +134,9 @@ export function useAudio({
         if (step > 0 && step < 2) c.listened += step
         c.last = a.currentTime
       }
-      setPosition(a.currentTime)
+      setTime({ position: a.currentTime })
     }
-    const meta = () => setDuration(a.duration || 0)
+    const meta = () => setTime({ duration: a.duration || 0 })
     const done = () => {
       report()
       ended.current()
@@ -147,13 +178,13 @@ export function useAudio({
     report()
     current.current = { id, listened: 0, startedAt: Date.now(), last: 0 }
     setError(null)
-    setPosition(0)
+    setTime({ position: 0, duration: 0 })
     a.src = src ?? streamUrl(base, id)
     // A rejected play() is normal: autoplay policy before any user gesture, or
     // a track replaced while it was still loading. Neither deserves an error in
     // the UI, and an unhandled rejection here would be noise in the console.
     void a.play().catch(() => {})
-  }, [base, report])
+  }, [base, report, setTime])
 
   const resume = useCallback(() => { void el.current?.play().catch(() => {}) }, [])
   const pause = useCallback(() => el.current?.pause(), [])
@@ -162,10 +193,17 @@ export function useAudio({
     const a = el.current
     if (!a) return
     a.currentTime = seconds
-    // Update immediately rather than waiting for `timeupdate`: the scrubber has
-    // to follow the pointer, not lag a quarter second behind it.
-    setPosition(seconds)
-  }, [])
+    // Published immediately rather than waiting for `timeupdate`: the scrubber
+    // has to follow the pointer, not lag a quarter second behind it.
+    setTime({ position: seconds })
+  }, [setTime])
 
-  return { playing, position, duration, error, play, resume, pause, seek }
+  return { playing, time, error, play, resume, pause, seek }
+}
+
+/**
+ * Subscribe to the playing position. For whoever draws it, and nobody else.
+ */
+export function useAudioTime(audio: Audio) {
+  return useSyncExternalStore(audio.time.subscribe, audio.time.get, audio.time.get)
 }

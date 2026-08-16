@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import type { Episode, Podcast } from '@jukebox/client-sdk'
 import {
-  api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
+  api, useDevices, useFacets, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
   usePlayer, usePlayerActions, usePodcasts, useTagTracks, useTrackCount, useTrackQuery, useTracks,
   useUpdateTracks,
 } from './api'
@@ -199,7 +199,6 @@ export default function App() {
   const playlists = usePlaylists().data?.items ?? []
   // Only what is still moving: a finished scan is history, and the panel is for
   // what is happening now.
-  const jobs = (useJobs().data?.items ?? []).filter((j) => j.state === 'running' || j.state === 'queued' || j.state === 'paused')
   // Counted in SQL over the whole library: the front only ever holds a page, so
   // it cannot know how much is missing by looking at what it has.
   const missing = useStats().data?.missing ?? 0
@@ -689,8 +688,7 @@ export default function App() {
       <Player
         track={current}
         playing={audio.playing}
-        position={audio.position}
-        duration={audio.duration}
+        audio={audio}
         shuffle={shuffle}
         repeat={repeat}
         volume={volume}
@@ -701,14 +699,15 @@ export default function App() {
         scope={view.kind === 'library' ? view.id : 'music'}
         onScope={(id) => setView({ kind: 'library', id })}
         browserOpen={browserOpen}
-        jobs={jobs}
         queueLength={queue.length}
         queueOpen={queueOpen}
         artOpen={artOpen}
         onToggleQueue={() => setQueueOpen((v) => !v)}
         onToggleArt={() => setArtOpen((v) => !v)}
         onToggle={toggle}
-        onPrev={() => (audio.position > 3 ? audio.seek(0) : step(-1))}
+        // Read at the click rather than subscribed to: this decides between
+        // "restart the track" and "go back one", and it needs the number once.
+        onPrev={() => (audio.time.get().position > 3 ? audio.seek(0) : step(-1))}
         onNext={() => step(1)}
         onSeek={audio.seek}
         onVolume={setVolume}
