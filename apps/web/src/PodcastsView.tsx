@@ -322,9 +322,17 @@ export function PodcastsView({
               onDoubleClick={() => onPlayEpisode(e, show, downloaded)}
               title={e.trackId ? 'In your library' : 'Not downloaded — plays from the publisher'}
             >
-              {/* Unplayed is a dot, downloaded is the disc: two facts, two
-                  marks, because an episode can be either without the other. */}
-              <span className="c-dot">{!e.played && <i />}</span>
+              {/* Three states, one column, in order of what is happening now:
+                  the speaker if this is the sound you are hearing — the same
+                  mark as a playing row in the library — otherwise a dot if it
+                  has not been listened to, otherwise nothing. */}
+              <span className="c-dot">
+                {e.trackId && e.trackId === nowPlaying ? (
+                  <Icon name="volumeHigh" size={10} className="spk" />
+                ) : !e.played ? (
+                  <i />
+                ) : null}
+              </span>
               <span className="c-name">
                 {e.trackId ? (
                   <Icon name="music" size={9} className="ep-have" />

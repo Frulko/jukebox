@@ -16,7 +16,8 @@ import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
-import { AppsView, AudiobooksView, mediaSummary, RadioView, StoreView } from './MediaViews'
+import { AppsView, mediaSummary, RadioView, StoreView } from './MediaViews'
+import { AudiobooksView } from './AudiobooksView'
 import { episodeAsTrack, hostOf, PodcastsView } from './PodcastsView'
 import { MissingView } from './MissingView'
 import { QueueView } from './QueueView'
@@ -151,6 +152,15 @@ export default function App() {
   // Only asked for while the podcasts view is the one on screen; the query is
   // shared with the view itself, so this costs no second request.
   const podcasts = usePodcasts(view.kind === 'library' && view.id === 'podcasts')
+  // Counted from what the library holds, not from a fabricated shelf.
+  const audiobookTracks = useTracks(
+    { kind: 'audiobook', limit: 500 },
+    view.kind === 'library' && view.id === 'audiobooks',
+  ).data?.items ?? []
+  const audiobookCount = {
+    books: new Set(audiobookTracks.map((t) => `${t.albumArtist} — ${t.album}`)).size,
+    chapters: audiobookTracks.length,
+  }
   const podcastCount = {
     shows: podcasts.data?.items.length ?? 0,
     episodes: (podcasts.data?.items ?? []).reduce((a, p) => a + p.episodeCount, 0),
@@ -684,7 +694,9 @@ export default function App() {
         onPlayEpisode={playEpisode}
         onNotice={setNotice}
       />,
-    audiobooks: <AudiobooksView search={search} />,
+    audiobooks: (
+      <AudiobooksView search={search} nowPlaying={nowPlaying} onPlay={playTrack} actions={trackActions} />
+    ),
     apps: <AppsView search={search} />,
     radio: <RadioView search={search} />,
     missing: <MissingView />,
@@ -931,7 +943,9 @@ export default function App() {
         <span className="summary">
           {notice ??
             (view.kind === 'library' && view.id !== 'music'
-              ? view.id === 'podcasts'
+              ? view.id === 'audiobooks'
+                ? `${audiobookCount.books} audiobook${audiobookCount.books === 1 ? '' : 's'}, ${audiobookCount.chapters.toLocaleString('en-US')} chapters`
+                : view.id === 'podcasts'
                 // Counted from the feeds themselves: the fabricated list this
                 // replaced would have gone on saying "4 podcasts" to someone
                 // subscribed to one.

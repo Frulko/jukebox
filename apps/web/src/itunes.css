@@ -2181,3 +2181,8 @@ input[type="range"]::-webkit-slider-thumb {
 .album-tracks li.sel { background: var(--sel); color: var(--sel-text); }
 .album-tracks li.sel .n, .album-tracks li.sel .d, .album-tracks li.sel .dim { color: var(--sel-text); opacity: .85; }
 .album-tracks li { user-select: none; }
+
+/* A book's chapters, and the line under them that plays the whole thing. */
+.book-foot { display: flex; align-items: center; gap: 10px; flex: none; padding: 8px 11px; border-top: 1px solid var(--line-soft); }
+.audiobooks .show .meta .s:last-child { color: var(--dim); }
+.ep .c-dot .spk { color: var(--accent); }

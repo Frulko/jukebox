@@ -365,6 +365,40 @@ for (const [i, t] of tracks.entries()) {
   if (i % 137 === 19) t.albumArtist = ''
 }
 
+/**
+ * Two audiobooks, as the library actually holds them: `kind: 'audiobook'`
+ * tracks whose album is the book and whose track number is the chapter. Without
+ * them the audiobooks page would be empty in the demo, and an empty page cannot
+ * show that a chapter plays with the rest of the book behind it.
+ */
+for (const [book, author, chapters] of [
+  ['The Long Way to a Small Angry Room', 'Ada Okonkwo', 11],
+  ['Notes on a Quiet Machine', 'Sam Iyer', 7],
+] as const) {
+  for (let i = 1; i <= chapters; i++) {
+    const base = tracks[i * 7]
+    tracks.push({
+      ...base,
+      id: `ab-${book.slice(0, 4)}-${i}`,
+      kind: 'audiobook',
+      name: `Chapter ${i}`,
+      artist: author,
+      albumArtist: author,
+      album: book,
+      genre: 'Audiobook',
+      trackNumber: i,
+      discNumber: 1,
+      duration: 1500 + i * 240,
+      size: (1500 + i * 240) * 16000,
+      format: 'm4b',
+      devices: [],
+      tags: [],
+      rating: 0,
+      playCount: 0,
+    })
+  }
+}
+
 const SOURCES: Source[] = [
   // With its mount, as the real route reports it: a UI that can say "this share
   // is not mounted" instead of showing an empty library needs the answer to
