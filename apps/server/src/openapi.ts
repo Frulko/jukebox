@@ -83,7 +83,7 @@ const DOCS: Record<string, Doc> = {
   'GET /users/:id/sources': { summary: 'Which sources this account may see. `all` when it has not been narrowed.', tag: 'accounts' },
   'PUT /users/:id/sources': { summary: 'Narrows an account to some sources. An empty list restores all of them.', tag: 'accounts', body: '{ sourceIds: [] }' },
 
-  'GET /tracks': { summary: 'One page of tracks, with device presence and renditions.', returns: 'Page<Track>', tag: 'library', query: ['sort', 'cursor', 'limit', 'q', 'genre', 'artist', 'album', 'format', 'tag', 'missing', 'kind', 'sourceId', 'rating', 'ratingMin', 'lossless', 'onDevice', 'notOnDevice', 'match'] },
+  'GET /tracks': { summary: 'One page of tracks, with device presence and renditions.', returns: 'Page<Track>', tag: 'library', query: ['sort', 'cursor', 'limit', 'q', 'genre', 'artist', 'album', 'format', 'tag', 'missing', 'folder', 'kind', 'sourceId', 'rating', 'ratingMin', 'lossless', 'onDevice', 'notOnDevice', 'match'] },
   'GET /tracks/count': { summary: 'How many tracks a query matches.', tag: 'library' },
   'GET /tracks/delta': { summary: 'What changed since a revision. The main network win.', returns: 'TracksDelta', tag: 'library', query: ['since', 'limit'] },
   'GET /tracks/missing': { summary: 'Tracks whose file the scanner can no longer find.', returns: 'MissingTrack[]', tag: 'library' },

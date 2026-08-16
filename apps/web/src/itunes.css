@@ -2211,3 +2211,18 @@ input[type="range"]::-webkit-slider-thumb {
 .station button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
 .radio-note { margin: 6px 0 18px; padding: 9px 11px; border-radius: var(--radius); background: var(--stripe); color: var(--dim); line-height: 1.55; }
 .radio-note b { color: var(--text); }
+
+/* Adding a podcast: two ways, so a dialog rather than a field with a button. */
+.add-podcast { width: 520px; max-width: 92vw; }
+.add-podcast .modal-body { max-height: 46vh; overflow-y: auto; }
+.add-podcast p.dim { margin: 0 0 10px; line-height: 1.55; }
+.ap-url { width: 100%; font: inherit; padding: 4px 7px; }
+.ap-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ap-row span { width: 60px; color: var(--dim); }
+.ap-folders { display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 4px; }
+.ap-folders button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 3px 6px; border-radius: 4px; text-align: left; }
+.ap-folders button.on { background: var(--sel); color: var(--sel-text); }
+.ap-folders .p { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; unicode-bidi: plaintext; }
+.ap-folders button.on em { color: var(--sel-text); }
+.ap-preview { margin: 10px 0 0; }
+.pod-section { padding: 10px 10px 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }

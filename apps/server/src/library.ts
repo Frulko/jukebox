@@ -16,6 +16,8 @@ export type TrackQuery = {
   tag?: string
   /** A field left empty: `album`, `artist`, `genre`, `year`, `track`, `artwork`, or `any`. */
   missing?: string
+  /** Everything under a folder, as a prefix of the stored path. */
+  folder?: string
   sourceId?: string
   /**
    * The sources this request may see at all, or absent for every one.
@@ -275,6 +277,16 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
     sql.push(clause ?? '0')
   }
 
+  if (qs.folder) {
+    // A prefix, with the separator forced on: without it `/music/Live` would
+    // also take `/music/Live Sessions`, which is a different folder.
+    const prefix = qs.folder.endsWith('/') ? qs.folder : `${qs.folder}/`
+    // `\` escapes the LIKE wildcards, or a folder containing `_` — which is
+    // most of them — matches any character in that position.
+    sql.push(`t.path LIKE ? ESCAPE '\\'`)
+    params.push(`${prefix.replace(/([%_\\])/g, '\\$1')}%`)
+  }
+
   // Tags are a table, so this is an EXISTS rather than a join: a join would
   // multiply the row by its tags and turn a page of 300 into a page of 300
   // repeated as many times as anyone was thorough.
@@ -458,7 +470,27 @@ export function facets(db: DB, qs: TrackQuery) {
     // "every tag on this page" -- the whole reason the column browser asks the
     // server. Not cascaded, for the same reason as formats.
     tags: tagFacet(db, base),
+    folders: folderFacet(db, base),
   }
+}
+
+/**
+ * Every folder holding a track, with how many it holds.
+ *
+ * `rtrim(path, replace(path, '/', ''))` is the SQLite idiom for "everything up
+ * to the last slash": the second argument is the path with its slashes removed,
+ * and trimming those characters from the right stops at the final separator.
+ * Doing it in SQL rather than over a page is the point — a folder picker built
+ * from the loaded rows would offer three folders for a library with two
+ * hundred, and the count beside each would be the page's.
+ */
+function folderFacet(db: DB, scope: TrackQuery): { value: string; count: number }[] {
+  const f = filters(scope)
+  return db
+    .prepare(`SELECT rtrim(t.path, replace(t.path, '/', '')) AS value, COUNT(*) AS count
+              FROM tracks t WHERE ${f.sql.join(' AND ')} AND t.path LIKE '%/%'
+              GROUP BY value ORDER BY value COLLATE NOCASE ASC`)
+    .all(...(f.params as never[])) as { value: string; count: number }[]
 }
 
 /** Every tag in scope, with how many tracks carry it. */

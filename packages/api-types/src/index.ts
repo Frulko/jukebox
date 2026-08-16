@@ -565,6 +565,13 @@ export type TrackQuery = {
    * would return the entire library while looking like it worked.
    */
   missing?: 'album' | 'artist' | 'albumartist' | 'genre' | 'year' | 'track' | 'any'
+  /**
+   * Everything under a folder, matched on the stored path as a prefix.
+   *
+   * A path, not a name: two sources can both hold `Podcasts/`, and the whole
+   * point of pointing at a folder is that it is *that* one.
+   */
+  folder?: string
   sourceId?: string
   /** Exactly this many stars, 0–5. `0` is "never rated", which is a real query. */
   rating?: number

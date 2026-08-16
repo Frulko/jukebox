@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Episode, Podcast, Track } from '@jukebox/client-sdk'
-import { api, usePodcasts } from './api'
+import { api, usePodcasts, useTracks } from './api'
+import { AddPodcast } from './AddPodcast'
 import { Icon } from './Icon'
 import { fmtBytes } from './media'
 import { useRemembered, useScrollMemory } from './viewState'
@@ -95,47 +96,41 @@ export function PodcastsView({
   search,
   nowPlaying,
   onPlayEpisode,
+  onPlay,
   onNotice,
 }: {
   search: string
   nowPlaying: string | null
   onPlayEpisode: (episode: Episode, show: Podcast, downloaded: string[]) => void
+  /** For episodes that are simply files: they are library tracks and play like any. */
+  onPlay: (id: string, queue?: string[]) => void
   onNotice: (message: string) => void
 }) {
   const qc = useQueryClient()
   const shows = usePodcasts()
-  const [feedUrl, setFeedUrl] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
-
-  const refreshShows = () => qc.invalidateQueries({ queryKey: ['podcasts'] })
-
-  /**
-   * Subscribing is a URL and nothing else.
-   *
-   * The server validates the URL before storing it — a typo should be an error
-   * at the moment it is typed, not a feed that silently never updates — and it
-   * fetches straight away, because a subscription showing nothing until the
-   * next scheduled refresh looks broken. Both of those are the server's rules;
-   * this only has to report what it said.
-   */
-  const subscribe = async () => {
-    const url = feedUrl.trim()
-    if (!url || adding) return
-    setAdding(true)
-    setAddError(null)
-    try {
-      const added = await api.podcasts.subscribe({ feedUrl: url })
-      setFeedUrl('')
-      setSel(added.id)
-      refreshShows()
-      onNotice(`Subscribed to ${added.title || url} — fetching episodes`)
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'the server refused that feed')
-    } finally {
-      setAdding(false)
+  // Episodes the library holds as files: what the folder half of "Add a
+  // podcast" produces, and what a feed's downloads are too.
+  const onDisk = useTracks({ kind: 'podcast', limit: 500, sort: 'album' }).data?.items ?? []
+  const diskShows = useMemo(() => {
+    const by = new Map<string, { key: string; title: string; tracks: typeof onDisk }>()
+    for (const t of onDisk) {
+      // Grouped by folder, not by album: this section is about *where the files
+      // are*, and two shows can carry the same album tag while a folder is one
+      // place. It is also what distinguishes these rows from the feed above
+      // when a feed's downloads land here too.
+      const key = t.path.includes('/') ? t.path.slice(0, t.path.lastIndexOf('/')) : 'Loose files'
+      const show = by.get(key) ?? { key, title: key.split('/').pop() || key, tracks: [] }
+      show.tracks.push(t)
+      by.set(key, show)
     }
+    return [...by.values()].sort((a, b) => a.title.localeCompare(b.title))
+  }, [onDisk])
+
+  const refreshShows = () => {
+    qc.invalidateQueries({ queryKey: ['podcasts'] })
+    qc.invalidateQueries({ queryKey: ['tracks'] })
   }
   const items = shows.data?.items ?? []
 
@@ -163,24 +158,17 @@ export function PodcastsView({
     return (
       <div className="media split">
         <div className="pod-empty">
-          <p>No podcasts yet. Paste a feed URL and its episodes appear here.</p>
-          <form
-            className="pod-add"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void subscribe()
-            }}
-          >
-            <input
-              value={feedUrl}
-              placeholder="https://example.com/feed.xml"
-              onChange={(e) => (setFeedUrl(e.target.value), setAddError(null))}
-            />
-            <button type="submit" disabled={!feedUrl.trim() || adding}>
-              {adding ? 'Adding…' : 'Subscribe'}
+          <p>
+            No podcasts yet. Subscribe to a feed, or point at a folder of episodes you already have.
+          </p>
+          <div className="pod-add">
+            <button className="prim" onClick={() => setAddOpen(true)}>
+              <Icon name="plus" size={9} /> Add a podcast
             </button>
-          </form>
-          {addError && <div className="pod-add-error">{addError}</div>}
+          </div>
+          {addOpen && (
+            <AddPodcast onClose={() => setAddOpen(false)} onNotice={onNotice} onAdded={refreshShows} />
+          )}
         </div>
       </div>
     )
@@ -189,28 +177,19 @@ export function PodcastsView({
     return <div className="media split"><div className="list-empty">Nothing matches “{search}”</div></div>
   }
 
+  const disk = sel?.startsWith('disk:') ? diskShows.find((d) => `disk:${d.key}` === sel) : undefined
+
   return (
     <div className="media split podcasts">
       <div className="show-col">
-        <form
-          className="pod-add"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void subscribe()
-          }}
-        >
-          <input
-            value={feedUrl}
-            placeholder="Feed URL…"
-            onChange={(e) => (setFeedUrl(e.target.value), setAddError(null))}
-          />
-          <button type="submit" disabled={!feedUrl.trim() || adding}>
-            {adding ? 'Adding…' : 'Subscribe'}
+        {/* A button rather than a URL field: there are two ways a podcast gets
+            into a library — a feed you subscribe to and a folder you already
+            have — and a box labelled "Feed URL" makes the second invisible. */}
+        <div className="pod-add">
+          <button className="prim" onClick={() => setAddOpen(true)}>
+            <Icon name="plus" size={9} /> Add a podcast
           </button>
-        </form>
-        {/* The server's own words: "already subscribed to this feed" and
-            "expected an http or https URL" are both worth reading. */}
-        {addError && <div className="pod-add-error">{addError}</div>}
+        </div>
       <div className="show-list" ref={list.ref} onScroll={list.onScroll}>
         {visible.map((s) => (
           <button key={s.id} className={`show ${s.id === show.id ? 'on' : ''}`} onClick={() => setSel(s.id)}>
@@ -238,9 +217,93 @@ export function PodcastsView({
             {s.downloadedCount > 0 && <span className="badge">{s.downloadedCount}</span>}
           </button>
         ))}
+
+        {/* Files, not subscriptions. A feed's downloaded episodes are here too,
+            because they *are* episodes on disk — the feed's own row says "In
+            your library" about the same file, which is one fact from two
+            directions rather than a duplicate. */}
+        {diskShows.length > 0 && (
+          <>
+            <div className="pod-section">Episodes on disk</div>
+            {diskShows.map((d) => (
+              <button
+                key={d.key}
+                className={`show ${sel === `disk:${d.key}` ? 'on' : ''}`}
+                onClick={() => setSel(`disk:${d.key}`)}
+              >
+                <div className="art" style={art(d.key)} />
+                <div className="meta">
+                  <span className="t">{d.title}</span>
+                  <span className="s" title={d.key}>
+                    {d.tracks.length} episode{d.tracks.length === 1 ? '' : 's'} · {d.key}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </>
+        )}
       </div>
       </div>
 
+      {disk ? (
+        <div className="ep-list">
+          <div className="show-head">
+            <div className="sh-meta">
+              <b>{disk.title}</b>
+              <span className="dim">
+                {disk.tracks.length} episode{disk.tracks.length === 1 ? '' : 's'} on disk · no feed to
+                check, so nothing new appears by itself
+              </span>
+            </div>
+            <div className="sh-actions">
+              <button
+                onClick={() => {
+                  // Back among the songs. The same one call that filed them,
+                  // which is why filing needed no confirmation.
+                  void api.tracks
+                    .patch(disk.tracks.map((t) => t.id), { kind: 'music' })
+                    .then(() => {
+                      refreshShows()
+                      setSel(null)
+                      onNotice(`${disk.title} is back among the songs`)
+                    })
+                }}
+              >
+                Not a podcast
+              </button>
+            </div>
+          </div>
+          <div className="ep-head">
+            <span className="c-dot" />
+            <span className="c-name">Name</span>
+            <span className="c-time">Time</span>
+            <span className="c-date">Added</span>
+            <span className="c-where">Where</span>
+            <span className="c-size">Size</span>
+          </div>
+          <div className="ep-body" ref={body.ref} onScroll={body.onScroll}>
+            {disk.tracks.map((t, i) => (
+              <div
+                key={t.id}
+                className={`ep ${i % 2 ? 'odd' : ''} ${t.id === nowPlaying ? 'playing' : ''}`}
+                onDoubleClick={() => onPlay(t.id, disk.tracks.map((x) => x.id))}
+              >
+                <span className="c-dot">
+                  {t.id === nowPlaying ? <Icon name="volumeHigh" size={10} className="spk" /> : null}
+                </span>
+                <span className="c-name">
+                  <Icon name="music" size={9} className="ep-have" />
+                  {t.name}
+                </span>
+                <span className="c-time num">{t.duration ? runtime(t.duration) : '—'}</span>
+                <span className="c-date">{day(t.dateAdded)}</span>
+                <span className="c-where dim">In your library</span>
+                <span className="c-size num">{t.size ? fmtBytes(t.size) : '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div className="ep-list">
         {/* Where this show comes from, and what to do about it. The feed URL is
             shown rather than hidden behind a settings dialog: it is the whole
@@ -354,6 +417,11 @@ export function PodcastsView({
           ))}
         </div>
       </div>
+      )}
+
+      {addOpen && (
+        <AddPodcast onClose={() => setAddOpen(false)} onNotice={onNotice} onAdded={refreshShows} />
+      )}
     </div>
   )
 }

@@ -2128,6 +2128,10 @@ export const SCHEMAS: Record<string, any> = {
         ],
         "description": "Tracks with a field left empty, for consolidating a library. `any` is the union of the rest. Deliberately about *fields*, not about quality: a track with no year is incomplete, a track with a year you disagree with is not, and only the first is something a query can find. No `artwork`: the column exists but nothing writes it — covers are read on demand rather than during a scan, because opening a hundred thousand files for their artwork would make a first scan interminable. A filter on it would return the entire library while looking like it worked."
       },
+      "folder": {
+        "type": "string",
+        "description": "Everything under a folder, matched on the stored path as a prefix. A path, not a name: two sources can both hold `Podcasts/`, and the whole point of pointing at a folder is that it is *that* one."
+      },
       "sourceId": {
         "type": "string"
       },

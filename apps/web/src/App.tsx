@@ -726,6 +726,7 @@ export default function App() {
         search={search}
         nowPlaying={nowPlaying}
         onPlayEpisode={playEpisode}
+        onPlay={playTrack}
         onNotice={setNotice}
       />,
     audiobooks: (

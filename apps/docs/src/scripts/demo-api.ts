@@ -87,6 +87,12 @@ function match(t: Track, q: TrackQuery) {
     if (isLossless !== want) return false
   }
   if (q.tag && !t.tags.includes(q.tag)) return false
+  if (q.folder) {
+    // Prefix with the separator forced on, exactly like the server: "Live"
+    // must not swallow "Live Sessions".
+    const prefix = q.folder.endsWith('/') ? q.folder : `${q.folder}/`
+    if (!t.path.startsWith(prefix)) return false
+  }
   if (q.missing) {
     // The same rules as the server's, including that `albumartist` is its own
     // gap: browsing by artist reads that column, so a track with an artist and
@@ -137,7 +143,9 @@ function facets(q: TrackQuery) {
     for (const t of list) seen.set(pick(t), (seen.get(pick(t)) ?? 0) + 1)
     return [...seen].sort((a, b) => a[0].localeCompare(b[0])).map(([value, n]) => ({ value, count: n }))
   }
-  const base = tracks.filter((t) => match(t, { q: q.q, kind: q.kind }))
+  // Scoped by source like the server's, or the folder picker offers folders
+  // from a source nobody chose.
+  const base = tracks.filter((t) => match(t, { q: q.q, kind: q.kind, sourceId: q.sourceId }))
   const byGenre = base.filter((t) => match(t, { genre: q.genre }))
   const byArtist = byGenre.filter((t) => match(t, { artist: q.artist }))
   return {
@@ -151,6 +159,9 @@ function facets(q: TrackQuery) {
     // one facet where a track can appear under more than one value.
     tags: count(tracks.flatMap((t) => t.tags.map((tag) => ({ ...t, tag }))) as (Track & { tag: string })[],
       (t) => (t as Track & { tag: string }).tag),
+    // Everything up to the last slash, as the server's SQL does it.
+    folders: count(tracks.filter((t) => t.path.includes('/')),
+      (t) => t.path.slice(0, t.path.lastIndexOf('/') + 1)),
   }
 }
 
@@ -334,6 +345,7 @@ for (const e of EPISODES) {
   tracks.push({
     ...base,
     id: `pt-${e.id}`,
+    path: `Podcasts/${show}/${e.episodeNumber ?? 0}.mp3`,
     kind: 'podcast',
     name: e.title,
     artist: author,

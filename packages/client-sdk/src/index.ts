@@ -136,8 +136,10 @@ export function createClient(opts: ClientOptions = {}) {
       list: (q: TrackQuery = {}) => request<Page<Track>>(`/tracks${qs(q)}`, {}, true),
       /** Distinct values for the column browser, cascading. */
       facets: (q: TrackQuery = {}) =>
-        request<{ genres: Facet[]; artists: Facet[]; albums: Facet[]; formats: Facet[]; tags: Facet[] }>(
-          `/facets${qs(q)}`, {}, true),
+        request<{
+          genres: Facet[]; artists: Facet[]; albums: Facet[]; formats: Facet[]
+          tags: Facet[]; folders: Facet[]
+        }>(`/facets${qs(q)}`, {}, true),
       count: (q: TrackQuery = {}) => request<{ count: number }>(`/tracks/count${qs(q)}`, {}, true),
       /** Fetches only what changed since `since`. The main network win. */
       delta: (since: number, limit = 500) => request<TracksDelta>(`/tracks/delta${qs({ since, limit })}`),
