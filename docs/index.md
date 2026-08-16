@@ -12,7 +12,9 @@ library. Everything in these pages follows from that split.
 
 - [Architecture](./architecture.md) — topology, plugins, satellites, audio routing
 - [Stack](./stack.md) — technical choices and deployment targets
-- [API](./api.md) — the target spec, existing routes marked ✅
+- [Plugins](./plugins.md) — what one can do, what it cannot, how it reaches the user
+- [API](./api.md) — the rules the API is built on
+- [API reference](./api-reference.md) — every route, generated from the router
 - [UI evolution](./ui-evolution.md) — iTunes 8 → iTunes 12 → Apple Music
 
 The [system map](/jukebox/map/) shows inputs, core and outputs on one page, and
