@@ -41,9 +41,15 @@
   --head-sorted: linear-gradient(#d6e5f8, #b8d0ee);
 
   --stripe: #edf3fe;
-  --sel: linear-gradient(#3d80df, #2d6bc4);
+  /* Flat, where iTunes 8 had a gradient. A row is the one place a vertical
+     gradient cannot go: it restarts on every row, so a block of selected rows
+     shows a light seam at each boundary — dark bottom against light top — which
+     reads exactly like a 1 px gap between the rows. Measured on the built app:
+     rgb(46,108,197) on the last line of a row, rgb(60,127,222) on the first line
+     of the next. The mid-tone keeps the colour and loses the banding. */
+  --sel: #3576d2;
   --sel-text: #fff;
-  --sel-blur: linear-gradient(#b6b6b6, #a4a4a4);
+  --sel-blur: #adadad;
   --row-h: 17px;
   --row-radius: 0;
 
