@@ -21,7 +21,11 @@ if (ok && !existsSync(DIR)) execFileSync('node', ['scripts/fixtures.mjs', DIR], 
 try {
   execFileSync('node', [
     '--experimental-strip-types', '--no-warnings=ExperimentalWarning',
-    '--test', 'apps/server/test/*.test.ts',
+    // Every app with tests, not just the server. The satellite's were written
+    // and then never run: `verify` reported all green while an entire
+    // application's suite sat unexecuted, which is a worse lie than having no
+    // tests at all — nobody doubts a suite that does not exist.
+    '--test', 'apps/server/test/*.test.ts', 'apps/satellite/test/*.test.ts',
   ], { stdio: 'inherit', env: { ...process.env, ...(ok ? { JUKEBOX_FIXTURES: DIR } : {}) } })
 } catch {
   process.exit(1)

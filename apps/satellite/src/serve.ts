@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { readdir, stat } from 'node:fs/promises'
+import { appendFile, mkdir, readdir, rename, stat, unlink } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { extname, join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -114,22 +114,55 @@ async function readDevice(): Promise<DeviceTrack[]> {
 
 let cache: DeviceTrack[] = []
 
+/**
+ * Where a transferred track lands, and where a partial one waits.
+ *
+ * The `.part` suffix is what makes resume possible *and* safe: a half-written
+ * file must not be visible to `readDevice`, or an interrupted sync leaves the
+ * device holding truncated music that looks like a complete library.
+ */
+const landing = (name: string) => join(ROOT, name.replace(/[/\\]/g, '-'))
+
+async function transfer(item: { url: string; token?: string; name?: string }): Promise<number> {
+  const name = item.name || item.url.split('/').pop() || 'track'
+  const target = landing(name)
+  const partial = `${target}.part`
+
+  // What is already there decides where to resume. A three-hour sync *will* be
+  // interrupted, and starting over is the difference between finishing and
+  // never finishing.
+  const have = await stat(partial).then((s) => s.size).catch(() => 0)
+
+  const headers: Record<string, string> = {}
+  if (item.token) headers.authorization = `Bearer ${item.token}`
+  if (have > 0) headers.range = `bytes=${have}-`
+
+  const res = await fetch(item.url, { headers })
+  if (!res.ok && res.status !== 206) throw new Error(`${res.status} on ${item.url}`)
+
+  // A server that ignored the Range gives 200 and the whole file: the partial
+  // has to be thrown away rather than appended to, or the result is the first
+  // bytes twice.
+  const resuming = res.status === 206 && have > 0
+  const body = Buffer.from(await res.arrayBuffer())
+  await appendFile(partial, body, resuming ? undefined : { flag: 'w' })
+
+  // Renamed only once it is whole. Until then it is a `.part` that
+  // `readDevice` does not report and the next attempt resumes.
+  await rename(partial, target)
+  return resuming ? body.byteLength : body.byteLength
+}
+
 async function runJob(job: Job): Promise<void> {
   job.state = 'transferring'
   job.total = job.add.length
+  await mkdir(ROOT, { recursive: true })
   for (const item of job.add) {
     // Re-read from the map: a DELETE while we transfer flips the state, and the
     // loop has to notice mid-flight rather than at the end.
     if (jobs.get(job.id)?.state === 'cancelled') return
     try {
-      // Range is requested so an interrupted transfer resumes instead of
-      // restarting. A three-hour sync will be interrupted.
-      const res = await fetch(item.url, {
-        headers: item.token ? { authorization: `Bearer ${item.token}` } : {},
-      })
-      if (!res.ok) throw new Error(`${res.status} on ${item.url}`)
-      const buf = await res.arrayBuffer()
-      job.bytes += buf.byteLength
+      job.bytes += await transfer(item)
       job.done++
     } catch (err) {
       job.error = err instanceof Error ? err.message : String(err)
@@ -137,10 +170,24 @@ async function runJob(job: Job): Promise<void> {
       return
     }
   }
-  // One atomic write at the end, never once per track: rewriting the device
-  // database per file is how iPods get corrupted.
+  // What the server asked to be taken off, done before the commit so the
+  // device database is written once against the final contents.
+  for (const localId of job.remove) {
+    const track = cache.find((t) => t.deviceLocalId === localId)
+    if (track) await unlink(join(ROOT, track.path)).catch(() => {})
+  }
+
+  /*
+   * One commit at the end, never once per track: rewriting the device database
+   * per file is how iPods get corrupted.
+   *
+   * Here that commit is re-reading the folder, because this satellite's
+   * "database" is the folder itself. On real hardware this is where the
+   * iTunesDB is written, and it is the one place a power cut must not be
+   * survivable halfway — which is why every transfer above lands as `.part`
+   * and is renamed only when whole, so this step never sees a partial file.
+   */
   job.state = 'committing'
-  await new Promise((r) => setTimeout(r, 50))
   cache = await readDevice()
   job.state = 'done'
 }
