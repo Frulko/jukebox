@@ -10,7 +10,8 @@
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
 import type {
-  Device, DeviceTrack, Episode, Job, MissingTrack, Playlist, Source, Stats, SyncPlan, Track, TrackQuery,
+  Device, DeviceTrack, Episode, Job, MissingTrack, Playlist, Podcast, Source, Stats, SyncPlan, Track,
+  TrackQuery,
 } from '@jukebox/api-types'
 
 const all = makeLibrary()
@@ -240,6 +241,19 @@ const PLAN: SyncPlan = (() => {
  * is the whole point of the view, so a demo without both halves would show a
  * distinction it never has to make.
  */
+/** Two feeds: one healthy, one that has been failing — both states the list must show. */
+const FEEDS: Podcast[] = [
+  { id: 'pod-vinyl', feedUrl: 'https://example.invalid/vinyl.xml', title: 'The Vinyl Hours',
+    description: 'Long-form listening.', author: 'Frulko', imageUrl: null, siteUrl: null,
+    cron: '0 7 * * *', keepLast: 10, autoDownload: 1, targetSourceId: 'demo', targetPath: 'Podcasts',
+    lastFetchAt: Date.UTC(2026, 7, 16, 7), lastError: null, episodeCount: 128, downloadedCount: 10 },
+  { id: 'pod-compression', feedUrl: 'https://example.invalid/compression.xml', title: 'Compression',
+    description: 'Audio engineering, weekly.', author: 'anon', imageUrl: null, siteUrl: null,
+    cron: '0 8 * * 1', keepLast: 5, autoDownload: 0, targetSourceId: 'demo', targetPath: 'Podcasts',
+    lastFetchAt: Date.UTC(2026, 6, 2), lastError: 'Feed answered 404 for the last 6 weeks',
+    episodeCount: 41, downloadedCount: 5 },
+]
+
 const EPISODES: Episode[] = [
   ...Array.from({ length: 12 }, (_, i) => ({
     id: `ep-vinyl-${i}`,
@@ -414,6 +428,19 @@ function stats(): Stats {
   }
 }
 
+/**
+ * A refusal the demo makes on purpose.
+ *
+ * The two the podcast field can provoke — a URL that is not one, and a feed
+ * already subscribed to — are the server's own, and a demo that accepted
+ * everything would teach that the field cannot be got wrong.
+ */
+class DemoError extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) {
+    super(message)
+  }
+}
+
 /** Returns the body for a route, or `undefined` when the demo has nothing to say. */
 function route(path: string, params: URLSearchParams, method: string, body: string | null): unknown {
   const q = Object.fromEntries(params) as TrackQuery
@@ -580,21 +607,60 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   // page exists to surface rather than hide behind a count.
   const eps = path.match(/^\/podcasts\/([^/]+)\/episodes$/)
   if (eps) return { items: EPISODES.filter((e) => e.podcastId === eps[1]), next: null }
-  if (path === '/podcasts') {
-    return {
-      items: [
-        { id: 'pod-vinyl', feedUrl: 'https://example.invalid/vinyl.xml', title: 'The Vinyl Hours',
-          description: 'Long-form listening.', author: 'Frulko', imageUrl: null, siteUrl: null,
-          cron: '0 7 * * *', keepLast: 10, autoDownload: 1, targetSourceId: 'demo', targetPath: 'Podcasts',
-          lastFetchAt: Date.UTC(2026, 7, 16, 7), lastError: null, episodeCount: 128, downloadedCount: 10 },
-        { id: 'pod-compression', feedUrl: 'https://example.invalid/compression.xml', title: 'Compression',
-          description: 'Audio engineering, weekly.', author: 'anon', imageUrl: null, siteUrl: null,
-          cron: '0 8 * * 1', keepLast: 5, autoDownload: 0, targetSourceId: 'demo', targetPath: 'Podcasts',
-          lastFetchAt: Date.UTC(2026, 6, 2), lastError: 'Feed answered 404 for the last 6 weeks',
-          episodeCount: 41, downloadedCount: 5 },
-      ],
+  if (path === '/podcasts' && method === 'POST') {
+    const b = JSON.parse(body ?? '{}') as { feedUrl?: string }
+    const url = (b.feedUrl ?? '').trim()
+    // The same two refusals the server makes, in the same order: a bad URL is
+    // an error when it is typed, and subscribing twice is not a subscription.
+    let host = ''
+    try {
+      const u = new URL(url)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('scheme')
+      host = u.hostname
+    } catch {
+      throw new DemoError(400, 'bad_feed_url', 'expected an http or https URL')
     }
+    if (FEEDS.some((f) => f.feedUrl === url)) {
+      throw new DemoError(409, 'already_subscribed', 'already subscribed to this feed')
+    }
+    const added = {
+      ...FEEDS[0],
+      id: `pod-${FEEDS.length + 1}`,
+      feedUrl: url,
+      title: host.replace(/^www\./, ''),
+      description: '',
+      author: host,
+      cron: '0 7 * * *',
+      lastFetchAt: Date.now(),
+      lastError: null,
+      episodeCount: 0,
+      downloadedCount: 0,
+    }
+    FEEDS.push(added)
+    return { ...added, job: scanning() }
   }
+  const podRefresh = path.match(/^\/podcasts\/([^/]+)\/refresh$/)
+  if (podRefresh && method === 'POST') {
+    const f = FEEDS.find((x) => x.id === podRefresh[1])
+    if (f) f.lastFetchAt = Date.now()
+    return scanning()
+  }
+  const pod = path.match(/^\/podcasts\/([^/]+)$/)
+  if (pod && method === 'DELETE') {
+    const i = FEEDS.findIndex((x) => x.id === pod[1])
+    if (i >= 0) FEEDS.splice(i, 1)
+    return null
+  }
+  if (pod && method === 'PATCH') {
+    const f = FEEDS.find((x) => x.id === pod[1])
+    if (!f) return undefined
+    const b = JSON.parse(body ?? '{}') as Record<string, unknown>
+    if (b.autoDownload !== undefined) f.autoDownload = (b.autoDownload ? 1 : 0) as 0 | 1
+    if (typeof b.keepLast === 'number') f.keepLast = b.keepLast
+    if (b.cron !== undefined) f.cron = b.cron as string | null
+    return f
+  }
+  if (path === '/podcasts') return { items: FEEDS }
   if (path === '/tracks/tags' && method === 'POST') {
     const b = JSON.parse(body ?? '{}') as { ids?: string[]; add?: string[]; remove?: string[] }
     const clean = (l: string[] = []) => [...new Set(l.map((t) => t.trim().toLowerCase()).filter(Boolean))]
@@ -729,7 +795,13 @@ export function installDemoApi() {
 
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
     const payload = typeof init?.body === 'string' ? init.body : null
-    const data = route(url.pathname.slice(at + 7), url.searchParams, method, payload)
+    let data: unknown
+    try {
+      data = route(url.pathname.slice(at + 7), url.searchParams, method, payload)
+    } catch (err) {
+      if (!(err instanceof DemoError)) throw err
+      return json({ error: { code: err.code, message: err.message } }, err.status)
+    }
     return data === undefined
       ? json({ error: { code: 'not_in_demo', message: `${method} ${url.pathname} is not part of the demo` } }, 404)
       : json(data)

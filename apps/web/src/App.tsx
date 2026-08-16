@@ -4,7 +4,7 @@ import { summarize, type Track } from './data'
 import type { Episode, Podcast } from '@jukebox/client-sdk'
 import {
   api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
-  usePlayer, usePlayerActions, useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
+  usePlayer, usePlayerActions, usePodcasts, useTagTracks, useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
 import { Sidebar } from './Sidebar'
@@ -106,6 +106,14 @@ export default function App() {
   }, [theme])
 
   const openAlbum = (album: string, artist?: string) => setAlbumOpen({ album, artist })
+
+  // Only asked for while the podcasts view is the one on screen; the query is
+  // shared with the view itself, so this costs no second request.
+  const podcasts = usePodcasts(view.kind === 'library' && view.id === 'podcasts')
+  const podcastCount = {
+    shows: podcasts.data?.items.length ?? 0,
+    episodes: (podcasts.data?.items ?? []).reduce((a, p) => a + p.episodeCount, 0),
+  }
 
   // Going anywhere leaves the album. Here rather than at each door into a
   // source, for the same reason as the line above: there are a dozen of them.
@@ -539,7 +547,12 @@ export default function App() {
   const mode = view.kind === 'library' && (view.id === 'albums' || view.id === 'artists') ? view.id : 'songs'
 
   const MEDIA: Record<string, React.ReactNode> = {
-    podcasts: <PodcastsView search={search} nowPlaying={nowPlaying} onPlayEpisode={playEpisode} />,
+    podcasts: <PodcastsView
+        search={search}
+        nowPlaying={nowPlaying}
+        onPlayEpisode={playEpisode}
+        onNotice={setNotice}
+      />,
     audiobooks: <AudiobooksView search={search} />,
     apps: <AppsView search={search} />,
     radio: <RadioView search={search} />,
@@ -775,7 +788,12 @@ export default function App() {
         <span className="summary">
           {notice ??
             (view.kind === 'library' && view.id !== 'music'
-              ? mediaSummary(view.id)
+              ? view.id === 'podcasts'
+                // Counted from the feeds themselves: the fabricated list this
+                // replaced would have gone on saying "4 podcasts" to someone
+                // subscribed to one.
+                ? `${podcastCount.shows} podcast${podcastCount.shows === 1 ? '' : 's'}, ${podcastCount.episodes.toLocaleString('en-US')} episodes`
+                : mediaSummary(view.id)
               : media ? '' : summarize(tracks))}
         </span>
         <div className="theme-picker">

@@ -196,9 +196,12 @@ export function useServerEvents(qc: QueryClient) {
       'job.progress': (job: Job) => {
         qc.setQueryData<{ items: Job[] }>(keys.jobs, (old) =>
           old ? { items: [job, ...old.items.filter((j) => j.id !== job.id)].slice(0, 20) } : { items: [job] })
-        if (job.state === 'done') {
+        if (job.state === 'done' || job.state === 'failed') {
           qc.invalidateQueries({ queryKey: ['tracks'] })
           qc.invalidateQueries({ queryKey: keys.sources })
+          // A feed that just refused to answer has a `lastError` worth reading,
+          // and it only lands on the podcast row — which nothing else refetches.
+          qc.invalidateQueries({ queryKey: ['podcasts'] })
         }
       },
       'library.changed': () => qc.invalidateQueries({ queryKey: ['tracks'] }),
@@ -264,6 +267,10 @@ export function usePlayerActions() {
     }
   }, [qc])
 }
+
+/** The feeds. One key, so the view and the status line ask once between them. */
+export const usePodcasts = (enabled = true) =>
+  useQuery({ queryKey: ['podcasts'], queryFn: () => api.podcasts.list(), staleTime: 60_000, enabled })
 
 /** Is the server answering? Used to show an honest state instead of an empty list. */
 export function useServerHealth() {

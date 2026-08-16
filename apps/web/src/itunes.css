@@ -2014,7 +2014,8 @@ input[type="range"]::-webkit-slider-thumb {
    Two marks that mean two different things: the dot is "not listened to yet",
    the glyph is "on disk or at the publisher". An episode can be either without
    the other, so they cannot share a channel. */
-.ep .c-name .icon { margin-right: 6px; vertical-align: -1px; }
+.ep .c-name { display: flex; align-items: center; gap: 6px; }
+.ep .c-name .icon { flex: none; }
 .ep-have { color: var(--accent); }
 .ep .c-name .ep-remote { opacity: .5; }
 .ep.playing .c-name { color: var(--accent); font-weight: 600; }
@@ -2028,3 +2029,31 @@ input[type="range"]::-webkit-slider-thumb {
   white-space: nowrap;
 }
 .show .art { object-fit: cover; }
+
+/* ---------------- subscribing to a feed ----------------
+   The URL is the whole identity of a podcast, so it is on screen rather than
+   behind a settings dialog — it is also the thing people paste elsewhere. */
+.show-col { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+.show-col .show-list { border-right: 0; }
+.pod-add { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line-soft); }
+.pod-add input { flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 3px 6px; }
+.pod-add-error { padding: 6px 9px; font-size: 11px; color: var(--danger, #d4342c); }
+.pod-empty { margin: auto; max-width: 420px; text-align: center; color: var(--dim); }
+.pod-empty .pod-add { border: 0; justify-content: center; }
+
+.show-head { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.sh-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sh-meta b { font-size: 13px; }
+.sh-feed {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; color: var(--dim); text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sh-feed:hover { color: var(--accent); text-decoration: underline; }
+.sh-meta .dim { font-size: 10px; }
+.sh-actions { display: flex; align-items: center; gap: 7px; flex: none; }
+.sh-toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; }
+.sh-actions button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
+/* Six columns rather than five: the sixth is where the episode actually is.
+   Scoped to podcasts, because audiobooks share `.ep` and have five. */
+.media.podcasts .ep-head, .media.podcasts .ep { grid-template-columns: 18px 1fr 84px 116px 124px 78px; }

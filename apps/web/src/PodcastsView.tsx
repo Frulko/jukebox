@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Episode, Podcast, Track } from '@jukebox/client-sdk'
-import { api } from './api'
+import { api, usePodcasts } from './api'
 import { Icon } from './Icon'
 import { fmtBytes } from './media'
 import { useRemembered, useScrollMemory } from './viewState'
@@ -94,12 +95,48 @@ export function PodcastsView({
   search,
   nowPlaying,
   onPlayEpisode,
+  onNotice,
 }: {
   search: string
   nowPlaying: string | null
   onPlayEpisode: (episode: Episode, show: Podcast, downloaded: string[]) => void
+  onNotice: (message: string) => void
 }) {
-  const shows = useQuery({ queryKey: ['podcasts'], queryFn: () => api.podcasts.list(), staleTime: 60_000 })
+  const qc = useQueryClient()
+  const shows = usePodcasts()
+  const [feedUrl, setFeedUrl] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+
+  const refreshShows = () => qc.invalidateQueries({ queryKey: ['podcasts'] })
+
+  /**
+   * Subscribing is a URL and nothing else.
+   *
+   * The server validates the URL before storing it — a typo should be an error
+   * at the moment it is typed, not a feed that silently never updates — and it
+   * fetches straight away, because a subscription showing nothing until the
+   * next scheduled refresh looks broken. Both of those are the server's rules;
+   * this only has to report what it said.
+   */
+  const subscribe = async () => {
+    const url = feedUrl.trim()
+    if (!url || adding) return
+    setAdding(true)
+    setAddError(null)
+    try {
+      const added = await api.podcasts.subscribe({ feedUrl: url })
+      setFeedUrl('')
+      setSel(added.id)
+      refreshShows()
+      onNotice(`Subscribed to ${added.title || url} — fetching episodes`)
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'the server refused that feed')
+    } finally {
+      setAdding(false)
+    }
+  }
   const items = shows.data?.items ?? []
 
   const [sel, setSel] = useRemembered<string | null>('podcasts.show', null)
@@ -125,8 +162,25 @@ export function PodcastsView({
   if (!items.length) {
     return (
       <div className="media split">
-        <div className="list-empty">
-          No podcasts yet. Subscribe to a feed and its episodes appear here.
+        <div className="pod-empty">
+          <p>No podcasts yet. Paste a feed URL and its episodes appear here.</p>
+          <form
+            className="pod-add"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void subscribe()
+            }}
+          >
+            <input
+              value={feedUrl}
+              placeholder="https://example.com/feed.xml"
+              onChange={(e) => (setFeedUrl(e.target.value), setAddError(null))}
+            />
+            <button type="submit" disabled={!feedUrl.trim() || adding}>
+              {adding ? 'Adding…' : 'Subscribe'}
+            </button>
+          </form>
+          {addError && <div className="pod-add-error">{addError}</div>}
         </div>
       </div>
     )
@@ -136,7 +190,27 @@ export function PodcastsView({
   }
 
   return (
-    <div className="media split">
+    <div className="media split podcasts">
+      <div className="show-col">
+        <form
+          className="pod-add"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void subscribe()
+          }}
+        >
+          <input
+            value={feedUrl}
+            placeholder="Feed URL…"
+            onChange={(e) => (setFeedUrl(e.target.value), setAddError(null))}
+          />
+          <button type="submit" disabled={!feedUrl.trim() || adding}>
+            {adding ? 'Adding…' : 'Subscribe'}
+          </button>
+        </form>
+        {/* The server's own words: "already subscribed to this feed" and
+            "expected an http or https URL" are both worth reading. */}
+        {addError && <div className="pod-add-error">{addError}</div>}
       <div className="show-list" ref={list.ref} onScroll={list.onScroll}>
         {visible.map((s) => (
           <button key={s.id} className={`show ${s.id === show.id ? 'on' : ''}`} onClick={() => setSel(s.id)}>
@@ -146,7 +220,10 @@ export function PodcastsView({
               <div className="art" style={art(s.id)} />
             )}
             <div className="meta">
-              <span className="t">{s.title}</span>
+              {/* A feed subscribed a second ago has no title yet, and one that
+                  never answers never will: the URL is what the person typed and
+                  the only name that is certainly true. */}
+              <span className="t">{s.title || hostOf(s.feedUrl)}</span>
               <span className="s">
                 {s.author || 'Unknown'} · {s.episodeCount} episode{s.episodeCount === 1 ? '' : 's'}
               </span>
@@ -162,13 +239,73 @@ export function PodcastsView({
           </button>
         ))}
       </div>
+      </div>
 
       <div className="ep-list">
+        {/* Where this show comes from, and what to do about it. The feed URL is
+            shown rather than hidden behind a settings dialog: it is the whole
+            identity of a podcast, and the thing you paste somewhere else. */}
+        <div className="show-head">
+          <div className="sh-meta">
+            <b>{show.title || hostOf(show.feedUrl)}</b>
+            <a className="sh-feed" href={show.feedUrl} target="_blank" rel="noreferrer" title={show.feedUrl}>
+              <Icon name="cloud" size={9} /> {show.feedUrl}
+            </a>
+            <span className="dim">
+              {show.downloadedCount} of {show.episodeCount} downloaded
+              {show.lastFetchAt ? ` · checked ${day(show.lastFetchAt)}` : ' · never checked'}
+              {show.cron ? '' : ' · manual refresh only'}
+            </span>
+          </div>
+          <div className="sh-actions">
+            <label className="sh-toggle" title="New episodes are fetched into the library as they appear">
+              <input
+                type="checkbox"
+                checked={!!show.autoDownload}
+                onChange={(e) =>
+                  api.podcasts.update(show.id, { autoDownload: e.target.checked }).then(refreshShows)
+                }
+              />
+              <span>Download new episodes</span>
+            </label>
+            <button
+              onClick={() =>
+                api.podcasts
+                  .refresh(show.id)
+                  .then(() => onNotice(`Refreshing ${show.title}…`))
+                  .catch(() => onNotice(`${show.title} could not be refreshed`))
+              }
+            >
+              <Icon name="sync" size={10} /> Refresh
+            </button>
+            {/* Two clicks rather than a `confirm()`: the browser's dialog
+                blocks the page, looks nothing like the app, and says the wrong
+                thing. The second click also carries the answer to the question
+                people actually have — what happens to what they downloaded. */}
+            <button
+              className={confirming ? 'danger' : ''}
+              title={confirming ? 'Downloaded episodes stay in your library' : undefined}
+              onClick={() => {
+                if (!confirming) return setConfirming(true)
+                api.podcasts.unsubscribe(show.id).then(() => {
+                  setConfirming(false)
+                  setSel(null)
+                  refreshShows()
+                  onNotice(`Unsubscribed from ${show.title} — downloaded episodes stay in your library`)
+                })
+              }}
+              onBlur={() => setConfirming(false)}
+            >
+              {confirming ? 'Really unsubscribe?' : 'Unsubscribe'}
+            </button>
+          </div>
+        </div>
         <div className="ep-head">
           <span className="c-dot" />
           <span className="c-name">Name</span>
           <span className="c-time">Time</span>
           <span className="c-date">Release Date</span>
+          <span className="c-where">Where</span>
           <span className="c-size">Size</span>
         </div>
         <div className="ep-body" ref={body.ref} onScroll={body.onScroll}>
@@ -199,6 +336,11 @@ export function PodcastsView({
               </span>
               <span className="c-time num">{e.duration ? runtime(e.duration) : '—'}</span>
               <span className="c-date">{day(e.pubDate)}</span>
+              {/* The distinction in words, not only in a glyph: one of these is
+                  a file you have, the other is somebody else's server. */}
+              <span className={`c-where ${e.trackId ? '' : 'dim'}`}>
+                {e.trackId ? 'In your library' : e.enclosureUrl ? hostOf(e.enclosureUrl) : 'nowhere'}
+              </span>
               <span className="c-size num">{e.enclosureLength ? fmtBytes(e.enclosureLength) : '—'}</span>
             </div>
           ))}
