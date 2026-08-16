@@ -1,7 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, RestoreReport, Schedule, Source, Stats, SyncPlan,
+  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
@@ -104,6 +104,18 @@ export function createClient(opts: ClientOptions = {}) {
           method: 'PATCH',
           body: JSON.stringify({ ids, patch, writeToFiles }),
         }),
+    },
+
+    plugins: {
+      /** `hostApi` is the version a plugin must declare compatibility with. */
+      list: () => request<{ items: Plugin[]; hostApi: string }>('/plugins', {}, true),
+      get: (id: string) => request<Plugin>(`/plugins/${id}`),
+      /** Re-reads the plugin folder. What fails to load is listed with the reason. */
+      scan: () => request<{ items: Plugin[] }>('/plugins/scan', { method: 'POST' }),
+      setEnabled: (id: string, enabled: boolean) =>
+        request<Plugin>(`/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+      configure: (id: string, config: Record<string, unknown>) =>
+        request<Plugin>(`/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ config }) }),
     },
 
     organize: {
@@ -288,7 +300,7 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  Move, OrganizePlan, RestoreReport, Schedule, Source, Stats, SyncPlan,
+  Move, OrganizePlan, Plugin, PluginState, RestoreReport, Schedule, Source, Stats, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }

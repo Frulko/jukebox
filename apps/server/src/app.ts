@@ -23,6 +23,7 @@ import { mimeFor, parseRange } from './stream.ts'
 import { configOf, open as rcOpen, RcloneError } from './rclone.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
+import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
@@ -95,6 +96,12 @@ export function createApp(dbFile: string) {
   jobs.start()
   const scheduler = new Scheduler(db, jobs)
   scheduler.start()
+  // Constructed, not started. Discovery touches the database and imports
+  // arbitrary code, so who runs it and when is the caller's decision: `serve.ts`
+  // awaits it at boot, and a test drives it explicitly. Started here as a
+  // floating promise it could still be reading the database after the process
+  // that owns it has closed it.
+  const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins')
   seedPresets(db)
 
   const app = new Hono()
@@ -213,6 +220,35 @@ export function createApp(dbFile: string) {
     jobs: db.prepare(`SELECT state, COUNT(*) AS n FROM jobs GROUP BY state`).all()
       .reduce((acc: any, r: any) => ({ ...acc, [r.state]: r.n }), {}),
   }))
+
+  /* ---------------- plugins ---------------- */
+
+  api.get('/plugins', (c) => withETag(c, {
+    items: listPlugins(db),
+    // The host version a plugin has to declare compatibility with. Published so
+    // an author can check before installing rather than after failing.
+    hostApi: HOST_API_VERSION,
+  }))
+
+  /** Re-reads the plugin folder. What fails to load is listed with the reason. */
+  api.post('/plugins/scan', async (c) => c.json({ items: await plugins.discover() }))
+
+  api.get('/plugins/:id', (c) => {
+    const p = getPlugin(db, c.req.param('id'))
+    return p ? c.json(p) : fail(c, 404, 'not_found', 'unknown plugin')
+  })
+
+  api.patch('/plugins/:id', async (c) => {
+    const id = c.req.param('id')
+    if (!getPlugin(db, id)) return fail(c, 404, 'not_found', 'unknown plugin')
+    const b = await c.req.json().catch(() => ({}))
+
+    if (b.config !== undefined) {
+      db.prepare(`UPDATE plugins SET config = ? WHERE id = ?`).run(JSON.stringify(b.config), id)
+    }
+    if (b.enabled !== undefined) return c.json(await plugins.setEnabled(id, Boolean(b.enabled)))
+    return c.json(getPlugin(db, id))
+  })
 
   /* ---------------- file organisation ---------------- */
 
@@ -940,5 +976,5 @@ export function createApp(dbFile: string) {
   app.route('/api/v1', api)
   app.notFound((c) => fail(c, 404, 'not_found', 'unknown route'))
 
-  return { app, db, jobs, scheduler }
+  return { app, db, jobs, scheduler, plugins }
 }

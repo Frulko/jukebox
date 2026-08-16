@@ -177,6 +177,24 @@ CREATE TABLE IF NOT EXISTS job_items (
   PRIMARY KEY (jobId, idx)
 );
 
+-- Installed plugins. "enabled" is the user's choice and survives a reinstall;
+-- "state" is what the host last observed, and "error" is why it is not running.
+-- (No backticks in here: SCHEMA is a template literal and they would end it.)
+CREATE TABLE IF NOT EXISTS plugins (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  version     TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  author      TEXT NOT NULL DEFAULT '',
+  permissions TEXT NOT NULL DEFAULT '[]',
+  contributes TEXT NOT NULL DEFAULT '{}',
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  state       TEXT NOT NULL DEFAULT 'installed',
+  error       TEXT,
+  config      TEXT NOT NULL DEFAULT '{}',
+  installedAt INTEGER NOT NULL
+);
+
 -- Every file a reorganisation moved. This is both the log the user reads and
 -- the only thing that makes the operation undoable, so it is written per move
 -- rather than per job -- an interrupted run is undoable up to where it stopped.

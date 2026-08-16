@@ -287,6 +287,32 @@ export type Move = {
   undoneAt: number | null
 }
 
+export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
+
+/**
+ * An installed plugin.
+ *
+ * `permissions` are declared by the author and shown before install. They are
+ * not enforced: a plugin runs in the server's own process and can do anything
+ * the server can. That is the same bargain Home Assistant and Volumio make, and
+ * the UI should say so plainly rather than imply a sandbox that is not there.
+ */
+export type Plugin = {
+  id: string
+  name: string
+  version: string
+  description: string
+  author: string
+  permissions: string[]
+  /** Where the plugin asks to appear in the UI. */
+  contributes: Record<string, unknown>
+  enabled: 0 | 1
+  state: PluginState
+  /** Why it is not running. */
+  error: string | null
+  config: Record<string, unknown>
+}
+
 /** Library totals, computed in SQL over the whole library rather than a page. */
 export type Stats = {
   tracks: number

@@ -96,7 +96,8 @@ hands out a URL.
 
 ## M5 · Plugins and store
 
-- [ ] **5.1** Plugin host — manifest, lifecycle, semver `hostApi`, sidecars
+- [x] **5.1** Plugin host — manifest, lifecycle, semver `hostApi`, failure isolation.
+      Sidecars (a plugin owning a child process) still to come
 - [ ] **5.2** Host-provided transports — `http`, `ws`, `mqtt`, `tcp`, `udp`
 - [ ] **5.3** Declarative settings (`ui.json`) + UI extension zones
 - [ ] **5.4** Store — git index with tagged releases, permissions shown before install
