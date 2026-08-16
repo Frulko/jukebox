@@ -175,3 +175,21 @@ test('an empty source that never had anything is not an error', async () => {
     assert.equal(job.state, 'done')
   } finally { await h.cleanup(); await rm(root, { recursive: true, force: true }) }
 })
+
+test('read-only is asked of the path, not inferred from the mount', async () => {
+  const { writable } = await import('../src/mounts.ts')
+  const dir = await mkdtemp(join(tmpdir(), 'jukebox-w-'))
+  try {
+    // On macOS the root volume is sealed and read-only, and firmlinks put
+    // /private, /Users and everything else people keep music in underneath it.
+    // Longest-prefix matching therefore calls a perfectly writable folder
+    // read-only, and a UI believing that greys out editing on a library that
+    // edits fine. This was live-reproduced before it was fixed.
+    const mount = mountFor(dir, await readMounts())
+    assert.ok(mount, 'the directory is on some mount')
+    assert.equal(await writable(dir), true, 'a temp directory is writable')
+
+    const missing = join(dir, 'no', 'such', 'place')
+    assert.equal(await writable(missing), false, 'and a path that does not exist is not')
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})

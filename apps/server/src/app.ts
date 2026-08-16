@@ -27,7 +27,7 @@ import { configOf as plexConfigOf, info as plexInfo, open as plexOpen } from './
 import * as airplay from './airplay.ts'
 import * as cast from './chromecast.ts'
 import { canStreamTo, streamMimeFor, transcodeStream } from './ffmpeg.ts'
-import { mountFor, readMounts } from './mounts.ts'
+import { mountFor, readMounts, writable as writableAt } from './mounts.ts'
 
 /**
  * A renderer, whichever protocol found it.
@@ -1443,19 +1443,24 @@ export function createApp(dbFile: string) {
       .filter((s) => !allowed || allowed.includes(s.id))
     const mounts = await readMounts()
 
-    return withETag(c, {
-      items: items.map((s) => {
-        if (s.kind !== 'local') return s
-        const mount = mountFor(s.root, mounts)
-        return {
-          ...s,
-          mount: mount && {
-            device: mount.device, type: mount.type,
-            network: mount.network, readOnly: mount.readOnly, point: mount.point,
-          },
-        }
-      }),
-    })
+    const described = await Promise.all(items.map(async (s) => {
+      if (s.kind !== 'local') return s
+      const mount = mountFor(s.root, mounts)
+      return {
+        ...s,
+        mount: mount && {
+          device: mount.device, type: mount.type,
+          network: mount.network, point: mount.point,
+          // Asked of the path, not taken from the mount's flags. On macOS the
+          // root volume is sealed and read-only while firmlinks put every
+          // directory anyone keeps music in underneath it, so the mount says
+          // read-only about a folder that writes perfectly well.
+          readOnly: !(await writableAt(s.root)),
+        },
+      }
+    }))
+
+    return withETag(c, { items: described })
   })
 
   api.post('/sources', async (c) => {

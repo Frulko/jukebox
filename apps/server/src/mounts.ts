@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolve } from 'node:path'
@@ -116,4 +117,27 @@ export function mountFor(path: string, mounts: Mount[]): Mount | null {
 /** What to show beside a source, and what to think twice about before sweeping. */
 export async function describe(path: string): Promise<Mount | null> {
   return mountFor(path, await readMounts())
+}
+
+/**
+ * Whether this path can actually be written to.
+ *
+ * Asked of the filesystem rather than inferred from the mount's flags, because
+ * on macOS the mount table gives a true answer to a different question. The
+ * root volume is sealed and read-only, and firmlinks put `/private`, `/Users`
+ * and everything else people keep music in *under* it while the bytes live on
+ * a separate writable volume. Longest-prefix matching therefore reports a
+ * perfectly writable music folder as read-only — and a UI believing it would
+ * grey out editing on a library that edits fine.
+ *
+ * `access(W_OK)` costs one syscall and answers the question that was actually
+ * being asked.
+ */
+export async function writable(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.W_OK)
+    return true
+  } catch {
+    return false
+  }
 }
