@@ -79,7 +79,9 @@ hands out a URL.
       Sonos-specific grouping and its own queue are still to come
 - [x] **3.4** Play queue shared between controllers — the server holds the intent, a renderer
       executes it and reports back, and every controller sees the same queue
-- [ ] **3.5** AirPlay · **3.6** Satellite renderer (tablet, Pi + DAC) · **3.7** Chromecast
+- [x] **3.6** Satellite renderer — registers as an output, follows the shared queue, plays
+      through mpv/ffplay/vlc and reports back. It pulls; the server never pushes audio
+- [ ] **3.5** AirPlay · **3.7** Chromecast
 - [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)
 
 ## M4b · One song, several files

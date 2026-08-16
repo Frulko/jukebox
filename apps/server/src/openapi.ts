@@ -96,6 +96,8 @@ const DOCS: Record<string, Doc> = {
   'POST /player/report': { summary: 'A renderer saying where it actually is. It may not reorder anything.', tag: 'player', body: '{ position, playing? }' },
 
   'GET /outputs': { summary: 'Renderers on the network, found by SSDP.', tag: 'outputs', query: ['refresh'] },
+  'POST /outputs/register': { summary: 'A satellite announcing it can play. Re-registering is also its heartbeat.', tag: 'outputs', body: '{ id, name, url, formats? }' },
+  'DELETE /outputs/:id': { summary: 'Forgets a registered output. Discovered ones come back on their own.', tag: 'outputs' },
   'POST /outputs/:id/play': { summary: 'Points a renderer at a track and starts it.', tag: 'outputs' },
   'POST /outputs/:id/pause': { summary: 'Pauses it.', tag: 'outputs' },
   'POST /outputs/:id/stop': { summary: 'Stops it.', tag: 'outputs' },

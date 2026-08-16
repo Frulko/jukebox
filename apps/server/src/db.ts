@@ -267,6 +267,24 @@ CREATE TABLE IF NOT EXISTS moves (
 );
 CREATE INDEX IF NOT EXISTS moves_job ON moves (jobId, id DESC);
 
+-- Renderers that announced themselves rather than being discovered.
+--
+-- UPnP speakers are found by shouting on the network; a satellite on a Pi with
+-- a DAC has no such protocol and simply says it exists. Stored rather than kept
+-- in memory because a satellite that was registered yesterday should still be
+-- offerable after a server restart -- it is a fixture of the house, not a thing
+-- that came and went.
+CREATE TABLE IF NOT EXISTS outputs (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  kind         TEXT NOT NULL DEFAULT 'satellite',
+  url          TEXT NOT NULL,
+  -- What it can decode, so the stream endpoint can pick a rendition it plays.
+  formats      TEXT NOT NULL DEFAULT '[]',
+  lastSeenAt   INTEGER NOT NULL,
+  registeredAt INTEGER NOT NULL
+);
+
 -- Internet radio. A station is a URL plus whatever the stream, its homepage and
 -- the community directory could tell us about it.
 CREATE TABLE IF NOT EXISTS radios (

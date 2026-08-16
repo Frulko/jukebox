@@ -33,6 +33,14 @@ const DEVICE_ID = process.env.SATELLITE_DEVICE_ID ?? 'ipod-fake'
 const DEVICE_NAME = process.env.SATELLITE_DEVICE_NAME ?? 'Fake iPod'
 const SELF = process.env.SATELLITE_URL ?? `http://localhost:${PORT}`
 
+// The same machine that docks an iPod usually has a headphone socket. Off
+// unless asked for, because a satellite bought for syncing should not start
+// making noise on its own.
+const RENDERER = process.env.SATELLITE_RENDERER === '1'
+const RENDERER_NAME = process.env.SATELLITE_RENDERER_NAME ?? `${DEVICE_NAME} speaker`
+const RENDERER_FORMATS = (process.env.SATELLITE_FORMATS ?? 'mp3,aac,flac,alac,opus,wav')
+  .split(',').map((f) => f.trim()).filter(Boolean)
+
 const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.alac', '.flac', '.wav', '.aiff'])
 
 type DeviceTrack = {
@@ -230,6 +238,22 @@ server.listen(PORT, async () => {
       body: JSON.stringify({ items: cache }),
     })
     console.log(`satellite · registered ${DEVICE_ID} with ${SERVER}`)
+
+    if (RENDERER) {
+      const { SatelliteRenderer, findPlayer } = await import('./renderer.ts')
+      const player = findPlayer()
+      if (!player) {
+        // Said once, plainly, rather than discovered as silence later.
+        console.warn('satellite · renderer wanted but no player found — install mpv, ffmpeg or vlc')
+      } else {
+        const renderer = new SatelliteRenderer({
+          server: SERVER, id: `out-${DEVICE_ID}`, name: RENDERER_NAME,
+          url: SELF, formats: RENDERER_FORMATS,
+        })
+        renderer.start()
+        console.log(`satellite · playing through ${player.bin} as "${RENDERER_NAME}"`)
+      }
+    }
   } catch (err) {
     // Not fatal: the satellite serves its device either way, and the server may
     // simply not be up yet.

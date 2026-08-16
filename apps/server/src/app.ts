@@ -555,14 +555,57 @@ export function createApp(dbFile: string) {
     if (c.req.query('refresh') === 'true' || now - renderers.at > 30_000) {
       renderers = { at: now, items: await discoverRenderers().catch(() => []) }
     }
+
+    // Two kinds, one list. A speaker found by shouting on the network and a
+    // satellite that announced itself are the same thing to whoever is choosing
+    // where the music comes out.
+    const registered = (db.prepare(`SELECT * FROM outputs ORDER BY name`).all() as any[]).map((o) => ({
+      id: o.id, name: o.name, kind: o.kind, manufacturer: '', model: '',
+      address: o.url, formats: JSON.parse(o.formats || '[]'),
+      // Stale rather than gone: a satellite that has not checked in for five
+      // minutes is probably unplugged, and saying so beats removing it from a
+      // list the user set up.
+      stale: now - o.lastSeenAt > 5 * 60_000,
+    }))
+
     return c.json({
-      items: renderers.items.map(({ id, name, manufacturer, model, address }) =>
-        ({ id, name, manufacturer, model, address })),
+      items: [
+        ...renderers.items.map(({ id, name, manufacturer, model, address }) =>
+          ({ id, name, kind: 'upnp', manufacturer, model, address, formats: [], stale: false })),
+        ...registered,
+      ],
       // What a renderer will be told to fetch. Shown because when it is wrong --
       // a container with several interfaces, a machine behind a proxy -- every
       // play silently fails, and this is the number that explains why.
       advertising: advertisedBase(Number(process.env.PORT ?? 8787)),
     })
+  })
+
+  /**
+   * A satellite announcing that it can play.
+   *
+   * The opposite direction from SSDP: a Pi with a DAC has no discovery
+   * protocol, so it says so instead. Idempotent on its id, and re-registering
+   * is also the heartbeat — a satellite that stops calling goes stale rather
+   * than disappearing from a list someone deliberately set up.
+   */
+  api.post('/outputs/register', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.id || !b?.name || !b?.url) return fail(c, 400, 'bad_body', 'expected { id, name, url, formats? }')
+    db.prepare(`
+      INSERT INTO outputs (id, name, kind, url, formats, lastSeenAt, registeredAt)
+      VALUES (?,?,?,?,?,?,?)
+      ON CONFLICT (id) DO UPDATE SET
+        name = excluded.name, url = excluded.url, formats = excluded.formats,
+        lastSeenAt = excluded.lastSeenAt`)
+      .run(b.id, b.name, b.kind ?? 'satellite', b.url,
+        JSON.stringify(b.formats ?? []), Date.now(), Date.now())
+    return c.json({ registered: b.id })
+  })
+
+  api.delete('/outputs/:id', (c) => {
+    const r = db.prepare(`DELETE FROM outputs WHERE id = ?`).run(c.req.param('id'))
+    return r.changes ? c.body(null, 204) : fail(c, 404, 'not_found', 'unknown output')
   })
 
   /** Points a renderer at a track and starts it. */
