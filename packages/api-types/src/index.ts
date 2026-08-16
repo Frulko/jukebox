@@ -6,6 +6,25 @@
  * OpenAPI spec — it gets no privilege from doing so.
  */
 
+/**
+ * Three roles, because a household has three kinds of person: whoever runs the
+ * server, whoever lives there, and the visitor or the kitchen tablet.
+ */
+export type Role = 'admin' | 'user' | 'guest'
+
+/** What a role may do. Ask the server rather than deriving it from the name. */
+export type Capability = 'admin' | 'write' | 'curate' | 'play'
+
+export type Account = {
+  id: string
+  username: string
+  role: Role
+  /** Whether a recoverable password is stored for Subsonic clients. */
+  subsonic: 0 | 1
+  createdAt: number
+  lastSeenAt: number | null
+}
+
 export type TrackKind = 'music' | 'audiobook' | 'podcast'
 
 /**
@@ -375,6 +394,13 @@ export type CommandResult =
   | { kind: 'job'; job: Job }
   | { kind: 'playlist'; id: string; name: string }
   | { kind: 'tracks'; ids: string[] }
+  /**
+   * Something to read: lyrics, credits, a review. Plain text, and the host
+   * renders it as text — a plugin that could return markup would be a plugin
+   * that can restyle the app and read what is on screen, which is the one thing
+   * `contributes` exists to prevent.
+   */
+  | { kind: 'text'; title?: string; body: string }
 
 export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
 

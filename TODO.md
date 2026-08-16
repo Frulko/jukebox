@@ -155,7 +155,16 @@ hands out a URL.
       exists, tokens stored as hashes and accepted in the query string for `<audio>`
 - [x] **5b.2** OpenSubsonic emitter — ping, browse, search, playlists, stream, cover art,
       star, rate and scrobble. Both auth schemes, JSON and XML
-- [ ] **5b.3** Per-user libraries and roles beyond admin/user
+- [x] **5b.3** Per-user libraries and roles — three roles, not more: `admin` runs the server,
+      `user` lives there, `guest` plays and nothing else. Enforced as *capabilities*
+      (`admin`/`write`/`curate`/`play`) from one table, by prefix and method, so a route added
+      later inherits the safe default instead of nothing; `/auth/me` returns the same list the
+      server enforces with, so a UI cannot offer a button the server refuses. Per-account
+      libraries scope `sourceIds` in SQL through the listing, the count, the facets, the delta
+      and the source list — each is a separate query, and hiding one proves nothing about the
+      others. Absence means everything, so a one-library household configures nothing. Two
+      bugs found by writing the tests: `GET /users` was readable by any account, and a
+      cascading foreign key meant deleting a source *widened* the account narrowed to it
 
 ## M5 · Plugins and store
 

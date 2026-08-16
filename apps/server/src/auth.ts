@@ -23,10 +23,23 @@ const derive = promisify(scrypt) as (p: string, s: Buffer, len: number) => Promi
 
 const KEYLEN = 64
 
+/**
+ * Three roles, because a household has three kinds of person.
+ *
+ * `admin` runs the server. `user` is whoever lives there: they play, rate,
+ * curate and retag. `guest` is the visitor, the kitchen tablet, the kid's
+ * account — it plays and nothing else.
+ *
+ * Deliberately not more. Every role beyond the third is one nobody can explain
+ * to the person it applies to, and permissions people cannot explain are
+ * permissions people set wrong.
+ */
+export type Role = 'admin' | 'user' | 'guest'
+
 export type User = {
   id: string
   username: string
-  role: 'admin' | 'user'
+  role: Role
   /** Whether a recoverable password is stored for Subsonic clients. */
   subsonic: 0 | 1
   createdAt: number
@@ -95,6 +108,63 @@ export function decryptSecret(stored: string, dbFile: string): string | null {
   }
 }
 
+/**
+ * What each role may do.
+ *
+ * Capabilities rather than role checks scattered through the routes: `can(user,
+ * 'write')` says what is being protected, where `user.role !== 'guest'` says
+ * only who is being kept out, and stops being true the day a fourth role
+ * appears.
+ */
+export type Capability =
+  /** Users, sources, plugins, settings, backups — the server itself. */
+  | 'admin'
+  /** Change the library: tags, conversions, organisation, deletions. */
+  | 'write'
+  /** Playlists and ratings — making the library yours without changing the files. */
+  | 'curate'
+  /** Play, and say that you did. Everyone with an account can. */
+  | 'play'
+
+const CAPABILITIES: Record<Role, Capability[]> = {
+  admin: ['admin', 'write', 'curate', 'play'],
+  user: ['write', 'curate', 'play'],
+  guest: ['play'],
+}
+
+export const can = (user: Pick<User, 'role'> | null | undefined, capability: Capability): boolean =>
+  Boolean(user && (CAPABILITIES[user.role] ?? []).includes(capability))
+
+/**
+ * The sources an account may see, or null for all of them.
+ *
+ * Null rather than a list of everything, and it is the important half of the
+ * design: a server nobody has configured has no rows here, so every query stays
+ * exactly as it was and nothing pays for a feature it does not use. A list
+ * appears only when somebody deliberately narrowed an account.
+ */
+export function sourcesFor(db: DB, user: Pick<User, 'id' | 'role'> | null): string[] | null {
+  // An admin sees the whole server by definition; narrowing one would be a way
+  // to lock everybody out of a source nobody can then unlock.
+  if (!user || user.role === 'admin') return null
+  const rows = db.prepare(`SELECT sourceId FROM user_sources WHERE userId = ?`)
+    .all(user.id) as { sourceId: string }[]
+  return rows.length ? rows.map((r) => r.sourceId) : null
+}
+
+export function setSourcesFor(db: DB, userId: string, sourceIds: string[]): void {
+  db.exec('BEGIN')
+  try {
+    db.prepare(`DELETE FROM user_sources WHERE userId = ?`).run(userId)
+    const ins = db.prepare(`INSERT OR IGNORE INTO user_sources (userId, sourceId) VALUES (?, ?)`)
+    for (const id of sourceIds) ins.run(userId, id)
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+}
+
 export function listUsers(db: DB): User[] {
   return (db.prepare(`SELECT * FROM users ORDER BY username`).all() as any[]).map(hydrate)
 }
@@ -106,7 +176,7 @@ export function getUser(db: DB, id: string): User | null {
 
 export async function createUser(
   db: DB,
-  input: { username: string; password: string; role?: 'admin' | 'user'; subsonic?: boolean },
+  input: { username: string; password: string; role?: Role; subsonic?: boolean },
   dbFile: string,
 ): Promise<User> {
   const id = `u-${randomUUID().slice(0, 8)}`
@@ -118,6 +188,22 @@ export async function createUser(
 }
 
 /** Username and password. Returns `null` for both "no such user" and "wrong password". */
+/**
+ * Changes a password, and the recoverable copy with it.
+ *
+ * The Subsonic secret has to be rewritten or removed in the same breath: leaving
+ * the old one behind means the old password still works for every Subsonic
+ * client, which is the opposite of what changing it was for.
+ */
+export async function setPassword(
+  db: DB, userId: string, password: string, dbFile: string, subsonic?: boolean,
+): Promise<void> {
+  const current = db.prepare(`SELECT subsonicSecret FROM users WHERE id = ?`).get(userId) as any
+  const keep = subsonic ?? Boolean(current?.subsonicSecret)
+  db.prepare(`UPDATE users SET passwordHash = ?, subsonicSecret = ? WHERE id = ?`)
+    .run(await hashPassword(password), keep ? encryptSecret(password, dbFile) : null, userId)
+}
+
 export async function authenticate(db: DB, username: string, password: string): Promise<User | null> {
   const r = db.prepare(`SELECT * FROM users WHERE username = ?`).get(username) as any
   if (!r) {

@@ -438,6 +438,39 @@ const MIGRATIONS: Migration[] = [
       .some((c) => c.name === 'externalId')
     if (!has) db.exec(`ALTER TABLE tracks ADD COLUMN externalId TEXT`)
   },
+
+  // 5 — who may see what.
+  //
+  // Absence is the default and it means "everything": a server with one
+  // household and one library should never have to configure this, and the
+  // empty table is what keeps that true. A row appears only when somebody
+  // deliberately narrows an account.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_sources (
+        userId   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        -- Deliberately *not* a cascading reference to sources.
+        --
+        -- If deleting a source removed the rows that mention it, an account
+        -- narrowed to exactly that source would be left with no rows at all --
+        -- which this reads as "not narrowed", and it would silently gain access
+        -- to the entire server at the moment its access was taken away.
+        --
+        -- A row pointing at a source that no longer exists simply matches
+        -- nothing. Stale rows narrow; they never widen. That is the direction
+        -- to fail in.
+        sourceId TEXT NOT NULL,
+        PRIMARY KEY (userId, sourceId)
+      )`)
+
+    // A playlist belongs to whoever made it. Null is a shared one, which is
+    // every playlist that existed before this column did -- the alternative,
+    // assigning them to the first admin, would hide them from everyone else on
+    // upgrade.
+    const has = (db.prepare(`PRAGMA table_info(playlists)`).all() as any[])
+      .some((c) => c.name === 'ownerId')
+    if (!has) db.exec(`ALTER TABLE playlists ADD COLUMN ownerId TEXT`)
+  },
 ]
 
 /**

@@ -5,8 +5,63 @@
 // TypeScript compiler to answer a request for its own documentation.
 
 export const SCHEMAS: Record<string, any> = {
-  "TrackKind": {
+  "Role": {
     "description": "Contracts shared between the server and its clients. This package is the single source of truth for the shape of the data. The first-party front end imports it the way any third party would import the OpenAPI spec — it gets no privilege from doing so.",
+    "type": "string",
+    "enum": [
+      "admin",
+      "user",
+      "guest"
+    ]
+  },
+  "Capability": {
+    "description": "What a role may do. Ask the server rather than deriving it from the name.",
+    "type": "string",
+    "enum": [
+      "admin",
+      "write",
+      "curate",
+      "play"
+    ]
+  },
+  "Account": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "username": {
+        "type": "string"
+      },
+      "role": {
+        "$ref": "#/components/schemas/Role"
+      },
+      "subsonic": {
+        "type": "number",
+        "enum": [
+          0,
+          1
+        ],
+        "description": "Whether a recoverable password is stored for Subsonic clients."
+      },
+      "createdAt": {
+        "type": "number"
+      },
+      "lastSeenAt": {
+        "type": "number",
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "username",
+      "role",
+      "subsonic",
+      "createdAt",
+      "lastSeenAt"
+    ]
+  },
+  "TrackKind": {
     "type": "string",
     "enum": [
       "music",
@@ -1502,6 +1557,25 @@ export const SCHEMAS: Record<string, any> = {
         "required": [
           "kind",
           "ids"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "text"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "body"
         ]
       }
     ]

@@ -71,10 +71,17 @@ const DOCS: Record<string, Doc> = {
   'GET /auth/state': { summary: 'Whether this install has been claimed yet.', tag: 'auth', returns: '{ open, users }' },
   'POST /auth/setup': { summary: 'Claims a fresh install. Refused once any account exists.', tag: 'auth', body: '{ username, password }' },
   'POST /auth/login': { summary: 'Exchanges a password for a token.', tag: 'auth', body: '{ username, password }' },
-  'GET /auth/me': { summary: 'The signed-in user.', tag: 'auth' },
+  'GET /auth/me': { summary: 'The signed-in user, with the capabilities it has and the sources it may see.', tag: 'auth' },
   'GET /auth/tokens': { summary: 'Tokens belonging to the signed-in user. Secrets are never returned.', tag: 'auth' },
   'POST /auth/tokens': { summary: 'Issues a token. The secret is shown once and only its hash is kept.', tag: 'auth' },
   'DELETE /auth/tokens/:id': { summary: 'Revokes a token.', tag: 'auth' },
+
+  'GET /users': { summary: 'Every account. Admin only; no secret ever leaves here.', tag: 'accounts' },
+  'POST /users': { summary: 'Creates an account. Roles: admin, user, guest — a guest plays and nothing else.', tag: 'accounts', body: '{ username, password, role? }' },
+  'PATCH /users/:id': { summary: 'Changes a role or a password. Refuses to demote the last admin.', tag: 'accounts', body: '{ role?, password? }' },
+  'DELETE /users/:id': { summary: 'Removes an account and its tokens. Not the last admin.', tag: 'accounts' },
+  'GET /users/:id/sources': { summary: 'Which sources this account may see. `all` when it has not been narrowed.', tag: 'accounts' },
+  'PUT /users/:id/sources': { summary: 'Narrows an account to some sources. An empty list restores all of them.', tag: 'accounts', body: '{ sourceIds: [] }' },
 
   'GET /tracks': { summary: 'One page of tracks, with device presence and renditions.', returns: 'Page<Track>', tag: 'library', query: ['sort', 'cursor', 'limit', 'q', 'genre', 'artist', 'album', 'format', 'kind', 'sourceId', 'rating', 'ratingMin', 'lossless', 'onDevice', 'notOnDevice', 'match'] },
   'GET /tracks/count': { summary: 'How many tracks a query matches.', tag: 'library' },

@@ -14,6 +14,15 @@ export type TrackQuery = {
   format?: string
   sourceId?: string
   /**
+   * The sources this request may see at all, or absent for every one.
+   *
+   * Not a filter the client chooses: it comes from the account, and it is
+   * applied in SQL beside the others for the reason every filter here is —
+   * narrowing a page after fetching it would answer "3 tracks" for a library
+   * of four hundred, and would leak the count of what was hidden.
+   */
+  sourceIds?: string[]
+  /**
    * Rating filters. Typed loosely on purpose: the route hands the raw query
    * object through, so these arrive as strings from HTTP and as numbers from
    * the SDK, and both have to mean the same thing.
@@ -226,6 +235,17 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
   // get nothing back.
   if (qs.format) { sql.push(`lower(t.format) = lower(?)`); params.push(qs.format) }
 
+  if (qs.sourceIds) {
+    // An empty list is "no sources", not "no filter". Reading it as the latter
+    // would show a narrowed account the entire library the moment its last
+    // source was taken away.
+    if (!qs.sourceIds.length) sql.push(`0`)
+    else {
+      sql.push(`t.sourceId IN (${qs.sourceIds.map(() => '?').join(',')})`)
+      params.push(...qs.sourceIds)
+    }
+  }
+
   // Rating. Both forms exist because they answer different questions: `rating=0`
   // is "what have I never rated", which is the query people run when tidying a
   // library, and `ratingMin=4` is "the good stuff". Folding them into one
@@ -364,7 +384,7 @@ export function facets(db: DB, qs: TrackQuery) {
 
   const base = {
     kind: qs.kind, q: qs.q, sourceId: qs.sourceId, onDevice: qs.onDevice, notOnDevice: qs.notOnDevice,
-    rating: qs.rating, ratingMin: qs.ratingMin, lossless: qs.lossless,
+    rating: qs.rating, ratingMin: qs.ratingMin, lossless: qs.lossless, sourceIds: qs.sourceIds,
   }
   return {
     genres: distinct('genre', base),
@@ -390,17 +410,27 @@ export function countTracks(db: DB, qs: TrackQuery): number {
  * Revision delta — what keeps clients from re-downloading the library. A client
  * away for five minutes gets what changed, not 40 MB.
  */
-export function tracksDelta(db: DB, since: number, limit = 500) {
+export function tracksDelta(db: DB, since: number, limit = 500, sourceIds?: string[]) {
+  // The scope belongs here as much as in the listing: a client that syncs by
+  // delta would otherwise receive, one revision at a time, everything the
+  // account is not allowed to see.
+  const scope = sourceIds
+    ? (sourceIds.length ? ` AND t.sourceId IN (${sourceIds.map(() => '?').join(',')})` : ' AND 0')
+    : ''
+  const scopeParams = sourceIds ?? []
+
   const changed = db
     .prepare(`SELECT ${COLUMNS} FROM tracks t
-              WHERE t.rev > ? AND t.deletedAt IS NULL
+              WHERE t.rev > ? AND t.deletedAt IS NULL${scope}
               ORDER BY t.rev ASC LIMIT ?`)
-    .all(...([since, limit] as never[])) as any[]
+    .all(...([since, ...scopeParams, limit] as never[])) as any[]
 
   const deleted = (
     db
-      .prepare(`SELECT id FROM tracks WHERE rev > ? AND deletedAt IS NOT NULL ORDER BY rev ASC LIMIT ?`)
-      .all(...([since, limit] as never[])) as { id: string }[]
+      .prepare(`SELECT id FROM tracks t
+                WHERE t.rev > ? AND t.deletedAt IS NOT NULL${scope}
+                ORDER BY t.rev ASC LIMIT ?`)
+      .all(...([since, ...scopeParams, limit] as never[])) as { id: string }[]
   ).map((r) => r.id)
 
   return { changed: withPresence(db, changed), deleted }

@@ -52,7 +52,8 @@ import { makeConvertHandler } from './convert.ts'
 import { findDuplicates, mergeTracks } from './duplicates.ts'
 import {
   authenticate, createToken, createUser, isOpen, listTokens, listUsers,
-  revokeToken, userForToken, type User,
+  can, getUser, revokeToken, setPassword, setSourcesFor, sourcesFor, userForToken,
+  type Capability, type User,
 } from './auth.ts'
 import { subsonicRouter } from './subsonic.ts'
 import { buildOpenApi } from './openapi.ts'
@@ -298,6 +299,8 @@ export function createApp(dbFile: string) {
    */
   const OPEN_PATHS = ['/health', '/openapi.json', '/auth/login', '/auth/setup', '/auth/state']
 
+  const userOf = (c: any): User | null => (c.get('user') as User | undefined) ?? null
+
   api.use('*', async (c, next) => {
     if (isOpen(db) || OPEN_PATHS.includes(c.req.path.replace(/^\/api\/v1/, ''))) return next()
 
@@ -309,6 +312,62 @@ export function createApp(dbFile: string) {
     if (!user) return fail(c, 401, 'unauthorized', 'a bearer token is required')
 
     c.set('user' as never, user as never)
+    return next()
+  })
+
+  /**
+   * What a request needs to be allowed to do.
+   *
+   * Read as a table rather than as checks scattered through the handlers: this
+   * way the answer to "who can delete a source" is one place, and a route added
+   * without thinking about permissions inherits the safe default at the bottom
+   * rather than none at all.
+   *
+   * The rule is by prefix and method, not per route, because per route is a
+   * list that goes stale the first week — a new admin endpoint under /users
+   * should be admin-only by virtue of where it lives.
+   */
+  const ADMIN_PREFIXES = ['/users', '/sources', '/plugins', '/store', '/backup', '/settings', '/schedules']
+
+  /** Routes a guest may still call, because they are playback rather than change. */
+  const GUEST_WRITES = [
+    /^\/tracks\/[^/]+\/play$/,   // saying you listened to something
+    /^\/player(\/|$)/,            // the shared queue: pause, skip, choose an output
+    /^\/outputs\/[^/]+\/(play|pause|stop|volume)$/,
+  ]
+
+  /** Reading these is administration too: the account list is not public. */
+  const ADMIN_READS = ['/users']
+
+  function required(method: string, path: string): Capability | null {
+    if (method === 'GET' || method === 'HEAD') {
+      return ADMIN_READS.some((p) => path === p || path.startsWith(`${p}/`)) ? 'admin' : null
+    }
+    if (ADMIN_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) return 'admin'
+    if (GUEST_WRITES.some((r) => r.test(path))) return 'play'
+    if (path.startsWith('/playlists')) return 'curate'
+    // Everything else that changes something changes the library.
+    return 'write'
+  }
+
+  api.use('*', async (c, next) => {
+    // An unclaimed server has no accounts and therefore no roles; the first
+    // thing anyone does with it is create one.
+    if (isOpen(db)) return next()
+
+    const path = c.req.path.replace(/^\/api\/v1/, '')
+    if (OPEN_PATHS.includes(path)) return next()
+
+    const capability = required(c.req.method, path)
+    if (!capability) return next()
+
+    const user = userOf(c)
+    if (!can(user, capability)) {
+      // 403 rather than 401: the credentials were fine, the account simply may
+      // not do this, and saying which capability is missing is the difference
+      // between a fixable message and a mystery.
+      return fail(c, 403, 'forbidden', `this account cannot ${capability === 'admin' ? 'administer the server' : capability}`)
+    }
     return next()
   })
 
@@ -352,7 +411,99 @@ export function createApp(dbFile: string) {
     return c.json({ user, ...createToken(db, user.id, b.tokenName ?? 'login') })
   })
 
-  api.get('/auth/me', (c) => c.json(c.get('user' as never) ?? null))
+  api.get('/auth/me', (c) => {
+    const user = userOf(c)
+    // The capabilities as well as the role: a front end should ask what it may
+    // do rather than re-derive it from a role name, or the two drift and the UI
+    // offers buttons the server refuses.
+    return c.json(user && {
+      ...user,
+      can: (['admin', 'write', 'curate', 'play'] as Capability[]).filter((k) => can(user, k)),
+      sources: sourcesFor(db, user),
+    })
+  })
+
+  /* ---------------- accounts ---------------- */
+
+  /**
+   * Everyone with an account. Admin only, and no secrets: `listUsers` returns
+   * the hydrated shape, which has never carried a hash.
+   */
+  api.get('/users', (c) => c.json({ items: listUsers(db) }))
+
+  api.post('/users', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.username || !b?.password) return fail(c, 400, 'bad_body', 'expected { username, password, role? }')
+    if (String(b.password).length < 8) return fail(c, 400, 'weak_password', 'at least 8 characters')
+    if (b.role && !['admin', 'user', 'guest'].includes(b.role)) {
+      return fail(c, 400, 'bad_role', 'role is admin, user or guest')
+    }
+    if (listUsers(db).some((u) => u.username === b.username)) {
+      return fail(c, 409, 'taken', 'that username exists')
+    }
+    return c.json(await createUser(db, { ...b, role: b.role ?? 'user' }, dbFile), 201)
+  })
+
+  api.patch('/users/:id', async (c) => {
+    const target = getUser(db, c.req.param('id'))
+    if (!target) return fail(c, 404, 'not_found', 'unknown user')
+    const b = await c.req.json().catch(() => ({}))
+
+    if (b.role && !['admin', 'user', 'guest'].includes(b.role)) {
+      return fail(c, 400, 'bad_role', 'role is admin, user or guest')
+    }
+    // Demoting the last admin locks everyone out of the server for good, and
+    // there is no recovery from it short of editing the database by hand.
+    if (b.role && b.role !== 'admin' && target.role === 'admin'
+      && listUsers(db).filter((u) => u.role === 'admin').length === 1) {
+      return fail(c, 409, 'last_admin', 'this is the only admin; promote someone else first')
+    }
+
+    if (b.role) db.prepare(`UPDATE users SET role = ? WHERE id = ?`).run(b.role, target.id)
+    if (b.password) {
+      if (String(b.password).length < 8) return fail(c, 400, 'weak_password', 'at least 8 characters')
+      await setPassword(db, target.id, b.password, dbFile, b.subsonic)
+    }
+    return c.json(getUser(db, target.id))
+  })
+
+  api.delete('/users/:id', (c) => {
+    const target = getUser(db, c.req.param('id'))
+    if (!target) return fail(c, 404, 'not_found', 'unknown user')
+    if (target.role === 'admin' && listUsers(db).filter((u) => u.role === 'admin').length === 1) {
+      return fail(c, 409, 'last_admin', 'the only admin cannot be deleted')
+    }
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(target.id)
+    db.prepare(`DELETE FROM tokens WHERE userId = ?`).run(target.id)
+    return c.body(null, 204)
+  })
+
+  /**
+   * Which sources an account may see.
+   *
+   * An empty list means every source, which is what a server nobody has
+   * configured returns for everyone. Narrowing is opt-in, per account, and
+   * never applies to an admin.
+   */
+  api.get('/users/:id/sources', (c) => {
+    const target = getUser(db, c.req.param('id'))
+    if (!target) return fail(c, 404, 'not_found', 'unknown user')
+    return c.json({ items: sourcesFor(db, target) ?? [], all: sourcesFor(db, target) === null })
+  })
+
+  api.put('/users/:id/sources', async (c) => {
+    const target = getUser(db, c.req.param('id'))
+    if (!target) return fail(c, 404, 'not_found', 'unknown user')
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.sourceIds)) return fail(c, 400, 'bad_body', 'expected { sourceIds: [] }')
+
+    const known = new Set((db.prepare(`SELECT id FROM sources`).all() as any[]).map((s) => s.id))
+    const unknown = b.sourceIds.filter((id: string) => !known.has(id))
+    if (unknown.length) return fail(c, 400, 'unknown_source', `no such source: ${unknown.join(', ')}`)
+
+    setSourcesFor(db, target.id, b.sourceIds)
+    return c.json({ items: sourcesFor(db, target) ?? [], all: sourcesFor(db, target) === null })
+  })
 
   api.get('/auth/tokens', (c) => {
     const user = c.get('user' as never) as User | undefined
@@ -374,20 +525,35 @@ export function createApp(dbFile: string) {
 
   /* ---------------- library ---------------- */
 
+  /**
+   * The sources this request may see, folded into its query.
+   *
+   * Taken from the account and never from the query string, which is the whole
+   * point: a client cannot widen its own scope by asking, because the value it
+   * sends is overwritten rather than merged.
+   */
+  const scoped = (c: any, q: Record<string, unknown> = {}) => ({
+    ...q,
+    sourceIds: sourcesFor(db, userOf(c)) ?? undefined,
+  })
+
   api.get('/tracks', (c) => {
-    const q = c.req.query()
-    const page = listTracks(db, q)
+    const page = listTracks(db, scoped(c, c.req.query()))
     return withETag(c, { ...page, revision: revision(db) })
   })
 
-  api.get('/facets', (c) => withETag(c, facets(db, c.req.query())))
+  api.get('/facets', (c) => withETag(c, facets(db, scoped(c, c.req.query()))))
 
-  api.get('/tracks/count', (c) => withETag(c, { count: countTracks(db, c.req.query()) }))
+  api.get('/tracks/count', (c) => withETag(c, { count: countTracks(db, scoped(c, c.req.query())) }))
 
   api.get('/tracks/delta', (c) => {
     const since = Number(c.req.query('since') ?? 0)
     if (!Number.isFinite(since) || since < 0) return fail(c, 400, 'bad_since', '`since` must be a positive integer')
-    return c.json({ revision: revision(db), ...tracksDelta(db, since, Number(c.req.query('limit') ?? 500)) })
+    return c.json({
+      revision: revision(db),
+      ...tracksDelta(db, since, Number(c.req.query('limit') ?? 500),
+        sourcesFor(db, userOf(c)) ?? undefined),
+    })
   })
 
   /**
@@ -1174,7 +1340,12 @@ export function createApp(dbFile: string) {
    * without anyone having to press anything.
    */
   api.get('/sources', async (c) => {
-    const items = db.prepare(`SELECT * FROM sources`).all() as any[]
+    // Narrowed accounts see the sources they may use and no others: listing the
+    // name of a library somebody cannot open tells them it exists, which is
+    // most of what hiding it was for.
+    const allowed = sourcesFor(db, userOf(c))
+    const items = (db.prepare(`SELECT * FROM sources`).all() as any[])
+      .filter((s) => !allowed || allowed.includes(s.id))
     const mounts = await readMounts()
 
     return withETag(c, {
