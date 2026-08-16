@@ -2175,3 +2175,9 @@ input[type="range"]::-webkit-slider-thumb {
 .share-plan ul { margin: 0; padding-left: 18px; }
 .share-plan li { margin-bottom: 4px; line-height: 1.5; }
 .share-plan b { color: var(--text); }
+
+/* A selected line under a cover is the same selection as one in the table:
+   the album views hold tracks, and they behave like tracks. */
+.album-tracks li.sel { background: var(--sel); color: var(--sel-text); }
+.album-tracks li.sel .n, .album-tracks li.sel .d, .album-tracks li.sel .dim { color: var(--sel-text); opacity: .85; }
+.album-tracks li { user-select: none; }

@@ -11,6 +11,7 @@ import { useAudio } from './audio'
 import { Sidebar } from './Sidebar'
 import { Player, type Repeat } from './Player'
 import { TrackList } from './TrackList'
+import type { TrackActions } from './TrackMenu'
 import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
@@ -645,6 +646,37 @@ export default function App() {
   // it, rather than two that can disagree about where you are.
   const mode = view.kind === 'library' && (view.id === 'albums' || view.id === 'artists') ? view.id : 'songs'
 
+  /**
+   * What a track can be told to do, in one place.
+   *
+   * The library list, an album's track list and an artist's each right-click
+   * into the same menu, and the only way to keep it the same menu is to hand
+   * them the same handlers rather than eighteen props threaded four ways.
+   */
+  const trackActions: TrackActions = useMemo(
+    () => ({
+      onPlay: playTrack,
+      onEnqueue: enqueue,
+      onPlayNext: playNext,
+      onConvert: setConverting,
+      onGetInfo: setInfoIds,
+      onOpenAlbum: openAlbum,
+      onUpdate: update,
+      onDelete: remove,
+      onAddToPlaylist: addToPlaylist,
+      onAddToDevice: addToDevice,
+      onNewPlaylistFrom: (ids: string[]) => void newPlaylist(ids),
+      onTag: applyTags,
+      playlists,
+      devices,
+      tags,
+      pluginEntries: pluginMenu.entries,
+      onPluginCommand: pluginMenu.run,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [playTrack, enqueue, playNext, update, applyTags, playlists, devices, tags, pluginMenu.entries],
+  )
+
   const MEDIA: Record<string, React.ReactNode> = {
     podcasts: <PodcastsView
         search={search}
@@ -779,6 +811,7 @@ export default function App() {
               onPlayNext={playNext}
               onGetInfo={setInfoIds}
               onBack={() => setAlbumOpen(null)}
+              actions={trackActions}
             />
           ) : device ? (
             <DeviceView
@@ -842,6 +875,7 @@ export default function App() {
                   onPlayNext={playNext}
                   onGetInfo={setInfoIds}
                   onOpenAlbum={openAlbum}
+                  actions={trackActions}
                 />
               ) : mode === 'artists' ? (
                 <ArtistsView
@@ -851,6 +885,7 @@ export default function App() {
                   onEnqueue={enqueue}
                   onPlayNext={playNext}
                   onOpenAlbum={openAlbum}
+                  actions={trackActions}
                 />
               ) : (
               <TrackList
@@ -873,23 +908,9 @@ export default function App() {
                 view={view}
                 playlists={playlists}
                 nowPlaying={nowPlaying}
-                onPlay={playTrack}
-                onEnqueue={enqueue}
-                onPlayNext={playNext}
-                onConvert={setConverting}
-                pluginEntries={pluginMenu.entries}
-                onPluginCommand={pluginMenu.run}
                 selectIds={selectIds}
-                onUpdate={update}
-                onDelete={remove}
-                onAddToPlaylist={addToPlaylist}
-                onAddToDevice={addToDevice}
                 onReorder={reorder}
-                onGetInfo={setInfoIds}
-                onOpenAlbum={openAlbum}
-                tags={tags}
-                onTag={applyTags}
-                onNewPlaylistFrom={(ids) => newPlaylist(ids)}
+                actions={trackActions}
               />
               )}
             </>

@@ -8,11 +8,9 @@ import { COLUMN_LABELS, DEFAULT_VISIBLE, makeColumns, NUMERIC } from './columns'
 import type { Playlist, Track } from './data'
 import type { View } from './App'
 import { isUnavailable } from './trackBadges'
-import type { PluginEntry } from './pluginMenu'
 import { useMenuPosition } from './useMenuPosition'
 import { titleIfClipped } from './Tooltip'
-import { MembershipsPopover } from './MembershipsPopover'
-import { Submenu } from './Submenu'
+import { useTrackMenu, type TrackActions } from './TrackMenu'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -40,34 +38,13 @@ type Props = {
   onFormat: (format: string | null) => void
   playlists: Playlist[]
   nowPlaying: string | null
-  /** The second argument is the queue this play starts from, in the order shown. */
-  onPlay: (id: string, queue?: string[]) => void
-  /** Appends to what is already playing rather than replacing it. */
-  onEnqueue: (ids: string[]) => void
-  /** Inserts right after the track playing, rather than at the end. */
-  onPlayNext: (ids: string[]) => void
-  /** Opens the conversion dialog for these tracks. */
-  onConvert: (ids: string[]) => void
-  /** Entries plugins asked to add, and how to run one. */
-  pluginEntries: PluginEntry[]
-  onPluginCommand: (entry: PluginEntry, ids: string[]) => void
+  /** Everything a track can be told to do — shared with the album views. */
+  actions: TrackActions
   /** A selection handed in from outside — a plugin command that found tracks. */
   selectIds: string[] | null
-  onUpdate: (ids: string[], patch: Partial<Track>) => void
-  onDelete: (ids: string[]) => void
-  onAddToPlaylist: (playlistId: string, ids: string[]) => void
-  onAddToDevice: (deviceId: string, ids: string[]) => void
   onReorder: (playlistId: string, ids: string[], toIndex: number) => void
-  onGetInfo: (ids: string[]) => void
   /** Waiting on the server. An empty list then says so rather than "No songs". */
   loading?: boolean
-  /** Opens the album of a track — the album name and its album artist. */
-  onOpenAlbum: (album: string, artist: string) => void
-  /** Every tag in the library, with counts, so the menu can offer them. */
-  tags: { value: string; count: number }[]
-  /** Adds and removes the listener's own tags on a selection. */
-  onTag: (ids: string[], add: string[], remove: string[]) => void
-  onNewPlaylistFrom: (ids: string[]) => void
 }
 
 export function TrackList(p: Props) {
@@ -84,10 +61,11 @@ export function TrackList(p: Props) {
     (stored, fresh) => [...stored.filter((id) => fresh.includes(id)), ...fresh.filter((id) => !stored.includes(id))],
   )
   const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('jukebox.sizes', {})
-  const [menu, setMenu] = useState<{ x: number; y: number; kind: 'row' | 'header' | 'format' } | null>(null)
+  /** Only the two menus that belong to *this* table: its header and its format
+   *  column. A row's menu is the shared one — see TrackMenu. */
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: 'header' | 'format' } | null>(null)
   const menuPosition = useMenuPosition(menu)
-  /** "Where is this?" — opened from the menu, at the same point. */
-  const [where, setWhere] = useState<{ id: string; x: number; y: number } | null>(null)
+  const trackMenu = useTrackMenu(p.actions, { inPlaylist: p.view.kind === 'playlist' })
   const [dropRow, setDropRow] = useState<number | null>(null)
   const [dragCol, setDragCol] = useState<string | null>(null)
   const anchor = useRef<string | null>(null)
@@ -104,8 +82,8 @@ export function TrackList(p: Props) {
   const actions = useMemo(
     () => ({
       toggleChecked: (id: string) =>
-        p.onUpdate([id], { enabled: !p.tracks.find((t) => t.id === id)?.enabled }),
-      rate: (id: string, rating: number) => p.onUpdate([id], { rating }),
+        p.actions.onUpdate([id], { enabled: !p.tracks.find((t) => t.id === id)?.enabled }),
+      rate: (id: string, rating: number) => p.actions.onUpdate([id], { rating }),
       devices: p.devices,
       badgeContext: { sourceIds: p.sourceIds, deviceIds: p.devices.map((d) => d.id) },
     }),
@@ -379,16 +357,16 @@ export function TrackList(p: Props) {
       e.preventDefault()
       move(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey)
     } else if (e.key === 'Enter' && selectedIds[0]) {
-      p.onPlay(selectedIds[0], rows.map((r) => r.id))
+      p.actions.onPlay(selectedIds[0], rows.map((r) => r.id))
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
       e.preventDefault()
       table.setRowSelection(Object.fromEntries(rows.map((r) => [r.id, true])))
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'i' && selectedIds.length) {
       e.preventDefault()
-      p.onGetInfo(selectedIds)
+      p.actions.onGetInfo(selectedIds)
     } else if ((e.key === 'Backspace' || e.key === 'Delete') && selectedIds.length) {
       e.preventDefault()
-      p.onDelete(selectedIds)
+      p.actions.onDelete(selectedIds)
     }
   }
 
@@ -429,7 +407,7 @@ export function TrackList(p: Props) {
   }
 
   /* ---- context menu ---- */
-  const openMenu = (e: React.MouseEvent, kind: 'row' | 'header' | 'format') => {
+  const openMenu = (e: React.MouseEvent, kind: 'header' | 'format') => {
     e.preventDefault()
     setMenu({ x: e.clientX, y: e.clientY, kind })
   }
@@ -443,7 +421,7 @@ export function TrackList(p: Props) {
       onKeyDown={onKeyDown}
       onMouseDown={() => {
         setMenu(null)
-        setWhere(null)
+        trackMenu.close()
       }}
     >
       <div className="thead" ref={headRef} onContextMenu={(e) => openMenu(e, 'header')}>
@@ -557,12 +535,19 @@ export function TrackList(p: Props) {
                 onMouseDown={(e) => clickRow(e, row.id)}
                 onMouseUp={() => releaseRow(row.id)}
                 onContextMenu={(e) => {
+                  // Right-clicking outside the selection makes that row the
+                  // selection; inside it, the selection stands.
                   if (!sel) table.setRowSelection({ [row.id]: true })
-                  openMenu(e, 'row')
+                  const chosen = sel ? selectedIds : [row.id]
+                  trackMenu.open(
+                    e,
+                    chosen.map((id) => table.getRow(id)!.original),
+                    rows.map((r) => r.id),
+                  )
                 }}
                 // A track whose source is gone has nothing to stream. Refusing
                 // here beats a player that starts and immediately errors.
-                onDoubleClick={() => !unreachable(row.original) && p.onPlay(row.id, rows.map((r) => r.id))}
+                onDoubleClick={() => !unreachable(row.original) && p.actions.onPlay(row.id, rows.map((r) => r.id))}
               >
                 {row.getVisibleCells().map((cell) => (
                   <div
@@ -590,10 +575,6 @@ export function TrackList(p: Props) {
             on its way it is not one we can make. */}
         {!rows.length && <div className="list-empty">{p.loading ? 'Loading…' : 'No songs'}</div>}
       </div>
-
-      {where && (
-        <MembershipsPopover trackId={where.id} point={{ x: where.x, y: where.y }} onClose={() => setWhere(null)} />
-      )}
 
       {menu && (
         <div
@@ -623,7 +604,7 @@ export function TrackList(p: Props) {
                 </button>
               ))}
             </>
-          ) : menu.kind === 'header' ? (
+          ) : (
             <>
               <div className="ctx-title">View Options</div>
               {columnOrder
@@ -642,133 +623,10 @@ export function TrackList(p: Props) {
                   )
                 })}
             </>
-          ) : (
-            <>
-              <button onClick={() => (p.onPlay(selectedIds[0], rows.map((r) => r.id)), setMenu(null))}>Play</button>
-              <button onClick={() => (p.onPlayNext(selectedIds), setMenu(null))}>
-                Play Next
-              </button>
-              <button onClick={() => (p.onEnqueue(selectedIds), setMenu(null))}>
-                {selectedIds.length > 1 ? `Add ${selectedIds.length} to Queue` : 'Add to Queue'}
-              </button>
-              <button onClick={() => (p.onGetInfo(selectedIds), setMenu(null))}>
-                {selectedIds.length > 1 ? `Get Info (${selectedIds.length} items)` : 'Get Info'}
-              </button>
-              {/* The album of the row you pointed at, not of the selection:
-                  ten selected rows can be ten albums, and going to one of them
-                  is not something the menu should choose on its own. */}
-              {(() => {
-                const t = table.getRow(selectedIds[0])?.original
-                return t?.album ? (
-                  <button onClick={() => (p.onOpenAlbum(t.album, t.albumArtist), setMenu(null))}>
-                    Go to Album
-                  </button>
-                ) : null
-              })()}
-              <button
-                onClick={() => {
-                  setWhere({ id: selectedIds[0], x: menu.x, y: menu.y })
-                  setMenu(null)
-                }}
-              >
-                Where is this track…
-              </button>
-              <button onClick={() => (p.onConvert(selectedIds), setMenu(null))}>
-                {selectedIds.length > 1 ? `Convert ${selectedIds.length} Tracks…` : 'Convert…'}
-              </button>
-              {p.pluginEntries.length > 0 && <hr />}
-              {p.pluginEntries.map((entry) => (
-                <button
-                  key={entry.id}
-                  disabled={!entry.runnable}
-                  title={
-                    entry.runnable
-                      ? `${entry.pluginName} · ${entry.command}`
-                      : `${entry.pluginName} is switched off`
-                  }
-                  onClick={() => (p.onPluginCommand(entry, selectedIds), setMenu(null))}
-                >
-                  {entry.label}
-                  <em className="ctx-from">{entry.pluginName}</em>
-                </button>
-              ))}
-              <hr />
-              <Submenu label="Rating">
-                {[0, 1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} onClick={() => (p.onUpdate(selectedIds, { rating: n }), setMenu(null))}>
-                    {n ? '★'.repeat(n) : 'None'}
-                  </button>
-                ))}
-              </Submenu>
-              {/* Tags the listener wrote, which are not the file's own fields.
-                  A tag is ticked only when *every* selected track carries it,
-                  so choosing it on a mixed selection adds it to the rest rather
-                  than toggling half of them off. */}
-              <Submenu label="Tag">
-                  <input
-                    className="tag-new"
-                    placeholder="New tag…"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return
-                      const value = (e.target as HTMLInputElement).value.trim()
-                      if (!value) return
-                      p.onTag(selectedIds, [value], [])
-                      setMenu(null)
-                    }}
-                  />
-                  {p.tags.length > 0 && <hr />}
-                  {p.tags.map((t) => {
-                    const all = selectedIds.every((id) => table.getRow(id)?.original.tags.includes(t.value))
-                    return (
-                      <button
-                        key={t.value}
-                        className={all ? 'on' : ''}
-                        onClick={() =>
-                          (p.onTag(selectedIds, all ? [] : [t.value], all ? [t.value] : []), setMenu(null))
-                        }
-                      >
-                        {all ? '✓' : ' '}&nbsp;&nbsp;{t.value}
-                        <em className="dim">{t.count.toLocaleString('en-US')}</em>
-                      </button>
-                    )
-                  })}
-              </Submenu>
-              <Submenu label="Add to Playlist">
-                  <button onClick={() => (p.onNewPlaylistFrom(selectedIds), setMenu(null))}>New Playlist…</button>
-                  <hr />
-                  {p.playlists
-                    .filter((pl) => !pl.smart)
-                    .map((pl) => (
-                      <button key={pl.id} onClick={() => (p.onAddToPlaylist(pl.id, selectedIds), setMenu(null))}>
-                        {pl.name}
-                      </button>
-                    ))}
-              </Submenu>
-              {/* Absent with nothing connected -- iTunes never showed a menu
-                  entry that could not do anything. */}
-              {p.devices.length > 0 && (
-                <Submenu label="Add to Device">
-                  {p.devices.map((d) => (
-                    <button key={d.id} onClick={() => (p.onAddToDevice(d.id, selectedIds), setMenu(null))}>
-                      {d.name}
-                    </button>
-                  ))}
-                </Submenu>
-              )}
-              <hr />
-              <button onClick={() => (p.onUpdate(selectedIds, { enabled: true }), setMenu(null))}>Check Selection</button>
-              <button onClick={() => (p.onUpdate(selectedIds, { enabled: false }), setMenu(null))}>Uncheck Selection</button>
-              <button onClick={() => (p.onUpdate(selectedIds, { playCount: 0, lastPlayed: null }), setMenu(null))}>Reset Plays</button>
-              <hr />
-              <button onClick={() => (p.onDelete(selectedIds), setMenu(null))}>
-                {p.view.kind === 'playlist' ? 'Remove from Playlist' : 'Delete from Library'}
-              </button>
-            </>
           )}
         </div>
       )}
+      {trackMenu.node}
     </div>
   )
 }

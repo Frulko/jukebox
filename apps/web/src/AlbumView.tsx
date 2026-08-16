@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import type { Play } from './App'
 import { useTracks } from './api'
 import { albumSeed, Cover } from './Artwork'
 import { Icon } from './Icon'
 import { fmtTime, type Track } from './data'
+import { useTrackMenu, type TrackActions } from './TrackMenu'
 
 /** What identifies an album to open. The artist is absent when the place you
  *  clicked from only knew a name — a column-browser row, say. */
@@ -30,6 +32,7 @@ export function AlbumView({
   onPlayNext,
   onGetInfo,
   onBack,
+  actions,
 }: {
   target: AlbumRef
   nowPlaying: string | null
@@ -38,7 +41,10 @@ export function AlbumView({
   onPlayNext: (ids: string[]) => void
   onGetInfo: (ids: string[]) => void
   onBack: () => void
+  /** The same menu the library list opens: these are tracks like any others. */
+  actions: TrackActions
 }) {
+  const menu = useTrackMenu(actions)
   const { data, isLoading } = useTracks({
     album: target.album,
     artist: target.artist,
@@ -46,6 +52,7 @@ export function AlbumView({
     limit: 500,
   })
   const tracks: Track[] = data?.items ?? []
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const ids = tracks.map((t) => t.id)
   const artists = [...new Set(tracks.map((t) => t.albumArtist))]
   const discs = [...new Set(tracks.map((t) => t.discNumber))].sort((a, b) => a - b)
@@ -54,6 +61,7 @@ export function AlbumView({
 
   return (
     <div className="media">
+      {menu.node}
       <div className="album-page-head">
         <button className="back" onClick={onBack}>
           ← Back
@@ -100,8 +108,14 @@ export function AlbumView({
                   .map((t) => (
                     <li
                       key={t.id}
-                      className={t.id === nowPlaying ? 'playing' : ''}
+                      className={`${t.id === nowPlaying ? 'playing' : ''} ${selected.has(t.id) ? 'sel' : ''}`}
+                      onMouseDown={(e) => e.button === 0 && setSelected(new Set([t.id]))}
                       onDoubleClick={() => onPlay(t.id, ids)}
+                      onContextMenu={(e) => {
+                        const chosen = selected.has(t.id) ? tracks.filter((x) => selected.has(x.id)) : [t]
+                        if (!selected.has(t.id)) setSelected(new Set([t.id]))
+                        menu.open(e, chosen, ids)
+                      }}
                     >
                       <span className="n">
                         {t.id === nowPlaying ? <Icon name="volumeHigh" size={10} /> : t.trackNumber}

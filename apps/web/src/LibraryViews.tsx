@@ -2,10 +2,11 @@
 // Artist instead of one flat song table. Songs stays in TrackList; these two are
 // grid-first, which is the whole point of the redesign.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Play } from './App'
 import { useRemembered, useScrollMemory } from './viewState'
 import { useMenuPosition } from './useMenuPosition'
+import { useTrackMenu, type TrackActions } from './TrackMenu'
 import { useViewSearch, ViewSearch } from './ViewSearch'
 import { albumSeed, Cover } from './Artwork'
 import { Icon } from './Icon'
@@ -90,14 +91,58 @@ function useGroupMenu(
   return { open, node }
 }
 
-function AlbumTracks({ album, nowPlaying, onPlay }: { album: Album; nowPlaying: string | null; onPlay: Play }) {
+/**
+ * The tracks of one album, wherever an album is drawn.
+ *
+ * They are tracks, so they behave like tracks: click selects, cmd and shift do
+ * what they do in the library, and a right-click opens the same menu with the
+ * same entries. A list of songs you cannot rate or add to a playlist because it
+ * happens to be under a cover is a list that has forgotten what it holds.
+ */
+export function AlbumTracks({
+  album,
+  nowPlaying,
+  onPlay,
+  menu,
+}: {
+  album: Album
+  nowPlaying: string | null
+  onPlay: Play
+  menu?: ReturnType<typeof useTrackMenu>
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const anchor = useRef<string | null>(null)
+  const ids = album.tracks.map((t) => t.id)
+
+  const click = (e: React.MouseEvent, id: string) => {
+    if (e.shiftKey && anchor.current) {
+      const a = ids.indexOf(anchor.current)
+      const b = ids.indexOf(id)
+      if (a > -1 && b > -1) return setSelected(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)))
+    }
+    anchor.current = id
+    if (e.metaKey || e.ctrlKey) {
+      const next = new Set(selected)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return setSelected(next)
+    }
+    setSelected(new Set([id]))
+  }
+
   return (
     <ol className="album-tracks">
       {album.tracks.map((t) => (
         <li
           key={t.id}
-          className={t.id === nowPlaying ? 'playing' : ''}
-          onDoubleClick={() => onPlay(t.id, album.tracks.map((x) => x.id))}
+          className={`${t.id === nowPlaying ? 'playing' : ''} ${selected.has(t.id) ? 'sel' : ''}`}
+          onMouseDown={(e) => e.button === 0 && click(e, t.id)}
+          onDoubleClick={() => onPlay(t.id, ids)}
+          onContextMenu={(e) => {
+            if (!menu) return
+            const chosen = selected.has(t.id) ? [...selected] : [t.id]
+            if (!selected.has(t.id)) setSelected(new Set([t.id]))
+            menu.open(e, album.tracks.filter((x) => chosen.includes(x.id)), ids)
+          }}
         >
           <span className="n">{t.id === nowPlaying ? <Icon name="volumeHigh" size={10} /> : t.trackNumber}</span>
           <span className="t">{t.name}</span>
@@ -116,6 +161,7 @@ export function AlbumsView({
   onPlayNext,
   onGetInfo,
   onOpenAlbum,
+  actions,
 }: {
   tracks: Track[]
   nowPlaying: string | null
@@ -124,11 +170,14 @@ export function AlbumsView({
   onPlayNext: (ids: string[]) => void
   onGetInfo: (ids: string[]) => void
   onOpenAlbum: (album: string, artist: string) => void
+  /** The same menu the library list opens, on the tracks under a cover. */
+  actions: TrackActions
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const [open, setOpen] = useRemembered<string | null>('albums.open', null)
   const pane = useScrollMemory<HTMLDivElement>('albums')
   const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext, onOpenAlbum)
+  const trackMenu = useTrackMenu(actions)
   const search = useViewSearch()
   const shown = albums.filter((a) => search.matches(a.album, a.artist))
   const current = albums.find((a) => a.key === open)
@@ -136,6 +185,7 @@ export function AlbumsView({
   return (
     <div className="media" ref={pane.ref} onScroll={pane.onScroll}>
       {menu.node}
+      {trackMenu.node}
       <div className="view-head">
         <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter albums" count={shown.length} />
       </div>
@@ -183,7 +233,7 @@ export function AlbumsView({
               </button>
               <button onClick={() => onGetInfo(current.tracks.map((t) => t.id))}>Get Info</button>
             </div>
-            <AlbumTracks album={current} nowPlaying={nowPlaying} onPlay={onPlay} />
+            <AlbumTracks album={current} nowPlaying={nowPlaying} onPlay={onPlay} menu={trackMenu} />
           </div>
         </div>
       )}
@@ -198,6 +248,7 @@ export function ArtistsView({
   onEnqueue,
   onPlayNext,
   onOpenAlbum,
+  actions,
 }: {
   tracks: Track[]
   nowPlaying: string | null
@@ -205,6 +256,7 @@ export function ArtistsView({
   onEnqueue: (ids: string[]) => void
   onPlayNext: (ids: string[]) => void
   onOpenAlbum: (album: string, artist: string) => void
+  actions: TrackActions
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const artists = useMemo(() => {
@@ -214,6 +266,7 @@ export function ArtistsView({
   }, [albums])
 
   const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext, onOpenAlbum)
+  const trackMenu = useTrackMenu(actions)
   const search = useViewSearch()
   const [sel, setSel] = useRemembered<string | null>('artists.sel', null)
   const list = useScrollMemory<HTMLDivElement>('artists.list')
@@ -224,6 +277,7 @@ export function ArtistsView({
   return (
     <div className="media split">
       {menu.node}
+      {trackMenu.node}
       <div className="artist-list" ref={list.ref} onScroll={list.onScroll}>
         <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter artists" />
         {artists.filter(([name]) => search.matches(name)).map(([name, list]) => (
@@ -258,7 +312,7 @@ export function ArtistsView({
               <h4>
                 {a.album} <em className="dim">{a.year}</em>
               </h4>
-              <AlbumTracks album={a} nowPlaying={nowPlaying} onPlay={onPlay} />
+              <AlbumTracks album={a} nowPlaying={nowPlaying} onPlay={onPlay} menu={trackMenu} />
             </div>
           </div>
         ))}
