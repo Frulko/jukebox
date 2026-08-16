@@ -1318,9 +1318,21 @@ input[type="range"]::-webkit-slider-thumb {
 [data-theme="studio"] .content {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
-  overflow: hidden;
+  /* Horizontal only. `overflow: hidden` was here for the rounded corners, and
+     it took the sidebar's scroll with it: the list is twice the height of the
+     panel in this theme, so everything from the playlists down was in the
+     document and unreachable. A scroll container clips to its own radius, so
+     the corners survive `overflow-y: auto` — which is what should have been
+     written in the first place. */
+  overflow-x: hidden;
 }
-[data-theme="studio"] .sidebar { width: 208px; border-right: 1px solid var(--line-soft); padding-top: 6px; }
+[data-theme="studio"] .content { overflow-y: hidden; }
+[data-theme="studio"] .sidebar {
+  width: 208px;
+  border-right: 1px solid var(--line-soft);
+  padding-top: 6px;
+  overflow-y: auto;
+}
 
 /* --- the bottom bar: transport, what is playing, tools --- */
 [data-theme="studio"] .topbar {
