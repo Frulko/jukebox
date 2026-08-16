@@ -127,7 +127,14 @@ hands out a URL.
 - [x] **4.1** rclone sidecar (`rclone rcd --rc-serve`) — listing, walking and range-streaming.
       Scanning and `/stream/:id` both work against a remote; tested against a real daemon.
       Left: artwork extraction for remote tracks, and writing back to a remote
-- [ ] **4.2** Optional OS mount (NFS, pre-existing mounts)
+- [x] **4.2** OS mounts (NFS, SMB, anything already mounted) — a share is just a local source,
+      because the kernel already did the hard part. What it needed was the *other* half:
+      `mounts.ts` reads the real mount table (`/proc/self/mounts` on Linux, `mount` elsewhere)
+      so `GET /sources` can say "this NFS share is not mounted" instead of showing an empty
+      library. And the scan now refuses to sweep when it finds nothing where a library used
+      to be — an unmounted share is shaped exactly like a deleted library, the two cannot be
+      told apart from there, and the costs are not symmetric: a wrong refusal leaves stale
+      rows, a wrong sweep empties the library. `?prune=true` is how to mean it
 - [x] **4.3** Jellyfin / Emby / **Plex** — indexed from their own metadata, so it downloads
       nothing; streaming proxied with Range through one shared proxy. Plex's differences are
       all in the details: milliseconds not ticks, JSON only if asked, the file three levels

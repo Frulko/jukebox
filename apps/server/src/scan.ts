@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { parseFile, parseBuffer } from 'music-metadata'
 import type { DB } from './db.ts'
 import { nextRev } from './db.ts'
+import { describe } from './mounts.ts'
 import type { JobContext } from './jobs.ts'
 import { shortFormat } from './tags.ts'
 import { configOf, open as rcOpen, walk as rcWalk } from './rclone.ts'
@@ -190,6 +191,9 @@ export function makeScanHandler(db: DB) {
     const startedAt = Date.now()
 
     const full = Boolean(ctx.payload.full)
+    // Deleting every track of a source is a deliberate act, never a default.
+    // See the guard before the sweep.
+    const prune = Boolean(ctx.payload.prune)
     let done = 0
     let bytes = 0
     let skipped = 0
@@ -284,6 +288,28 @@ export function makeScanHandler(db: DB) {
     // actually went. Bumping it on every scan would make each client
     // re-download the whole library after every scan -- the exact cost the
     // revision exists to avoid.
+    // Nothing at all was found where there used to be a library. That is a
+    // share that is not mounted, a drive that is not plugged in or a path that
+    // was edited -- and it is *shaped exactly* like a library somebody deleted.
+    //
+    // The two cannot be told apart from here, so the asymmetry decides: a
+    // wrong refusal leaves stale rows until someone confirms, a wrong sweep
+    // makes the whole library disappear. Refuse, and say how to mean it.
+    const had = (db.prepare(
+      `SELECT COUNT(*) AS n FROM tracks WHERE sourceId = ? AND deletedAt IS NULL`)
+      .get(source.id) as { n: number }).n
+
+    if (done === 0 && skipped === 0 && had > 0 && !prune) {
+      const mount = await describe(source.root)
+      const because = mount?.network
+        ? `${source.root} is on a ${mount.type} mount that looks unmounted`
+        : `${source.root} is empty`
+      db.prepare(`UPDATE sources SET lastScanAt = ? WHERE id = ?`).run(Date.now(), source.id)
+      throw new Error(
+        `${because}, but this source has ${had} tracks. Nothing was removed. `
+        + `Mount it and scan again, or scan with prune=true to delete them on purpose.`)
+    }
+
     const gone = (db.prepare(
       `SELECT COUNT(*) AS n FROM tracks
        WHERE sourceId = ? AND deletedAt IS NULL AND (lastSeenAt IS NULL OR lastSeenAt < ?)`)

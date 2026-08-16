@@ -27,6 +27,7 @@ import { configOf as plexConfigOf, info as plexInfo, open as plexOpen } from './
 import * as airplay from './airplay.ts'
 import * as cast from './chromecast.ts'
 import { canStreamTo, streamMimeFor, transcodeStream } from './ffmpeg.ts'
+import { mountFor, readMounts } from './mounts.ts'
 
 /**
  * A renderer, whichever protocol found it.
@@ -1164,7 +1165,32 @@ export function createApp(dbFile: string) {
 
   /* ---------------- sources ---------------- */
 
-  api.get('/sources', (c) => withETag(c, { items: db.prepare(`SELECT * FROM sources`).all() }))
+  /**
+   * The sources, each with the filesystem it actually sits on.
+   *
+   * The mount is what lets a UI say "this NFS share is not mounted" instead of
+   * showing a library with nothing in it. Read live rather than stored: a share
+   * that came back since the last scan should stop being reported as missing
+   * without anyone having to press anything.
+   */
+  api.get('/sources', async (c) => {
+    const items = db.prepare(`SELECT * FROM sources`).all() as any[]
+    const mounts = await readMounts()
+
+    return withETag(c, {
+      items: items.map((s) => {
+        if (s.kind !== 'local') return s
+        const mount = mountFor(s.root, mounts)
+        return {
+          ...s,
+          mount: mount && {
+            device: mount.device, type: mount.type,
+            network: mount.network, readOnly: mount.readOnly, point: mount.point,
+          },
+        }
+      }),
+    })
+  })
 
   api.post('/sources', async (c) => {
     const b = await c.req.json().catch(() => null)
@@ -1220,11 +1246,15 @@ export function createApp(dbFile: string) {
     // to run when the server changes how it derives a field: the files have not
     // moved, so an ordinary scan would skip all of them.
     const full = c.req.query('full') === 'true'
+    // A scan that finds nothing where a library used to be refuses to delete
+    // it, because an unmounted share and a deleted library look identical from
+    // the scanner. This is how to say the second one was meant.
+    const prune = c.req.query('prune') === 'true'
     // One key per source: re-triggering a running scan joins it instead of duplicating it.
     // A full scan gets its own key, or it would join the incremental one it was
     // meant to replace.
-    const job = jobs.create('scan', { sourceId: id, full },
-      { idempotencyKey: c.req.header('idempotency-key') ?? `scan-${id}${full ? '-full' : ''}` })
+    const job = jobs.create('scan', { sourceId: id, full, prune },
+      { idempotencyKey: c.req.header('idempotency-key') ?? `scan-${id}${full ? '-full' : ''}${prune ? '-prune' : ''}` })
     return c.json(publicJob(job), 202)
   })
 

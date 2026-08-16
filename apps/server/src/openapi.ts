@@ -101,7 +101,7 @@ const DOCS: Record<string, Doc> = {
   'GET /sources': { summary: 'Where the music lives.', returns: 'Source[]', tag: 'sources' },
   'POST /sources': { summary: 'Adds a source. `rclone` sources carry `config: { url, fs }`.', tag: 'sources' },
   'POST /sources/:id/test': { summary: 'Does this source answer? Better asked before a scan than read from its error afterwards.', tag: 'sources' },
-  'POST /sources/:id/scan': { summary: 'Indexes it. `?full=true` re-reads files an incremental scan would skip.', tag: 'sources', query: ['full'] },
+  'POST /sources/:id/scan': { summary: 'Indexes a source. `full` re-reads every file; `prune` confirms deleting every track when the source turns up empty, which an unmounted share also does.', tag: 'sources', query: ['full', 'prune'] },
   'GET /duplicates': { summary: 'Rows that look like one song. Proposes; never merges.', returns: 'DuplicateGroup[]', tag: 'sources' },
   'POST /duplicates/merge': { summary: 'Folds tracks into one, moving their files across as renditions.', tag: 'sources', body: '{ keeperId, ids }' },
   'POST /organize': { summary: 'What moving files into a pattern would do. Dry unless `apply`.', tag: 'sources', body: '{ sourceId, pattern, apply? }' },
