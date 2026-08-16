@@ -203,3 +203,49 @@ test('a device says both whether it holds a track and whether it wants one', () 
   // A device with no relationship to the track is not listed at all.
   assert.equal(membershipsOf(db, 't4', smartQuery)!.devices.length, 0)
 })
+
+test('rating filters in SQL, and 0 means unrated rather than no filter', () => {
+  const db = fixture()
+  db.exec(`UPDATE tracks SET rating = 5 WHERE id = 't1'`)
+  db.exec(`UPDATE tracks SET rating = 3 WHERE id = 't2'`)
+
+  assert.deepEqual(listTracks(db, { ratingMin: 4 }).items.map((t: any) => t.id), ['t1'])
+  assert.deepEqual(listTracks(db, { rating: 3 }).items.map((t: any) => t.id), ['t2'])
+
+  // "What have I never rated" is the query people run when tidying a library,
+  // so `rating=0` has to survive the trip rather than read as "not asked".
+  assert.deepEqual(listTracks(db, { rating: 0 }).items.map((t: any) => t.id).sort(), ['t3', 't4', 't5'])
+
+  // Both forms arrive as strings over HTTP, where an empty one is a cleared
+  // chip and must not become a filter for zero.
+  assert.deepEqual(listTracks(db, { rating: '0' }).items.map((t: any) => t.id).sort(), ['t3', 't4', 't5'])
+  assert.equal(listTracks(db, { rating: '' }).items.length, 5)
+  assert.equal(listTracks(db, { ratingMin: '4' }).items.length, 1)
+
+  // The count has to apply the same filter as the page, or a UI says "1 of 5"
+  // over a list of one.
+  assert.equal(countTracks(db, { ratingMin: 4 }), 1)
+  assert.equal(countTracks(db, { rating: 0 }), 3)
+})
+
+test('lossless is asked of the rendition, and false means false', () => {
+  const db = fixture()
+  const r = db.prepare(
+    `INSERT INTO renditions (id, trackId, sourceId, path, format, lossless, preferred, size, createdAt)
+     VALUES (?, ?, 's', ?, ?, ?, ?, 0, 1700000000000)`)
+  r.run('r1', 't1', '/m/t1.flac', 'flac', 1, 1)
+  r.run('r2', 't2', '/m/t2.mp3', 'mp3', 0, 1)
+  // Two files of the same song: the preferred one is what would play, so it is
+  // what the filter has to answer for.
+  r.run('r3', 't3', '/m/t3.mp3', 'mp3', 0, 1)
+  r.run('r4', 't3', '/m/t3.flac', 'flac', 1, 0)
+
+  assert.deepEqual(listTracks(db, { lossless: true }).items.map((t: any) => t.id), ['t1'])
+
+  // The trap: `lossless=false` is a non-empty string, so anything testing it
+  // for truthiness filters for exactly the opposite of what was asked.
+  const lossy = listTracks(db, { lossless: 'false' }).items.map((t: any) => t.id).sort()
+  assert.deepEqual(lossy, ['t2', 't3', 't4', 't5'])
+  assert.equal(listTracks(db, { lossless: '' }).items.length, 5, 'a cleared chip is not a filter')
+  assert.equal(countTracks(db, { lossless: true }), 1)
+})

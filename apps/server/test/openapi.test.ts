@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createApp } from '../src/app.ts'
+import { execFileSync } from 'node:child_process'
 import { buildOpenApi, routeTable } from '../src/openapi.ts'
 
 test('every route the server serves is described', () => {
@@ -80,4 +81,33 @@ test('the reference generator produces something a docs site can include', async
     assert.match(out, new RegExp(`^## ${tag}$`, 'm'), tag)
   }
   assert.ok(!out.includes('Undocumented.'), 'and nothing reaches the docs undescribed')
+})
+
+test('the schemas are derived from the types, and have not drifted from them', () => {
+  // The generated file is committed so the server never loads the TypeScript
+  // compiler to answer a request for its own documentation. That trade only
+  // holds while the file is current, which is what this checks: change a type
+  // in @jukebox/api-types without regenerating and this fails here rather than
+  // in somebody's generated client six months later.
+  execFileSync('node', ['scripts/api-schemas.mjs', '--check'], { stdio: 'pipe' })
+})
+
+test('every named return type exists as a schema', () => {
+  const { app, jobs } = createApp(':memory:')
+  const spec = buildOpenApi(app) as any
+  jobs.stop()
+
+  const schemas = spec.components.schemas
+  const missing: string[] = []
+  for (const [path, ops] of Object.entries<any>(spec.paths)) {
+    for (const [method, op] of Object.entries<any>(ops)) {
+      const described = op.responses['200'].description as string
+      // A description that looks like a type name but resolves to nothing is
+      // the failure worth catching: it reads as a promise the spec does not keep.
+      const name = /^(Page<)?(\w+)(>)?(\[\])?$/.exec(described)?.[2]
+      if (!name || !/^[A-Z]/.test(described)) continue
+      if (!schemas[name]) missing.push(`${method.toUpperCase()} ${path} → ${described}`)
+    }
+  }
+  assert.deepEqual(missing, [])
 })

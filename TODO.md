@@ -37,9 +37,13 @@ hands out a URL.
       ETag cache, `paginate`, typed errors, SSE). Tested against the real app as `Request →
       Response`, no port involved: if server and client drift apart, the test breaks before the
       interface does.
-- [ ] **1.8b** Generate the SDK from the spec too — the paths are generated now, the schemas
-      are still prose. Today the types
-      are hand-written in `api-types`, so they can drift from the routes.
+- [x] **1.8b** The spec now describes shapes, not just paths. `scripts/api-schemas.mjs` reads
+      `@jukebox/api-types` with the TypeScript compiler that is already a devDependency and
+      emits `components.schemas` — 40 types, doc comments and all. Committed rather than
+      generated at boot, so the server never loads the compiler to document itself, with a
+      test that fails when the two drift. The direction is deliberate: the types stay the
+      source and the spec is derived, because the types are what the server is checked
+      against and a spec is not
 - [~] **1.9** Frontend on the real API — the `Track` shape matches the server and
       `apps/web/src/api.ts` carries the TanStack Query hooks; what remains is swapping the data
       source in `App.tsx`

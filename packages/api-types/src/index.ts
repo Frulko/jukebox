@@ -511,6 +511,16 @@ export type TrackQuery = {
    */
   format?: string
   sourceId?: string
+  /** Exactly this many stars, 0–5. `0` is "never rated", which is a real query. */
+  rating?: number
+  /** This many stars or more. The one people actually want. */
+  ratingMin?: number
+  /**
+   * Whether the file that would play is a lossless one. Asked of the rendition
+   * rather than derived from the codec name, because "is this a lossy copy" is
+   * a property of the file and a client-side codec list rots.
+   */
+  lossless?: boolean
   /** Present on these devices. */
   onDevice?: string
   /** Missing from these devices — "what is left to sync". */

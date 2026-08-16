@@ -13,6 +13,15 @@ export type TrackQuery = {
   /** Codec name as stored: `mp3`, `aac`, `alac`, `flac`, `opus`, `vorbis`, `wav`, `aiff`. */
   format?: string
   sourceId?: string
+  /**
+   * Rating filters. Typed loosely on purpose: the route hands the raw query
+   * object through, so these arrive as strings from HTTP and as numbers from
+   * the SDK, and both have to mean the same thing.
+   */
+  rating?: number | string
+  ratingMin?: number | string
+  /** Whether the file that would play is lossless. Asked of the rendition. */
+  lossless?: boolean | string
   /** Present on this device (comma-separated ids). */
   onDevice?: string
   /** Missing from this device — the question that matters when syncing. */
@@ -170,6 +179,33 @@ export function renditionsFor(db: DB, trackIds: string[]): Map<string, Rendition
 }
 
 /**
+ * A query-string value as a number, or null for "not asked".
+ *
+ * Everything arrives as a string here — the route hands the raw query object
+ * straight through — so `rating=0` has to survive, and `rating=` has to not
+ * become 0. Those are opposite answers to the same screen.
+ */
+function number(v: unknown): number | null {
+  if (v === undefined || v === null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * The same for booleans, where the string form is the trap: `lossless=false` is
+ * a non-empty string, so anything testing it for truthiness filters for exactly
+ * the opposite of what was asked.
+ */
+function bool(v: unknown): boolean | null {
+  if (v === undefined || v === null || v === '') return null
+  if (typeof v === 'boolean') return v
+  const s = String(v).toLowerCase()
+  if (s === 'true' || s === '1' || s === 'yes') return true
+  if (s === 'false' || s === '0' || s === 'no') return false
+  return null
+}
+
+/**
  * Builds the filter clause. Device presence is computed here, in SQL — never by
  * filtering a page that was already fetched, or a 200-row page can return 3 and
  * the UI looks empty while 40,000 tracks are still waiting behind it.
@@ -189,6 +225,26 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
   // lowercase by the scanner, but a client typing `FLAC` should not silently
   // get nothing back.
   if (qs.format) { sql.push(`lower(t.format) = lower(?)`); params.push(qs.format) }
+
+  // Rating. Both forms exist because they answer different questions: `rating=0`
+  // is "what have I never rated", which is the query people run when tidying a
+  // library, and `ratingMin=4` is "the good stuff". Folding them into one
+  // parameter loses the first.
+  const rating = number(qs.rating)
+  const ratingMin = number(qs.ratingMin)
+  if (rating !== null) { sql.push(`t.rating = ?`); params.push(rating) }
+  if (ratingMin !== null) { sql.push(`t.rating >= ?`); params.push(ratingMin) }
+
+  const lossless = bool(qs.lossless)
+  if (lossless !== null) {
+    // Asked of the rendition, not derived from the codec name. "Is this a lossy
+    // copy" is a property of the file, and a client enumerating
+    // flac|alac|wav|aiff is a rule that rots the day another codec is
+    // supported. The preferred rendition is the one that would actually play.
+    sql.push(`COALESCE((SELECT r.lossless FROM renditions r
+                        WHERE r.trackId = t.id ORDER BY r.preferred DESC LIMIT 1), 0) = ?`)
+    params.push(lossless ? 1 : 0)
+  }
 
   if (qs.q?.trim()) {
     // FTS5 over an external content table: fetch the rowids, join on them.
@@ -306,7 +362,10 @@ export function facets(db: DB, qs: TrackQuery) {
       .all(...(f.params as never[])) as { value: string; count: number }[])
   }
 
-  const base = { kind: qs.kind, q: qs.q, sourceId: qs.sourceId, onDevice: qs.onDevice, notOnDevice: qs.notOnDevice }
+  const base = {
+    kind: qs.kind, q: qs.q, sourceId: qs.sourceId, onDevice: qs.onDevice, notOnDevice: qs.notOnDevice,
+    rating: qs.rating, ratingMin: qs.ratingMin, lossless: qs.lossless,
+  }
   return {
     genres: distinct('genre', base),
     artists: distinct('albumArtist', { ...base, genre: qs.genre }),
