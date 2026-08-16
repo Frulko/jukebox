@@ -705,6 +705,25 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     if (b.cron !== undefined) f.cron = b.cron as string | null
     return f
   }
+  const srcTest = path.match(/^\/sources\/([^/]+)\/test$/)
+  if (srcTest && method === 'POST') {
+    const src = SOURCES.find((x) => x.id === srcTest[1])
+    // Answers 200 either way, like the server: "the share is down" is an answer
+    // about the source, not a failure of the request.
+    return src
+      ? { ok: true, kind: src.kind, name: src.root, version: null }
+      : { ok: false, reason: 'unknown source' }
+  }
+  if (path === '/sources' && method === 'POST') {
+    const b = JSON.parse(body ?? '{}') as { name?: string; root?: string }
+    if (!b.name || !b.root) throw new DemoError(400, 'bad_body', 'expected { name, root }')
+    const added: Source = {
+      id: `src-${SOURCES.length + 1}`, kind: 'local', name: b.name, root: b.root,
+      writable: 0, lastScanAt: null, rev: 1,
+    }
+    SOURCES.push(added)
+    return added
+  }
   if (path === '/podcasts') return { items: FEEDS }
   if (path === '/tracks/tags' && method === 'POST') {
     const b = JSON.parse(body ?? '{}') as { ids?: string[]; add?: string[]; remove?: string[] }

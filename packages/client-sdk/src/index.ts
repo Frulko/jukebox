@@ -329,6 +329,17 @@ export function createClient(opts: ClientOptions = {}) {
       /** `full` re-reads every file instead of trusting mtime and size. */
       scan: (id: string, full = false) =>
         request<Job>(`/sources/${id}/scan${full ? '?full=true' : ''}`, { method: 'POST' }),
+      /**
+       * Is it reachable *now*?
+       *
+       * Answers `200` either way: "the share is down" is an answer about the
+       * source, not a failure of the request, and a client that has to catch an
+       * exception to read it ends up unable to tell it from a server that is
+       * itself unwell.
+       */
+      test: (id: string) =>
+        request<{ ok: true; kind: string; name: string; version: string | null } | { ok: false; reason: string }>(
+          `/sources/${id}/test`, { method: 'POST' }),
     },
 
     jobs: {

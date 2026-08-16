@@ -24,6 +24,7 @@ import { AlbumView, type AlbumRef } from './AlbumView'
 import { PlaylistsView } from './PlaylistsView'
 import { ConvertDialog } from './ConvertDialog'
 import { AdminView } from './AdminView'
+import { SourcesView } from './SourcesView'
 import { DuplicatesView } from './DuplicatesView'
 import { HomeView, useRecentPlaylists } from './HomeView'
 import { usePluginMenu } from './pluginMenu'
@@ -656,6 +657,7 @@ export default function App() {
     radio: <RadioView search={search} />,
     missing: <MissingView />,
     admin: <AdminView />,
+    sources: <SourcesView onNotice={setNotice} />,
     duplicates: <DuplicatesView onNotice={setNotice} />,
     home: (
       <HomeView

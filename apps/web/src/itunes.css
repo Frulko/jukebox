@@ -2099,3 +2099,30 @@ input[type="range"]::-webkit-slider-thumb {
   line-height: 1.5;
 }
 .review-lead b { color: var(--text); }
+
+/* ---------------- sources ----------------
+   One card per source: what kind it is, where it points, whether it answers,
+   and what it is allowed to do — the last one stated rather than inferred from
+   a greyed button three pages away. */
+.sources .view-head .spacer { flex: 1; }
+.source-card { padding: 11px 13px; margin-bottom: 10px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel); }
+.sc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sc-head b { font-size: 13px; }
+.sc-head .spacer { flex: 1; }
+.sc-flag { flex: none; padding: 1px 7px; border-radius: 9px; font-size: 10px; background: var(--stripe); color: var(--dim); }
+.sc-flag.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.sc-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 4px 16px; margin: 0 0 10px; }
+.sc-facts div { display: flex; gap: 8px; min-width: 0; }
+.sc-facts dt { flex: none; width: 78px; color: var(--dim); }
+.sc-facts dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-facts dd.path { direction: rtl; text-align: left; unicode-bidi: plaintext; }
+.sc-gone { color: var(--danger, #d4342c); }
+.sc-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.sc-probe { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.sc-probe.ok { color: var(--accent); }
+.sc-probe.bad { color: var(--danger, #d4342c); }
+.source-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 11px 13px; margin-bottom: 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
+.source-add input { flex: 1; min-width: 180px; font: inherit; font-size: 11px; padding: 3px 6px; }
+.source-add p { flex-basis: 100%; margin: 0; line-height: 1.5; }
+.sources-note { margin: 14px 0 20px; padding: 10px 12px; border-radius: var(--radius); background: var(--stripe); color: var(--dim); line-height: 1.55; }
+.sources-note b { color: var(--text); }
