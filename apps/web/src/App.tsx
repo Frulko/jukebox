@@ -536,7 +536,12 @@ export default function App() {
       </div>
     )
   }
-  if (loading && tracks.length === 0) return <div className="boot">Loading library…</div>
+  // No full-screen loading state. It used to replace the *entire app* — sidebar,
+  // player and all — whenever a track query was in flight with nothing yet in
+  // hand, which is exactly what going from Admin to a playlist is: the admin
+  // page holds no tracks, so the first click on a playlist blanked the window
+  // for one round trip and read as a full page refresh. A view that is waiting
+  // says so where that view is; the shell it sits in never goes away.
 
   const infoTracks = infoIds ? tracks.filter((t) => infoIds.includes(t.id)) : []
   const device = view.kind === 'device' ? devices.find((d) => d.id === view.id) : undefined
@@ -748,6 +753,7 @@ export default function App() {
                 showArtwork={theme !== 'classic'}
                 devices={devices}
                 tracks={tracks}
+                loading={loading}
                 view={view}
                 playlists={playlists}
                 nowPlaying={nowPlaying}

@@ -436,8 +436,14 @@ function stats(): Stats {
  * everything would teach that the field cannot be got wrong.
  */
 class DemoError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) {
+  // Longhand rather than parameter properties: those *emit* assignments, and
+  // this repository's guardrail refuses any TypeScript that is more than types.
+  readonly status: number
+  readonly code: string
+  constructor(status: number, code: string, message: string) {
     super(message)
+    this.status = status
+    this.code = code
   }
 }
 

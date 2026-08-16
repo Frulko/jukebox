@@ -59,6 +59,8 @@ type Props = {
   onAddToDevice: (deviceId: string, ids: string[]) => void
   onReorder: (playlistId: string, ids: string[], toIndex: number) => void
   onGetInfo: (ids: string[]) => void
+  /** Waiting on the server. An empty list then says so rather than "No songs". */
+  loading?: boolean
   /** Opens the album of a track — the album name and its album artist. */
   onOpenAlbum: (album: string, artist: string) => void
   /** Every tag in the library, with counts, so the menu can offer them. */
@@ -575,7 +577,9 @@ export function TrackList(p: Props) {
             )
           })}
         </div>
-        {!rows.length && <div className="list-empty">No songs</div>}
+        {/* "No songs" is a claim about the library; while the answer is still
+            on its way it is not one we can make. */}
+        {!rows.length && <div className="list-empty">{p.loading ? 'Loading…' : 'No songs'}</div>}
       </div>
 
       {where && (
