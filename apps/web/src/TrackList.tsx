@@ -320,7 +320,7 @@ export function TrackList(p: Props) {
                 data-rowid={row.id}
                 data-rowidx={v.index}
                 style={{ transform: `translateY(${v.start}px)` }}
-                className={`tr ${sel ? 'sel' : ''} ${v.index % 2 ? 'odd' : ''} ${row.id === p.nowPlaying ? 'playing' : ''} ${row.original.enabled ? '' : 'unchecked'} ${dropRow === v.index ? 'drop-above' : ''} ${dropRow === rows.length && v.index === rows.length - 1 ? 'drop-below' : ''}`}
+                className={`tr ${sel ? 'sel' : ''} ${v.index % 2 ? 'odd' : ''} ${row.id === p.nowPlaying ? 'playing' : ''} ${row.original.enabled ? 'checked' : 'unchecked'} ${dropRow === v.index ? 'drop-above' : ''} ${dropRow === rows.length && v.index === rows.length - 1 ? 'drop-below' : ''}`}
                 draggable
                 onDragStart={(e) => dragTracks(e, row.id)}
                 onMouseDown={(e) => clickRow(e, row.id)}
