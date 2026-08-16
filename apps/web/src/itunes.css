@@ -666,9 +666,9 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--chrome-text);
 }
 .modal-titlebar .close {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 24px;
   border: 1px solid #a9564f;
   background: radial-gradient(circle at 35% 30%, #ff9a92, #d64a41);
 }
@@ -1578,3 +1578,5 @@ input[type="range"]::-webkit-slider-thumb {
 /* An unreachable file is the one case where dimming is honest: it really cannot
    be played. It keeps its warning icon at full strength. */
 .tr.unavailable .td:not(.status) { opacity: .5; }
+/* File formats are tokens, not prose: tabular so a column of them lines up. */
+.format { font-variant-numeric: tabular-nums; letter-spacing: .02em; font-size: .95em; }

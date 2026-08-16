@@ -146,6 +146,13 @@ export const makeColumns = (a: CellActions) =>
       cell: (c) => <span className="num">{c.getValue() || ''}</span>,
     }),
     h.accessor('kind', { header: 'Kind', size: 150 }),
+    h.accessor('format', {
+      header: 'Format',
+      size: 64,
+      // Upper case because these are file formats, not words: FLAC and MP3 are
+      // read as tokens, and a column of them scans faster than "flac", "mp3".
+      cell: (c) => <span className="format">{c.getValue().toUpperCase()}</span>,
+    }),
     h.accessor('size', {
       header: 'Size',
       size: 62,
@@ -195,7 +202,7 @@ export const COLUMN_LABELS: Record<string, string> = {
   checked: '✓', index: '#', status: 'Status', name: 'Name', time: 'Time', artist: 'Artist', album: 'Album',
   genre: 'Genre', rating: 'Rating', playCount: 'Plays', year: 'Year', trackNumber: 'Track Number',
   discNumber: 'Disc Number', albumArtist: 'Album Artist', composer: 'Composer', grouping: 'Grouping',
-  comments: 'Comments', bpm: 'BPM', kind: 'Kind', size: 'Size', bitRate: 'Bit Rate',
+  comments: 'Comments', bpm: 'BPM', kind: 'Kind', format: 'Format', size: 'Size', bitRate: 'Bit Rate',
   sampleRate: 'Sample Rate', dateAdded: 'Date Added', lastPlayed: 'Last Played', skipCount: 'Skips',
   devices: 'On device',
 }
