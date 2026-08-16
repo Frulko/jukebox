@@ -732,6 +732,12 @@ export default function App() {
               playlists={playlists}
               onDevices={() => qc.invalidateQueries({ queryKey: ['devices'] })}
               onEject={() => setView({ kind: 'library', id: 'music' })}
+              // The same door a plugin's "found these tracks" uses: go to the
+              // library and select it, rather than describing where it is.
+              onReveal={(trackId) => {
+                setView({ kind: 'library', id: 'music' })
+                setSelectIds([trackId])
+              }}
               nowPlaying={nowPlaying}
               onPlay={playTrack}
             />

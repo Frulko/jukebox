@@ -337,7 +337,10 @@ const SOURCES: Source[] = [
   // With its mount, as the real route reports it: a UI that can say "this share
   // is not mounted" instead of showing an empty library needs the answer to
   // exist even when it is the reassuring one.
-  { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
+  // Writable, so importing off the iPod is something the demo can actually
+  // show: with no writable source the page can only explain why the button is
+  // not there, which is the one thing the page is for.
+  { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 1,
     lastScanAt: Date.UTC(2026, 7, 16), rev: 1,
     mount: { device: '/dev/disk3s5', type: 'apfs', network: false, readOnly: false, point: '/' } } as Source,
 ]
@@ -763,6 +766,23 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   if (path.startsWith('/sources/') && path.endsWith('/scan') && method === 'POST') return scanning()
   if (path === '/devices') return { items: [DEVICE] }
   if (path === '/jobs') return { items: [syncing(), scanning()].filter(Boolean) }
+  if (path === `/devices/${DEVICE.id}/import` && method === 'POST') {
+    const b = JSON.parse(body ?? '{}') as { deviceLocalIds?: string[] }
+    // Importing off a device is a job like any other — the satellite serves the
+    // bytes and the library gains a track when it lands.
+    for (const localId of b.deviceLocalIds ?? []) {
+      const row = onDevice.find((t) => t.deviceLocalId === localId)
+      if (!row || row.libraryTrackId) continue
+      const id = `imp-${localId}`
+      tracks.push({
+        ...tracks[0], id, name: row.name, artist: row.artist, albumArtist: row.artist,
+        album: row.album, duration: row.duration, size: row.size, format: row.format,
+        devices: [DEVICE.id], tags: [], rating: 0, playCount: 0, dateAdded: Date.now(),
+      })
+      row.libraryTrackId = id
+    }
+    return scanning()
+  }
   if (path === `/devices/${DEVICE.id}/sync` && method === 'POST') {
     const b = JSON.parse(body ?? '{}') as { dryRun?: boolean }
     // Asking is free and acting is not: the plan is what the first click gets.

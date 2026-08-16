@@ -1180,6 +1180,12 @@ input[type="range"]::-webkit-slider-thumb {
 
 .dev-tabs { padding: 0 0 0 0; background: none; border-bottom: 1px solid var(--line-soft); }
 .devtracks { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+/* The contents tab fills what is left and scrolls inside the table, so the
+   footer never lands on top of half a row. */
+.device.contents { overflow: hidden; }
+.devtracks .data-table { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.devtracks .data-table .tbody { max-height: none; flex: 1; }
+.ep .c-name .icon { flex: none; }
 .devtracks-bar {
   display: flex;
   align-items: center;
@@ -1925,6 +1931,9 @@ input[type="range"]::-webkit-slider-thumb {
 /* The shared table in a page that is not the library: it needs its own height,
    since it is not the only thing in its view. */
 .data-table { border: 1px solid var(--line-soft); border-radius: var(--radius); overflow: hidden; min-height: 220px; }
+/* A cap, for a page that stacks several tables and scrolls as a whole — the
+   Missing page. A table that owns its pane says so instead; see .device.contents,
+   where 46vh left the last row sliced in half by the capacity bar. */
 .data-table .tbody { max-height: 46vh; }
 .data-table .tr.orphan .td { opacity: .72; }
 .data-table .tr.playing .td.name { color: var(--accent); font-weight: 600; }

@@ -32,6 +32,7 @@ export function DeviceView({
   onEject,
   nowPlaying,
   onPlay,
+  onReveal,
 }: {
   device: Device
   playlists: Playlist[]
@@ -39,6 +40,8 @@ export function DeviceView({
   onEject: () => void
   nowPlaying: string | null
   onPlay: Play
+  /** Takes a track that is also in the library to it, selected. */
+  onReveal: (trackId: string) => void
 }) {
   /**
    * The job this view started, watched through the job list rather than
@@ -105,8 +108,11 @@ export function DeviceView({
     api.devices.syncPlan(device.id).then(setPlan).catch(() => setPlan(null))
   }
 
+  // The contents tab is a table that should fill what is left and scroll inside
+  // itself; the settings tab is a stack of panels that scrolls as a page. One
+  // class, because they are genuinely two layouts.
   return (
-    <div className="device">
+    <div className={`device ${tab === 'contents' ? 'contents' : ''}`}>
       <div className="dev-head">
         <Icon name={DEVICE_ICON[device.kind]} size={54} className="dev-glyph" />
         <div className="dev-id">
@@ -167,7 +173,14 @@ export function DeviceView({
       </div>
 
       {tab === 'contents' && (
-        <DeviceTracks deviceId={device.id} deviceName={device.name} sources={sources} nowPlaying={nowPlaying} onPlay={onPlay} />
+        <DeviceTracks
+          deviceId={device.id}
+          deviceName={device.name}
+          sources={sources}
+          nowPlaying={nowPlaying}
+          onPlay={onPlay}
+          onReveal={onReveal}
+        />
       )}
 
       {tab === 'settings' && <>

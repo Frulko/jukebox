@@ -7,6 +7,7 @@ import type { DeviceTrack, Source } from '@jukebox/client-sdk'
 import { fmtSize, fmtTime } from './data'
 import type { Play } from './App'
 import { DataTable } from './DataTable'
+import { useMenuPosition } from './useMenuPosition'
 import { FilterBar, type FilterChip } from './FilterBar'
 import type { features } from './tableFeatures'
 
@@ -26,16 +27,22 @@ export function DeviceTracks({
   sources,
   nowPlaying,
   onPlay,
+  onReveal,
 }: {
   deviceId: string
   deviceName: string
   sources: Source[]
   nowPlaying: string | null
   onPlay: Play
+  onReveal: (trackId: string) => void
 }) {
   const [orphansOnly, setOrphansOnly] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [importing, setImporting] = useState<string | null>(null)
+  /** The row being pointed at, which is what a right-click acts on. */
+  const [current, setCurrent] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; track: DeviceTrack } | null>(null)
+  const menuPosition = useMenuPosition(menu)
 
   const { data, isPending } = useQuery({
     queryKey: ['devices', deviceId, 'tracks', orphansOnly],
@@ -70,8 +77,10 @@ export function DeviceTracks({
     () => [
       h.display({
         id: 'pick',
-        header: '',
-        size: 26,
+        // Headed, because an empty column with a box on four rows out of forty
+        // reads as something failing to render rather than as a choice.
+        header: 'Import',
+        size: 46,
         enableResizing: false,
         // Only an orphan the satellite can serve is importable; the rest have
         // nothing to tick, so they get no box rather than a disabled one.
@@ -101,13 +110,22 @@ export function DeviceTracks({
       h.accessor('size', { header: 'Size', size: 72, cell: (c) => <span className="num">{fmtSize(c.getValue())}</span> }),
       h.accessor('libraryTrackId', {
         id: 'state',
-        header: 'In library',
-        size: 110,
+        header: 'Where else',
+        size: 132,
+        // Words, not a glyph. The difference between "you have this" and "this
+        // iPod is the last copy" is the reason to open this page at all, and a
+        // small dim note was making the interesting half the quiet one.
         cell: (c) =>
           c.getValue() ? (
-            <Icon name="music" size={10} className="dim" />
+            <span className="dim">In your library</span>
+          ) : c.row.original.sourceUrl ? (
+            <em className="tag-orphan" title="Only on this device — the satellite can serve the file, so it can be imported">
+              Only here
+            </em>
           ) : (
-            <em className="tag-orphan">{c.row.original.sourceUrl ? 'importable' : 'not fetchable'}</em>
+            <em className="tag-orphan off" title="Only on this device, and nothing can fetch the file from it">
+              Only here · no source
+            </em>
           ),
       }),
     ],
@@ -124,13 +142,62 @@ export function DeviceTracks({
       await api.devices.importTracks(deviceId, chosen, targets[0].id, `Imported from ${deviceName}`)
       setSelected(new Set())
       setImporting('queued')
+      // The band says the job started; the job list says how it is going. A
+      // line that stays for ever ends up describing an import from last Tuesday.
+      setTimeout(() => setImporting((v) => (v === 'queued' ? null : v)), 6000)
     } catch (err) {
+      // A failure keeps its place until something else happens: it is the one
+      // of the two that nobody else will mention.
       setImporting(err instanceof Error ? err.message : 'import failed')
     }
   }
 
+  const menuFor = (t: DeviceTrack) => {
+    const inLibrary = !!t.libraryTrackId
+    return (
+      <div
+        className="ctx"
+        ref={menuPosition.setFloating}
+        style={menuPosition.floatingStyles}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button
+          disabled={!inLibrary}
+          // The server streams what the library holds; the file for an orphan
+          // is on the iPod, so there is nothing to play from here.
+          title={inLibrary ? undefined : 'Only on the device — import it to play it'}
+          onClick={() => {
+            if (t.libraryTrackId) {
+              onPlay(t.libraryTrackId, items.map((x) => x.libraryTrackId).filter((id): id is string => !!id))
+            }
+            setMenu(null)
+          }}
+        >
+          Play
+        </button>
+        <button
+          disabled={!inLibrary}
+          onClick={() => (t.libraryTrackId && onReveal(t.libraryTrackId), setMenu(null))}
+        >
+          Show in library
+        </button>
+        <hr />
+        <button
+          disabled={inLibrary || !t.sourceUrl || targets.length === 0}
+          title={targets.length === 0 ? 'No writable source to import into' : undefined}
+          onClick={() => {
+            setSelected((old) => new Set(old).add(t.deviceLocalId))
+            setMenu(null)
+          }}
+        >
+          Tick for import
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className="devtracks">
+    <div className="devtracks" onMouseDown={() => setMenu(null)}>
       <div className="devtracks-bar">
         <FilterBar chips={chips} />
 
@@ -172,6 +239,13 @@ export function DeviceTracks({
               ? 'Everything on this device is in the library'
               : 'Nothing on this device'
         }
+        selectedId={current}
+        onRowClick={(t) => setCurrent(t.deviceLocalId)}
+        onRowContextMenu={(t, e) => {
+          e.preventDefault()
+          setCurrent(t.deviceLocalId)
+          setMenu({ x: e.clientX, y: e.clientY, track: t })
+        }}
         rowClass={(t) =>
           `${t.libraryTrackId === null ? 'orphan' : ''} ${t.libraryTrackId && t.libraryTrackId === nowPlaying ? 'playing' : ''}`
         }
@@ -186,6 +260,8 @@ export function DeviceTracks({
           )
         }}
       />
+
+      {menu && menuFor(menu.track)}
     </div>
   )
 }
