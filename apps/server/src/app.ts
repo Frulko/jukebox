@@ -36,6 +36,7 @@ import {
 } from './auth.ts'
 import { subsonicRouter } from './subsonic.ts'
 import { buildOpenApi } from './openapi.ts'
+import { Player, type PlayerState } from './player.ts'
 import {
   advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
   setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
@@ -122,6 +123,7 @@ export function createApp(dbFile: string) {
   // Cached between searches: SSDP takes seconds, and a UI that lists outputs on
   // every render would spend its life waiting for a multicast timeout.
   let renderers: { at: number; items: Renderer[] } = { at: 0, items: [] }
+  const player = new Player(db, events)
   const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events)
   seedPresets(db)
 
@@ -411,6 +413,132 @@ export function createApp(dbFile: string) {
     })
     return c.json(publicJob(job), 202)
   })
+
+  /* ---------------- the shared queue ---------------- */
+
+  /**
+   * One queue, several controllers.
+   *
+   * The server holds the intent — what is queued, which one is current, whether
+   * it should be playing, where. A renderer executes it and reports back. That
+   * separation is what makes "pause it from my phone while it plays on the
+   * Sonos" work at all.
+   */
+  api.get('/player', (c) => c.json(player.withTrack()))
+
+  api.put('/player/queue', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.trackIds)) return fail(c, 400, 'bad_body', 'expected { trackIds: [], startAt? }')
+    const state = player.setQueue(b.trackIds, Number(b.startAt) || 0, by(c))
+    void driveOutput(state)
+    return c.json(player.withTrack())
+  })
+
+  api.post('/player/queue', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!Array.isArray(b?.trackIds)) return fail(c, 400, 'bad_body', 'expected { trackIds: [], next? }')
+    const state = b.next ? player.playNext(b.trackIds, by(c)) : player.enqueue(b.trackIds, by(c))
+    void driveOutput(state)
+    return c.json(player.withTrack())
+  })
+
+  api.delete('/player/queue', (c) => c.json(player.clear(by(c))))
+
+  // Each takes the controller's name, so "paused from iPhone" is answerable.
+  // Building these without it was silently dropping the one thing that makes a
+  // shared queue feel shared.
+  for (const [path, act] of [
+    ['play', (who: string | null) => player.play(who ?? undefined)],
+    ['pause', (who: string | null) => player.pause(who ?? undefined)],
+    ['next', (who: string | null) => player.step(1, who ?? undefined)],
+    ['previous', (who: string | null) => player.step(-1, who ?? undefined)],
+  ] as const) {
+    api.post(`/player/${path}`, (c) => {
+      const state = act(by(c))
+      void driveOutput(state)
+      return c.json(player.withTrack())
+    })
+  }
+
+  api.post('/player/seek', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (typeof b?.position !== 'number') return fail(c, 400, 'bad_body', 'expected { position }')
+    return c.json(player.seek(b.position, by(c)))
+  })
+
+  api.post('/player/goto', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.trackId) return fail(c, 400, 'bad_body', 'expected { trackId }')
+    const state = player.goTo(b.trackId, by(c))
+    void driveOutput(state)
+    return c.json(player.withTrack())
+  })
+
+  api.patch('/player', async (c) => {
+    const b = await c.req.json().catch(() => ({}))
+    if (b.target) {
+      const target = b.target.kind === 'output'
+        ? renderers.items.find((r) => r.id === b.target.id)
+        : null
+      if (b.target.kind === 'output' && !target) {
+        return fail(c, 404, 'not_found', 'unknown output; try GET /outputs?refresh=true')
+      }
+      const state = player.setTarget(
+        target ? { kind: 'output', id: target.id, name: target.name } : { kind: 'local' }, by(c))
+      // Moving rooms should pick up where it was, not start over.
+      void driveOutput(state)
+    }
+    if (b.repeat !== undefined || b.shuffle !== undefined) {
+      player.set({ repeat: b.repeat, shuffle: b.shuffle }, by(c))
+    }
+    return c.json(player.withTrack())
+  })
+
+  /**
+   * Where the renderer says it actually is.
+   *
+   * Separate from the control routes because a renderer may report a position,
+   * not reorder a queue — and because a position tick is not somebody doing
+   * something, so it must not show up as "changed by iPhone".
+   */
+  api.post('/player/report', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (typeof b?.position !== 'number') return fail(c, 400, 'bad_body', 'expected { position, playing? }')
+    return c.json(player.report(b.position, b.playing))
+  })
+
+  /** Names the controller, so a UI can say "paused from iPhone". */
+  const by = (c: any) => c.req.header('x-jukebox-client') ?? null
+
+  /**
+   * When the target is a speaker, the server does the driving.
+   *
+   * Best-effort and never fatal: a renderer that has been unplugged should not
+   * make pressing play return an error, it should make the next `GET /outputs`
+   * stop listing it.
+   */
+  async function driveOutput(state: PlayerState): Promise<void> {
+    if (state.target.kind !== 'output' || !state.trackId) return
+    const targetId = state.target.id
+    const renderer = renderers.items.find((r) => r.id === targetId)
+    if (!renderer) return
+
+    const t = getTrack(db, state.trackId)
+    if (!t) return
+    const base = advertisedBase(Number(process.env.PORT ?? 8787))
+    try {
+      if (state.playing) {
+        await playUrl(renderer, {
+          name: t.name, artist: t.artist, album: t.album, duration: t.duration,
+          url: `${base}/api/v1/stream/${t.id}`,
+        })
+      } else {
+        await pauseRenderer(renderer)
+      }
+    } catch (err) {
+      console.warn(`[player] ${renderer.name} refused:`, err instanceof Error ? err.message : err)
+    }
+  }
 
   /* ---------------- outputs ---------------- */
 

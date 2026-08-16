@@ -1,7 +1,8 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  CommandResult, DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition,
+  CommandResult, DuplicateGroup, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
+  PluginState, Rendition,
   RestoreReport, Schedule,
   Source, Stats,
   StoreEntry, SyncPlan,
@@ -40,6 +41,8 @@ export type Facet = { value: string; count: number }
 export type ClientOptions = {
   baseUrl?: string
   token?: string
+  /** Names this controller in the shared player, e.g. "iPhone". */
+  client?: string
   fetch?: typeof globalThis.fetch
 }
 
@@ -54,6 +57,7 @@ export function createClient(opts: ClientOptions = {}) {
     const url = base + path
     const headers = new Headers(init.headers)
     if (opts.token) headers.set('authorization', `Bearer ${opts.token}`)
+    if (opts.client) headers.set('x-jukebox-client', opts.client)
     if (init.body) headers.set('content-type', 'application/json')
 
     const cached = cacheable ? etags.get(url) : undefined
@@ -205,6 +209,35 @@ export function createClient(opts: ClientOptions = {}) {
         }),
       configure: (id: string, config: Record<string, unknown>) =>
         request<Plugin>(`/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ config }) }),
+    },
+
+    /**
+     * The shared queue. Every controller sees the same one.
+     *
+     * Send `x-jukebox-client` (via `createClient({ client })`) and the state
+     * reports who last changed it, so a UI can say "paused from iPhone".
+     */
+    player: {
+      get: () => request<PlayerState & { track: Track | null }>('/player'),
+      setQueue: (trackIds: string[], startAt = 0) =>
+        request<PlayerState>('/player/queue', { method: 'PUT', body: JSON.stringify({ trackIds, startAt }) }),
+      /** `next: true` puts them after the current track rather than at the end. */
+      enqueue: (trackIds: string[], next = false) =>
+        request<PlayerState>('/player/queue', { method: 'POST', body: JSON.stringify({ trackIds, next }) }),
+      clear: () => request<PlayerState>('/player/queue', { method: 'DELETE' }),
+      play: () => request<PlayerState>('/player/play', { method: 'POST' }),
+      pause: () => request<PlayerState>('/player/pause', { method: 'POST' }),
+      next: () => request<PlayerState>('/player/next', { method: 'POST' }),
+      previous: () => request<PlayerState>('/player/previous', { method: 'POST' }),
+      seek: (position: number) =>
+        request<PlayerState>('/player/seek', { method: 'POST', body: JSON.stringify({ position }) }),
+      goTo: (trackId: string) =>
+        request<PlayerState>('/player/goto', { method: 'POST', body: JSON.stringify({ trackId }) }),
+      set: (patch: { target?: PlayerTarget; repeat?: PlayerState['repeat']; shuffle?: boolean }) =>
+        request<PlayerState>('/player', { method: 'PATCH', body: JSON.stringify(patch) }),
+      /** For a renderer: where it actually got to. It may not reorder anything. */
+      report: (position: number, playing?: boolean) =>
+        request<PlayerState>('/player/report', { method: 'POST', body: JSON.stringify({ position, playing }) }),
     },
 
     organize: {
@@ -389,7 +422,8 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
-  CommandResult, DuplicateGroup, Move, OrganizePlan, Plugin, PluginState, Rendition,
+  CommandResult, DuplicateGroup, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
+  PluginState, Rendition,
   RestoreReport, Schedule,
   Source, Stats,
   StoreEntry, SyncPlan,

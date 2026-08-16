@@ -77,7 +77,8 @@ hands out a URL.
 - [x] **3.3** UPnP/DLNA — SSDP discovery, description parsing, `SetAVTransportURI`, play,
       pause, stop, volume. Verified against five real Sonos speakers on the LAN.
       Sonos-specific grouping and its own queue are still to come
-- [ ] **3.4** Play queue shared between controllers
+- [x] **3.4** Play queue shared between controllers — the server holds the intent, a renderer
+      executes it and reports back, and every controller sees the same queue
 - [ ] **3.5** AirPlay · **3.6** Satellite renderer (tablet, Pi + DAC) · **3.7** Chromecast
 - [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)
 

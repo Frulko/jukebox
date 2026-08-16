@@ -449,6 +449,33 @@ export type MissingTrack = {
   deletedAt: number
 }
 
+/** Where the music comes out. `local` means the client that is asking. */
+export type PlayerTarget = { kind: 'local' } | { kind: 'output'; id: string; name: string }
+
+/**
+ * The shared queue.
+ *
+ * The server holds the intent — what is queued, which one is current, whether
+ * it should be playing, where. A renderer executes it and reports its position
+ * back. That separation is what makes controlling playback from one device
+ * while it comes out of another work at all.
+ */
+export type PlayerState = {
+  queue: string[]
+  /** Index into `queue`. -1 when nothing is loaded. */
+  index: number
+  trackId: string | null
+  playing: boolean
+  position: number
+  target: PlayerTarget
+  repeat: 'off' | 'all' | 'one'
+  shuffle: boolean
+  /** Bumped on every change, so a client can tell its own echo from someone else's. */
+  revision: number
+  /** Which controller last changed it, from the `x-jukebox-client` header. */
+  by: string | null
+}
+
 /** Cursor pagination. `next` of `null` means: last page. */
 export type Page<T> = { items: T[]; next: string | null; revision?: number }
 
