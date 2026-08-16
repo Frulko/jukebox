@@ -143,7 +143,7 @@ td code { white-space: nowrap; }
    contact shadow, a short ambient one and a long soft one — because a single
    large blur reads as a sticker, not as something with weight. */
 .window {
-  border: 1px solid var(--line);
+  /* border: 1px solid var(--line); */
   background: var(--panel);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, .03),
@@ -200,7 +200,7 @@ td code { white-space: nowrap; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px;
+  padding:  9px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
