@@ -62,6 +62,16 @@ jobs:
           echo "— an unknown API route"
           curl -s http://127.0.0.1:8787/api/v1/nope | grep -q '"not_found"'
 
+          # The plugins, which the image shipped without for weeks. The
+          # Dockerfile test catches a missing COPY line; this catches the
+          # running container having none, which is the fact that matters and
+          # which /health answers perfectly happily without.
+          echo "— the bundled plugins"
+          curl -fsS http://127.0.0.1:8787/api/v1/plugins > /tmp/plugins.json
+          for p in lyrics listenbrainz lastfm homeassistant; do
+            grep -q "\"$p\"" /tmp/plugins.json || { echo "missing plugin: $p"; cat /tmp/plugins.json; exit 1; }
+          done
+
           # The tools the image exists to carry.
           echo "— ffmpeg and rclone"
           docker exec jukebox ffmpeg -version | head -1
