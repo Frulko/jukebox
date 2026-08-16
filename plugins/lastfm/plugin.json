@@ -1,0 +1,44 @@
+{
+  "id": "lastfm",
+  "name": "Last.fm",
+  "version": "1.0.0",
+  "hostApi": "^1.0.0",
+  "main": "index.mjs",
+  "description": "Scrobbles to Last.fm. Queues while the network is down, and signs every call the way Last.fm insists on.",
+  "author": "jukebox",
+  "permissions": [
+    "network:ws.audioscrobbler.com",
+    "events:play"
+  ],
+  "contributes": {
+    "settings": [
+      {
+        "key": "apiKey",
+        "label": "API key",
+        "type": "text",
+        "help": "From last.fm/api/account/create — the plugin does nothing until this and the secret are set."
+      },
+      {
+        "key": "apiSecret",
+        "label": "Shared secret",
+        "type": "password"
+      },
+      {
+        "key": "username",
+        "label": "Username",
+        "type": "text",
+        "help": "Only needed once, to connect."
+      },
+      {
+        "key": "password",
+        "label": "Password",
+        "type": "password",
+        "help": "Used once to obtain a session key, then cleared. Never sent again."
+      }
+    ],
+    "commands": [
+      { "id": "connect", "label": "Connect to Last.fm", "command": "connect" },
+      { "id": "flush", "label": "Send queued scrobbles now", "command": "flush" }
+    ]
+  }
+}
