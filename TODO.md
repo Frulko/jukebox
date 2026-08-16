@@ -192,7 +192,14 @@ hands out a URL.
       the Purchased pane that renders it is the front session's
 - [x] **5.6b** ListenBrainz scrobbler — the first real plugin, shipped in `plugins/`, with a
       queue that survives an unreachable server
-- [ ] **5.6** Last.fm scrobble (same shape, plus an MD5-signed parameter dance)
+- [x] **5.6** Last.fm scrobble — the same queue-and-batch shape as ListenBrainz, plus the
+      signature: MD5 over the parameters sorted by *name*, joined as `nameValue` with no
+      separators, secret on the end, with `format` and `api_sig` themselves excluded and the
+      raw UTF-8 hashed rather than the encoded form. Every expected signature in the tests was
+      computed outside the code, since a test that signs with the function it is testing only
+      proves the function is deterministic. Their error numbers are read rather than the HTTP
+      status: 9 is a dead session, 16 is come back later, and retrying the first blocks
+      everything behind it
 - [ ] **5.7** AudioMuse
 - [x] **5.8** Home Assistant + MQTT — the player publishes itself as a `media_player` entity
       through MQTT discovery, so nobody edits a YAML file, and accepts its commands back.
