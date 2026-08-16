@@ -1,6 +1,6 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta,
+  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta, WantResult,
 } from '@jukebox/api-types'
 
 /**
@@ -128,7 +128,9 @@ export function createClient(opts: ClientOptions = {}) {
       list: () => request<{ items: Source[] }>('/sources', {}, true),
       create: (s: { id?: string; name: string; root: string; kind?: string; writable?: boolean }) =>
         request<Source>('/sources', { method: 'POST', body: JSON.stringify(s) }),
-      scan: (id: string) => request<Job>(`/sources/${id}/scan`, { method: 'POST' }),
+      /** `full` re-reads every file instead of trusting mtime and size. */
+      scan: (id: string, full = false) =>
+        request<Job>(`/sources/${id}/scan${full ? '?full=true' : ''}`, { method: 'POST' }),
     },
 
     jobs: {
@@ -160,6 +162,15 @@ export function createClient(opts: ClientOptions = {}) {
           body: JSON.stringify({ deviceLocalIds, targetSourceId, targetPath }),
         }),
       stats: (id: string) => request<DeviceStats>(`/devices/${id}/stats`, {}, true),
+      /** Hand-picks tracks for a device. They join the sync rules; the sync moves them. */
+      want: (id: string, trackIds: string[]) =>
+        request<WantResult>(`/devices/${id}/wanted`, {
+          method: 'POST', body: JSON.stringify({ trackIds }),
+        }),
+      unwant: (id: string, trackIds: string[]) =>
+        request<{ removed: number }>(`/devices/${id}/wanted`, {
+          method: 'DELETE', body: JSON.stringify({ trackIds }),
+        }),
       update: (id: string, patch: Partial<Pick<Device, 'name' | 'autoSync' | 'syncMode' | 'syncPlaylistIds'>>) =>
         request<Device>(`/devices/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
       sync: (id: string) => request<Job>(`/devices/${id}/sync`, { method: 'POST', body: '{}' }),
@@ -200,5 +211,5 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta,
+  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta, WantResult,
 }

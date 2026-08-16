@@ -3,21 +3,44 @@ import assert from 'node:assert/strict'
 import { copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fingerprint, matches, readTags, writeTags } from '../src/tags.ts'
+import { fingerprint, matches, readTags, shortFormat, writeTags } from '../src/tags.ts'
 
 const FIXTURES = process.env.JUKEBOX_FIXTURES ?? ''
 const skip = FIXTURES ? false : 'JUKEBOX_FIXTURES is not set'
 
 test('tags are read from mp3, flac and m4a', { skip }, async () => {
-  for (const [file, format] of [['Daft Punk/Discovery/01.mp3', 'mpeg'],
+  // The format is the short codec name, not the container: an iPod declares
+  // `mp3`, never `MPEG`, and the sync compares the two.
+  for (const [file, format] of [['Daft Punk/Discovery/01.mp3', 'mp3'],
                                 ['Daft Punk/Discovery/03.flac', 'flac'],
-                                ['Radiohead/Kid A/01.m4a', 'm4a']] as const) {
+                                ['Radiohead/Kid A/01.m4a', 'aac']] as const) {
     const r = await readTags(join(FIXTURES, file))
     assert.ok(r.tags.name, `${file} — title read`)
     assert.ok(r.tags.artist, `${file} — artist read`)
     assert.ok(r.audio.duration > 0, `${file} — duration read`)
-    assert.match(r.audio.format, new RegExp(format, 'i'), `${file} — format`)
+    assert.equal(r.audio.format, format, `${file} — format`)
   }
+})
+
+test('the format is a name a device would recognise', () => {
+  // Real values from music-metadata. Containers alone say `MPEG` for an mp3 and
+  // `M4A/isom/iso2` for an m4a; a device's accepted list contains neither, so
+  // reading them raw meant transcoding a whole library for nothing.
+  const cases: [string, string, string][] = [
+    ['MPEG', 'MPEG 1 Layer 3', 'mp3'],
+    ['M4A/isom/iso2', 'MPEG-4/AAC', 'aac'],
+    ['M4A/mp42/isom', 'ALAC', 'alac'],
+    ['FLAC', 'FLAC', 'flac'],
+    ['Ogg', 'Opus', 'opus'],
+    ['WAVE', 'PCM', 'wav'],
+    ['AIFF', 'PCM', 'aiff'],
+  ]
+  for (const [container, codec, want] of cases) {
+    assert.equal(shortFormat(container, codec), want, `${container} / ${codec}`)
+  }
+  // ALAC is checked before AAC: the codec string of an Apple Lossless file
+  // mentions MPEG-4 too, and calling it aac would transcode lossless to lossy.
+  assert.equal(shortFormat('M4A/isom', 'MPEG-4/ALAC'), 'alac')
 })
 
 test('tags are written in place and read back from the file', { skip }, async () => {

@@ -33,6 +33,28 @@ export const WRITABLE: (keyof Tags)[] = [
   'year', 'trackNumber', 'trackCount', 'discNumber', 'bpm', 'comments', 'grouping', 'compilation',
 ]
 
+/**
+ * The short codec name everything else in the app speaks: `mp3`, `aac`, `alac`.
+ *
+ * `format.container` cannot be used directly — it answers `MPEG` for an mp3 and
+ * `M4A/isom/iso2` for an m4a, neither of which appears in the format list a
+ * device declares. Comparing containers against that list marked every mp3 as
+ * unplayable, and a sync would have transcoded a whole library to ALAC for
+ * nothing.
+ */
+export function shortFormat(container = '', codec = ''): string {
+  const s = `${codec} ${container}`.toLowerCase()
+  if (s.includes('layer 3') || s.includes('mp3')) return 'mp3'
+  if (s.includes('alac')) return 'alac'
+  if (s.includes('aac')) return 'aac'
+  if (s.includes('flac')) return 'flac'
+  if (s.includes('opus')) return 'opus'
+  if (s.includes('vorbis')) return 'vorbis'
+  if (s.includes('wave') || s.includes('wav')) return 'wav'
+  if (s.includes('aiff')) return 'aiff'
+  return container.toLowerCase()
+}
+
 export async function readTags(path: string) {
   const parsed = await parseFile(path, { duration: true, skipCovers: false })
   const c = parsed.common
@@ -59,7 +81,7 @@ export async function readTags(path: string) {
       bitRate: Math.round((f.bitrate ?? 0) / 1000),
       sampleRate: f.sampleRate ?? 0,
       channels: f.numberOfChannels ?? 2,
-      format: (f.container ?? '').toLowerCase(),
+      format: shortFormat(f.container, f.codec),
       lossless: f.lossless ?? false,
     },
     picture: c.picture?.[0] ?? null,
