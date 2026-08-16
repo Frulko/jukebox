@@ -352,6 +352,23 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     }
     if (command === 'playlist') return { kind: 'playlist', id: 'p-top', name: 'Built from your listening' }
     if (command === 'flush') return { kind: 'done', message: '3 listens sent.' }
+    if (command === 'words') {
+      // The words are invented, like everything else in this library: the real
+      // plugin fetches them from LRCLIB, which has nothing to say about songs
+      // that do not exist.
+      const t = tracks.find((x) => x.id === trackIds?.[0])
+      if (!t) return { kind: 'text', body: 'No track.' }
+      return {
+        kind: 'text',
+        title: `${t.name} — ${t.artist}`,
+        body: [
+          'The needle finds the groove again,', 'and the room is a little warmer.',
+          '', 'Nothing here was ever filed,', 'nothing here was ever lost.',
+          '', '(instrumental break)', '',
+          'Play it once and play it twice,', 'the second time it means something else.',
+        ].join('\n'),
+      }
+    }
     return { kind: 'done', message: `${command} done` }
   }
   if (path === '/plugins') {
@@ -366,6 +383,14 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
             { id: 'lb.playlist', label: 'Build a playlist from this', command: 'playlist' },
           ] },
           commands: ['similar', 'playlist', 'flush'],
+          enabled: 1, state: 'active', error: null, config: {} },
+        // Contributes a *place* rather than an action: the information window
+        // grows a tab, and the host draws whatever the command answers.
+        { id: 'lyrics', name: 'Lyrics', version: '1.0.0', author: 'jukebox',
+          description: 'Shows the words of a track, fetched from LRCLIB.',
+          permissions: ['network:lrclib.net'],
+          contributes: { 'track.tab': [{ id: 'lyrics.words', label: 'Lyrics', command: 'words' }] },
+          commands: ['words'],
           enabled: 1, state: 'active', error: null, config: {} },
         { id: 'audiomuse', name: 'AudioMuse', version: '0.4.1', author: 'community',
           description: 'Sonic analysis: tempo, key and a similarity map of the library.',

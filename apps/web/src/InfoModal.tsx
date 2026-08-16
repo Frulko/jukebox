@@ -1,8 +1,49 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { fmtDate, fmtSize, fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
 import { useSources } from './api'
+import { explainTab, runPluginTab, type PluginTab } from './pluginMenu'
+
+/**
+ * A tab a plugin asked for, drawn by the host.
+ *
+ * The command runs when the tab is opened rather than when the window is —
+ * a plugin that reaches a third party should cost nothing to whoever only
+ * wanted to fix a track number. React Query then keeps the answer, so coming
+ * back to the tab is instant and does not ask twice.
+ */
+function PluginTabBody({ tab, track }: { tab: PluginTab; track: Track }) {
+  const { data, error, isPending } = useQuery({
+    queryKey: ['plugin-tab', tab.pluginId, tab.command, track.id],
+    queryFn: () => runPluginTab(tab, track.id),
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+
+  if (isPending) return <p className="dim">Asking {tab.pluginName}…</p>
+  if (error) return <p className="dim">{explainTab(error, tab)}</p>
+
+  switch (data.kind) {
+    case 'text':
+      return (
+        <>
+          {data.title && <h4 className="plugin-title">{data.title}</h4>}
+          {/* Text, not markup: the newlines are the plugin's, the styling is
+              ours, and nothing it returns can become an element. */}
+          <pre className="plugin-text">{data.body}</pre>
+          <p className="dim plugin-from">from {tab.pluginName}</p>
+        </>
+      )
+    case 'done':
+      return <p className="dim">{data.message ?? 'Nothing to show.'}</p>
+    default:
+      // The other kinds start something — a job, a playlist, a selection — and
+      // a tab is a place to read, not a place to set things off.
+      return <p className="dim">{tab.pluginName} answered with something a tab cannot show.</p>
+  }
+}
 
 type Field = {
   key: keyof Track
@@ -46,13 +87,16 @@ export function InfoModal({
   tracks,
   onClose,
   onApply,
+  pluginTabs = [],
 }: {
   tracks: Track[]
   onClose: () => void
   onApply: (patch: Partial<Track>) => void
+  /** Tabs plugins asked to add. About one track, so none when several. */
+  pluginTabs?: PluginTab[]
 }) {
   const multi = tracks.length > 1
-  const [tab, setTab] = useState<'details' | 'options' | 'artwork' | 'file'>('details')
+  const [tab, setTab] = useState<string>('details')
   // Named, not just an id: "Demo library" answers "where is this?", `src-3` does not.
   const sources = useSources().data?.items ?? []
   const source = sources.find((x) => x.id === tracks[0]?.sourceId)
@@ -86,7 +130,11 @@ export function InfoModal({
     onClose()
   }
 
-  const tabs: Array<typeof tab> = multi ? ['details', 'options', 'artwork'] : ['details', 'options', 'artwork', 'file']
+  const own = multi ? ['details', 'options', 'artwork'] : ['details', 'options', 'artwork', 'file']
+  // A plugin tab is about one track: "the lyrics of these nine songs" is not a
+  // question, so the window keeps its own tabs when several are selected.
+  const mine = multi ? [] : pluginTabs
+  const open = mine.find((x) => x.id === tab)
   const visible = FIELDS.filter((f) => f.tab === tab)
   const t = tracks[0]
 
@@ -118,15 +166,28 @@ export function InfoModal({
         </div>
 
         <div className="tabs">
-          {tabs.map((id) => (
+          {own.map((id) => (
             <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
               {id[0].toUpperCase() + id.slice(1)}
+            </button>
+          ))}
+          {mine.map((x) => (
+            <button
+              key={x.id}
+              className={tab === x.id ? 'on' : ''}
+              // Which plugin put it there, without making the tab itself longer.
+              title={`${x.pluginName} · ${x.command}`}
+              onClick={() => setTab(x.id)}
+            >
+              {x.label}
             </button>
           ))}
         </div>
 
         <div className="modal-body">
-          {tab === 'file' ? (
+          {open ? (
+            <PluginTabBody tab={open} track={t} />
+          ) : tab === 'file' ? (
             <>
               <dl className="file-info">
                 {[

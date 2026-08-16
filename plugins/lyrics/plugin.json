@@ -1,0 +1,37 @@
+{
+  "id": "lyrics",
+  "name": "Lyrics",
+  "version": "1.0.0",
+  "hostApi": "^1.0.0",
+  "main": "index.mjs",
+  "description": "Shows the words of a track, fetched from LRCLIB.",
+  "author": "jukebox",
+  "permissions": [
+    "network:lrclib.net"
+  ],
+  "contributes": {
+    "settings": [
+      {
+        "key": "url",
+        "label": "Server",
+        "type": "text",
+        "default": "https://lrclib.net",
+        "help": "LRCLIB needs no account. Point this at your own mirror if you run one."
+      },
+      {
+        "key": "synced",
+        "label": "Prefer the timed version when there is one",
+        "type": "check",
+        "default": false,
+        "help": "Timed lyrics carry a [mm:ss] stamp on every line."
+      }
+    ],
+    "track.tab": [
+      {
+        "id": "lyrics.words",
+        "label": "Lyrics",
+        "command": "words"
+      }
+    ]
+  }
+}

@@ -1966,3 +1966,18 @@ input[type="range"]::-webkit-slider-thumb {
   text-align: left;
 }
 .np-album:hover { color: var(--accent); text-decoration: underline; }
+
+/* ---------------- a tab a plugin contributed ----------------
+   Text the host draws: the plugin returns a string, so what it can do to this
+   window ends at line breaks. Wrapped rather than clipped, and in the reading
+   font — the browser's <pre> default is monospace, which makes words look like
+   code. */
+.plugin-title { margin: 0 0 8px; font-size: 12px; }
+.plugin-text {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.plugin-from { margin: 12px 0 0; font-size: 10px; }

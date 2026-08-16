@@ -106,6 +106,26 @@ shows which plugin an entry came from, and **greys out any entry the plugin
 cannot currently run** — a stopped plugin still has a manifest, so contributing
 and being able to run are different facts and the menu says which is which.
 
+### `contributes["track.tab"]`
+
+A tab in a track's information window:
+
+```jsonc
+"track.tab": [
+  { "id": "lyrics.words", "label": "Lyrics", "command": "words" }
+]
+```
+
+The command runs when the tab is *opened*, not when the window is — a plugin
+that reaches a third party costs nothing to someone who only wanted to fix a
+track number. It is asked about **one** track: "the lyrics of these nine songs"
+is not a question, so the window keeps only its own tabs when several are
+selected.
+
+Unlike a menu entry, a stopped plugin's tab is **not drawn at all**. A greyed
+entry says "this exists and is switched off", which is worth saying; an empty
+tab is worse than a window with one tab fewer.
+
 ### `contributes["home.section"]`
 
 A strip on the home page. The host renders it as data — a title and rows — never
@@ -122,8 +142,14 @@ something different with each:
 | `{ kind: 'job', job }` | Sends it to the display that cycles through running jobs |
 | `{ kind: 'playlist', id, name }` | Opens the playlist that was just built |
 | `{ kind: 'tracks', ids }` | **Selects** them and scrolls there — not saved |
+| `{ kind: 'text', title?, body }` | Renders it in the tab that asked, as text |
 
-That last one is the one worth understanding. "Find me more like this" produces a
+`text` is plain text and the host renders it as such. A plugin that could answer
+with markup would be a plugin that can restyle the window and read what is
+around it, which is the one thing `contributes` exists to prevent — so what a
+tab can do to the interface ends at line breaks.
+
+The `tracks` kind is the other one worth understanding. "Find me more like this" produces a
 selection, not a playlist: an exploratory command should not leave something
 behind for the user to delete. Saving it is then their decision rather than the
 plugin's.
@@ -158,3 +184,12 @@ is deliberately small and exercises the whole surface: it takes a token through
 `contributes.settings`, subscribes with `host.on('play')`, queues listens through
 `host.net` so disabling it stops the traffic, and registers a `flush` command
 that returns `{ kind: 'done', message: '3 listens sent.' }`.
+
+[`plugins/lyrics`](https://github.com/Frulko/jukebox/tree/main/plugins/lyrics)
+covers the other half: it contributes a *place* rather than an action. Thirty
+lines, one `track.tab`, one command that answers `{ kind: 'text' }` — and it
+shows what a lookup plugin should do when the lookup fails. A track LRCLIB has
+never heard of, an entry that exists but holds no words, and a server that
+cannot be reached are three different sentences, and none of them throws: a
+command that throws marks the plugin `failed`, and a lyrics server being down
+for a minute is not a broken plugin.

@@ -18,10 +18,20 @@ export type PluginEntry = {
   runnable: boolean
 }
 
+/**
+ * A tab a plugin asked to add to the track's information window.
+ *
+ * Same shape as a menu entry and deliberately so: a plugin declares *where* and
+ * *what it is called*, the host runs the command and draws the answer. Nothing
+ * of the plugin's runs in the page, which is why a third-party tab cannot
+ * restyle the window or read the rest of it.
+ */
+export type PluginTab = PluginEntry
+
 type Contribution = { id?: string; label?: string; command?: string }
 
-function entriesOf(plugin: Plugin): PluginEntry[] {
-  const zone = (plugin.contributes as Record<string, unknown>)?.['track.contextMenu']
+function entriesOf(plugin: Plugin, zoneName = 'track.contextMenu'): PluginEntry[] {
+  const zone = (plugin.contributes as Record<string, unknown>)?.[zoneName]
   if (!Array.isArray(zone)) return []
   return (zone as Contribution[])
     .filter((c) => c.label && c.command)
@@ -62,6 +72,15 @@ export type CommandResult =
   | { kind: 'job'; job: unknown }
   | { kind: 'playlist'; id: string; name: string }
   | { kind: 'tracks'; ids: string[] }
+  | { kind: 'text'; title?: string; body: string }
+
+/** Runs a tab's command and hands back the answer instead of acting on it. */
+export async function runPluginTab(tab: PluginTab, trackId: string): Promise<CommandResult> {
+  return (await api.plugins.command(tab.pluginId, tab.command, [trackId])) as CommandResult
+}
+
+/** The sentence to show when a tab's command fails, naming the right culprit. */
+export const explainTab = explain
 
 export function usePluginMenu(handlers: {
   notice: (message: string) => void
@@ -71,7 +90,14 @@ export function usePluginMenu(handlers: {
   const qc = useQueryClient()
   const plugins = useQuery({ queryKey: ['plugins'], queryFn: () => api.plugins.list(), staleTime: 60_000 })
 
-  const entries = (plugins.data?.items ?? []).flatMap(entriesOf)
+  const entries = (plugins.data?.items ?? []).flatMap((p) => entriesOf(p))
+  // A tab that cannot run has nothing to show, so unlike a menu entry — which
+  // is drawn greyed to say "this exists and is switched off" — a stopped
+  // plugin's tab is not drawn at all: an empty tab is a worse answer than a
+  // window that simply has one tab fewer.
+  const tabs: PluginTab[] = (plugins.data?.items ?? [])
+    .flatMap((p) => entriesOf(p, 'track.tab'))
+    .filter((t) => t.runnable)
 
   const run = async (entry: PluginEntry, trackIds: string[]) => {
     try {
@@ -95,6 +121,11 @@ export function usePluginMenu(handlers: {
           handlers.select(r.ids)
           handlers.notice(`${r.ids.length} track${r.ids.length > 1 ? 's' : ''} found — selected, not saved`)
           break
+        case 'text':
+          // A menu entry has nowhere to put a page of text; the status line
+          // gets the title, and the tab is where it belongs.
+          handlers.notice(r.title ?? `${entry.label} — answered`)
+          break
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) qc.invalidateQueries({ queryKey: ['plugins'] })
@@ -102,5 +133,5 @@ export function usePluginMenu(handlers: {
     }
   }
 
-  return { entries, run }
+  return { entries, tabs, run }
 }

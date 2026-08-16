@@ -138,6 +138,12 @@ export type CommandResult =
   | { kind: 'job'; job: unknown }
   | { kind: 'playlist'; id: string; name: string }
   | { kind: 'tracks'; ids: string[] }
+  /**
+   * Something to read — lyrics, credits. Plain text on purpose: a plugin that
+   * could answer with markup would be a plugin that can restyle the app and
+   * read what is on screen, which is what `contributes` exists to prevent.
+   */
+  | { kind: 'text'; title?: string; body: string }
 
 /** What a plugin is handed on activation. The surface `hostApi` is versioning. */
 export type Host = {

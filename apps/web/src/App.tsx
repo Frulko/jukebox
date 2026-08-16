@@ -686,6 +686,7 @@ export default function App() {
           tracks={infoTracks}
           onClose={() => setInfoIds(null)}
           onApply={(patch) => update(infoIds, patch)}
+          pluginTabs={pluginMenu.tabs}
         />
       )}
     </div>
