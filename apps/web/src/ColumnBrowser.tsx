@@ -12,11 +12,14 @@ function Pane({
   values,
   selected,
   onSelect,
+  onOpen,
 }: {
   title: string
   values: Facet[]
   selected: string | null
   onSelect: (v: string | null) => void
+  /** Double-click, where the value names something openable. */
+  onOpen?: (v: string) => void
 }) {
   return (
     <div className="cb-pane">
@@ -26,7 +29,12 @@ function Pane({
           All ({values.length} {title.toLowerCase()})
         </li>
         {values.map((v) => (
-          <li key={v.value} className={selected === v.value ? 'on' : ''} onClick={() => onSelect(v.value)}>
+          <li
+            key={v.value}
+            className={selected === v.value ? 'on' : ''}
+            onClick={() => onSelect(v.value)}
+            onDoubleClick={onOpen && (() => onOpen(v.value))}
+          >
             {v.value}
           </li>
         ))}
@@ -46,10 +54,13 @@ export function ColumnBrowser({
   value,
   onChange,
   query,
+  onOpenAlbum,
 }: {
   value: Browse
   onChange: (b: Browse) => void
   query: TrackQuery
+  /** A pane row knows a name and nothing else — hence no artist. */
+  onOpenAlbum: (album: string) => void
 }) {
   const { data } = useFacets(query)
 
@@ -72,6 +83,7 @@ export function ColumnBrowser({
         values={data?.albums ?? EMPTY}
         selected={value.album}
         onSelect={(album) => onChange({ ...value, album })}
+        onOpen={onOpenAlbum}
       />
     </div>
   )

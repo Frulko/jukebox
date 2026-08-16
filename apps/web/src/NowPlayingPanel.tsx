@@ -15,7 +15,15 @@ import { Icon } from './Icon'
  * conversion landed, and nothing else in the app says which one plays, what the
  * others are, or what they cost on disk.
  */
-export function NowPlayingPanel({ track, onClose }: { track: Track; onClose: () => void }) {
+export function NowPlayingPanel({
+  track,
+  onClose,
+  onOpenAlbum,
+}: {
+  track: Track
+  onClose: () => void
+  onOpenAlbum: (album: string, artist: string) => void
+}) {
   const renditions = track.renditions ?? []
 
   return (
@@ -34,7 +42,22 @@ export function NowPlayingPanel({ track, onClose }: { track: Track; onClose: () 
           <b>{track.name}</b>
           <span>{track.artist}</span>
           <span className="dim">
-            {track.album}
+            {/* The cover is right there, so this is the one place where "and
+                what else is on it" is the obvious next question. */}
+            {track.album ? (
+              <button
+                className="np-album"
+                title={`Go to ${track.album}`}
+                onClick={() => {
+                  onOpenAlbum(track.album, track.albumArtist)
+                  onClose()
+                }}
+              >
+                {track.album}
+              </button>
+            ) : (
+              track.album
+            )}
             {track.year ? ` · ${track.year}` : ''}
           </span>
           <span className="dim">{fmtTime(track.duration)}</span>

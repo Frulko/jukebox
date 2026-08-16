@@ -44,8 +44,15 @@ export function groupAlbums(tracks: Track[]): Album[] {
  * mean "all of that". It offers the same two verbs as a row, because that is
  * what makes a folder feel like one — you can act on it without opening it.
  */
-function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void, onPlayNext: (ids: string[]) => void) {
-  const [menu, setMenu] = useState<{ x: number; y: number; ids: string[]; label: string } | null>(null)
+function useGroupMenu(
+  onPlay: Play,
+  onEnqueue: (ids: string[]) => void,
+  onPlayNext: (ids: string[]) => void,
+  onOpenAlbum?: (album: string, artist: string) => void,
+) {
+  const [menu, setMenu] = useState<{ x: number; y: number; ids: string[]; label: string; album?: Album } | null>(
+    null,
+  )
   const position = useMenuPosition(menu)
 
   useEffect(() => {
@@ -59,9 +66,9 @@ function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void, onPlayNe
     }
   }, [menu])
 
-  const open = (e: React.MouseEvent, ids: string[], label: string) => {
+  const open = (e: React.MouseEvent, ids: string[], label: string, album?: Album) => {
     e.preventDefault()
-    if (ids.length) setMenu({ x: e.clientX, y: e.clientY, ids, label })
+    if (ids.length) setMenu({ x: e.clientX, y: e.clientY, ids, label, album })
   }
 
   const node = menu ? (
@@ -71,6 +78,12 @@ function useGroupMenu(onPlay: Play, onEnqueue: (ids: string[]) => void, onPlayNe
       <button onClick={() => (onEnqueue(menu.ids), setMenu(null))}>
         Add {menu.ids.length} to Queue
       </button>
+      {/* An artist is a group too, and has no album page to go to. */}
+      {menu.album && onOpenAlbum && (
+        <button onClick={() => (onOpenAlbum(menu.album!.album, menu.album!.artist), setMenu(null))}>
+          Go to Album
+        </button>
+      )}
     </div>
   ) : null
 
@@ -102,6 +115,7 @@ export function AlbumsView({
   onEnqueue,
   onPlayNext,
   onGetInfo,
+  onOpenAlbum,
 }: {
   tracks: Track[]
   nowPlaying: string | null
@@ -109,11 +123,12 @@ export function AlbumsView({
   onEnqueue: (ids: string[]) => void
   onPlayNext: (ids: string[]) => void
   onGetInfo: (ids: string[]) => void
+  onOpenAlbum: (album: string, artist: string) => void
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const [open, setOpen] = useRemembered<string | null>('albums.open', null)
   const pane = useScrollMemory<HTMLDivElement>('albums')
-  const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext)
+  const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext, onOpenAlbum)
   const search = useViewSearch()
   const shown = albums.filter((a) => search.matches(a.album, a.artist))
   const current = albums.find((a) => a.key === open)
@@ -129,7 +144,11 @@ export function AlbumsView({
           <div
             key={a.key}
             className={`tile ${open === a.key ? 'on' : ''}`}
-            onContextMenu={(e) => menu.open(e, a.tracks.map((t) => t.id), a.album)}
+            onContextMenu={(e) => menu.open(e, a.tracks.map((t) => t.id), a.album, a)}
+            // Click opens the album under the grid, double-click opens its
+            // page: the same two verbs a folder has, and the reason the inline
+            // panel stays — it is the one you want when comparing albums.
+            onDoubleClick={() => onOpenAlbum(a.album, a.artist)}
           >
             <button className="tile-art" onClick={() => setOpen(open === a.key ? null : a.key)}>
               <Cover seed={a.key} size={148} label={a.album} />
@@ -178,12 +197,14 @@ export function ArtistsView({
   onPlay,
   onEnqueue,
   onPlayNext,
+  onOpenAlbum,
 }: {
   tracks: Track[]
   nowPlaying: string | null
   onPlay: Play
   onEnqueue: (ids: string[]) => void
   onPlayNext: (ids: string[]) => void
+  onOpenAlbum: (album: string, artist: string) => void
 }) {
   const albums = useMemo(() => groupAlbums(tracks), [tracks])
   const artists = useMemo(() => {
@@ -192,7 +213,7 @@ export function ArtistsView({
     return [...by.entries()].sort((x, y) => x[0].localeCompare(y[0]))
   }, [albums])
 
-  const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext)
+  const menu = useGroupMenu(onPlay, onEnqueue, onPlayNext, onOpenAlbum)
   const search = useViewSearch()
   const [sel, setSel] = useRemembered<string | null>('artists.sel', null)
   const list = useScrollMemory<HTMLDivElement>('artists.list')
@@ -228,9 +249,9 @@ export function ArtistsView({
           <div
             key={a.key}
             className="artist-album"
-            onContextMenu={(e) => menu.open(e, a.tracks.map((t) => t.id), a.album)}
+            onContextMenu={(e) => menu.open(e, a.tracks.map((t) => t.id), a.album, a)}
           >
-            <div className="aa-art">
+            <div className="aa-art" onDoubleClick={() => onOpenAlbum(a.album, a.artist)}>
               <Cover seed={a.key} size={110} label={a.album} />
             </div>
             <div className="aa-meta">

@@ -1947,3 +1947,22 @@ input[type="range"]::-webkit-slider-thumb {
 .chip.clear { margin-left: 4px; border-style: dashed; }
 .chip-menu button { display: flex; align-items: center; width: 100%; }
 .chip-menu button em { margin-left: auto; padding-left: 14px; font-style: normal; font-size: 10px; }
+
+/* ---------------- album page ----------------
+   Reuses .album-detail, so it is the same block the albums grid expands
+   inline — one album looks like one album wherever you opened it from. */
+.album-page-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.album-page-head .back { padding: 3px 10px; }
+.album-tracks h5, .album-meta h5 { margin: 12px 0 4px; font-size: 11px; font-weight: 600; }
+.album-tracks .dim { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The album, where the now-playing panel shows it: a target, not a button. */
+.np-album {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.np-album:hover { color: var(--accent); text-decoration: underline; }

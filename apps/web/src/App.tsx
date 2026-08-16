@@ -17,6 +17,7 @@ import { AppsView, AudiobooksView, mediaSummary, PodcastsView, RadioView, StoreV
 import { MissingView } from './MissingView'
 import { QueueView } from './QueueView'
 import { AlbumsView, ArtistsView } from './LibraryViews'
+import { AlbumView, type AlbumRef } from './AlbumView'
 import { PlaylistsView } from './PlaylistsView'
 import { ConvertDialog } from './ConvertDialog'
 import { AdminView } from './AdminView'
@@ -59,6 +60,14 @@ export default function App() {
   const [lossless, setLossless] = useState<string | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
   const [artOpen, setArtOpen] = useState(false)
+  /**
+   * The album being looked at, if any. Deliberately not a `View`: you are still
+   * in the library, or in the playlist, or wherever you right-clicked — the
+   * album is a detour, and making it a source would have lit up the sidebar as
+   * if you had left. Closing it therefore needs no history: the view underneath
+   * never changed.
+   */
+  const [albumOpen, setAlbumOpen] = useState<AlbumRef | null>(null)
   const [recentPlaylists, rememberPlaylist] = useRecentPlaylists()
   const [converting, setConverting] = useState<string[] | null>(null)
   const [selectIds, setSelectIds] = useState<string[] | null>(null)
@@ -90,6 +99,12 @@ export default function App() {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('itunes.theme', theme)
   }, [theme])
+
+  const openAlbum = (album: string, artist?: string) => setAlbumOpen({ album, artist })
+
+  // Going anywhere leaves the album. Here rather than at each door into a
+  // source, for the same reason as the line above: there are a dozen of them.
+  useEffect(() => setAlbumOpen(null), [view])
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
   /**
@@ -489,7 +504,9 @@ export default function App() {
         onToggleBrowser={() => setBrowserOpen((v) => !v)}
       />
 
-      {artOpen && current && <NowPlayingPanel track={current} onClose={() => setArtOpen(false)} />}
+      {artOpen && current && (
+        <NowPlayingPanel track={current} onClose={() => setArtOpen(false)} onOpenAlbum={openAlbum} />
+      )}
 
       {queueOpen && (
         <QueueView
@@ -527,7 +544,17 @@ export default function App() {
         />
 
         <div className="content">
-          {device ? (
+          {albumOpen ? (
+            <AlbumView
+              target={albumOpen}
+              nowPlaying={nowPlaying}
+              onPlay={playTrack}
+              onEnqueue={enqueue}
+              onPlayNext={playNext}
+              onGetInfo={setInfoIds}
+              onBack={() => setAlbumOpen(null)}
+            />
+          ) : device ? (
             <DeviceView
               device={device}
               playlists={playlists}
@@ -559,7 +586,7 @@ export default function App() {
                 </div>
               )}
               {theme === 'classic' && browserOpen && (
-                <ColumnBrowser value={browse} onChange={setBrowse} query={query} />
+                <ColumnBrowser value={browse} onChange={setBrowse} query={query} onOpenAlbum={openAlbum} />
               )}
               {mode === 'albums' ? (
                 <AlbumsView
@@ -569,6 +596,7 @@ export default function App() {
                   onEnqueue={enqueue}
                   onPlayNext={playNext}
                   onGetInfo={setInfoIds}
+                  onOpenAlbum={openAlbum}
                 />
               ) : mode === 'artists' ? (
                 <ArtistsView
@@ -577,6 +605,7 @@ export default function App() {
                   onPlay={playTrack}
                   onEnqueue={enqueue}
                   onPlayNext={playNext}
+                  onOpenAlbum={openAlbum}
                 />
               ) : (
               <TrackList
@@ -611,6 +640,7 @@ export default function App() {
                 onAddToDevice={addToDevice}
                 onReorder={reorder}
                 onGetInfo={setInfoIds}
+                onOpenAlbum={openAlbum}
                 onNewPlaylistFrom={(ids) => newPlaylist(ids)}
               />
               )}

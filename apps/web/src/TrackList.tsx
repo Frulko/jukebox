@@ -58,6 +58,8 @@ type Props = {
   onAddToDevice: (deviceId: string, ids: string[]) => void
   onReorder: (playlistId: string, ids: string[], toIndex: number) => void
   onGetInfo: (ids: string[]) => void
+  /** Opens the album of a track — the album name and its album artist. */
+  onOpenAlbum: (album: string, artist: string) => void
   onNewPlaylistFrom: (ids: string[]) => void
 }
 
@@ -634,6 +636,17 @@ export function TrackList(p: Props) {
               <button onClick={() => (p.onGetInfo(selectedIds), setMenu(null))}>
                 {selectedIds.length > 1 ? `Get Info (${selectedIds.length} items)` : 'Get Info'}
               </button>
+              {/* The album of the row you pointed at, not of the selection:
+                  ten selected rows can be ten albums, and going to one of them
+                  is not something the menu should choose on its own. */}
+              {(() => {
+                const t = table.getRow(selectedIds[0])?.original
+                return t?.album ? (
+                  <button onClick={() => (p.onOpenAlbum(t.album, t.albumArtist), setMenu(null))}>
+                    Go to Album
+                  </button>
+                ) : null
+              })()}
               <button
                 onClick={() => {
                   setWhere({ id: selectedIds[0], x: menu.x, y: menu.y })
