@@ -1,0 +1,20 @@
+---
+import { getCollection, render } from 'astro:content'
+import Doc from '../../layouts/Doc.astro'
+
+export async function getStaticPaths() {
+  const docs = await getCollection('docs')
+  return docs.map((entry) => ({
+    // `index.md` is the section's own page, at /docs/ — not /docs/index/.
+    params: { slug: entry.id === 'index' ? undefined : entry.id },
+    props: { entry },
+  }))
+}
+
+const { entry } = Astro.props
+const { Content } = await render(entry)
+---
+
+<Doc title={entry.data.title} description={entry.data.description} wide={entry.id === 'api'}>
+  <Content />
+</Doc>

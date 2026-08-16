@@ -1,11 +1,6 @@
 ---
-title: Jukebox
-description: Self-hosted manager for your own music library, with an iTunes-style interface.
-template: splash
-hero:
-  tagline: |
-    Self-hosted manager for your own music library. The server indexes,
-    transcodes and serves; the players live elsewhere.
+title: Overview
+description: What these documents cover, and the split everything else follows from.
 ---
 
 **Work in progress.** The server core and the interface prototype run; most of
@@ -20,4 +15,5 @@ library. Everything in these pages follows from that split.
 - [API](./api.md) — the target spec, existing routes marked ✅
 - [UI evolution](./ui-evolution.md) — iTunes 8 → iTunes 12 → Apple Music
 
-The [system map](/jukebox/map/) shows inputs, core and outputs on one page.
+The [system map](/jukebox/map/) shows inputs, core and outputs on one page, and
+the [interface](/jukebox/demo/) runs in the browser on a fabricated library.

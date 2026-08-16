@@ -1,0 +1,32 @@
+---
+import Base from '../layouts/Base.astro'
+import Demo from '../components/Demo.astro'
+import { url } from '../lib/url'
+---
+
+<Base title="Demo — jukebox" description="The jukebox interface, running in the page on a fabricated library.">
+  <section class="wrap wide" style="padding-top:44px">
+    <h1 style="margin:0 0 10px">The interface</h1>
+    <p class="lead" style="max-width:70ch">
+      The actual front end from <code>apps/web</code>, built in demo mode and framed below — not a screenshot. Same
+      components, same virtualized table, same keyboard handling; the library it browses is fabricated in the browser
+      instead of coming from a server.
+    </p>
+    <Demo />
+  </section>
+
+  <section class="wrap prose" style="margin-top:60px">
+    <h2>What to look at</h2>
+    <ul>
+      <li><b>The table</b> — TanStack v9, virtualized: the row count is not what makes it slow, the network is.</li>
+      <li><b>The three themes</b> — iTunes 8, iTunes 12, Apple Music. Not palettes: navigation and density change too.</li>
+      <li><b>Bulk editing</b> — select several tracks, edit once; the modal adapts to what the selection has in common.</li>
+      <li><b>The column browser</b> — genre, artist, album, the way iTunes did it.</li>
+    </ul>
+
+    <div class="note">
+      In the real application every one of these views is a client of the public API, exactly like a third-party
+      front end would be. See <a href={url('/docs/api/')}>the API reference</a>.
+    </div>
+  </section>
+</Base>

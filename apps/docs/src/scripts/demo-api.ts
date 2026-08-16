@@ -1,0 +1,141 @@
+// The fake back end for the embedded demo.
+//
+// It answers the public API from a library fabricated in the browser, so the
+// site can ship the *real* front end — same components, same queries — with no
+// server behind it. It patches `fetch` and nothing else: the day `apps/web`
+// serves its own fabricated data in demo mode, the app stops calling the network
+// and this file simply never runs. Nothing in `apps/web` is modified for it.
+//
+// ponytail: one page per query, no cursor. The demo library is ~250 tracks; the
+// real pagination is the server's job and is tested there.
+import { makeLibrary } from '../../../web/src/data'
+import type { Playlist, Source, Track, TrackQuery } from '@jukebox/api-types'
+
+const tracks = makeLibrary()
+let revision = tracks.length
+
+const norm = (s: string) => s.toLowerCase()
+
+function match(t: Track, q: TrackQuery) {
+  if (q.kind && t.kind !== q.kind) return false
+  if (q.genre && t.genre !== q.genre) return false
+  if (q.artist && t.albumArtist !== q.artist && t.artist !== q.artist) return false
+  if (q.album && t.album !== q.album) return false
+  if (q.q) {
+    const needle = norm(q.q)
+    if (![t.name, t.artist, t.album, t.albumArtist, t.genre].some((f) => norm(f).includes(needle))) return false
+  }
+  return true
+}
+
+const SORTS: Record<string, (a: Track, b: Track) => number> = {
+  artist: (a, b) =>
+    a.albumArtist.localeCompare(b.albumArtist) ||
+    a.album.localeCompare(b.album) ||
+    a.discNumber - b.discNumber ||
+    a.trackNumber - b.trackNumber,
+  album: (a, b) => a.album.localeCompare(b.album) || a.discNumber - b.discNumber || a.trackNumber - b.trackNumber,
+  name: (a, b) => a.name.localeCompare(b.name),
+  added: (a, b) => a.dateAdded - b.dateAdded,
+}
+
+function select(q: TrackQuery) {
+  const found = tracks.filter((t) => match(t, q))
+  const key = (q.sort ?? 'artist').replace(/^-/, '')
+  const cmp = SORTS[key] ?? SORTS.artist
+  found.sort(q.sort?.startsWith('-') ? (a, b) => cmp(b, a) : cmp)
+  return found
+}
+
+/** Distinct values, cascading the way the column browser expects. */
+function facets(q: TrackQuery) {
+  const count = (list: Track[], pick: (t: Track) => string) => {
+    const seen = new Map<string, number>()
+    for (const t of list) seen.set(pick(t), (seen.get(pick(t)) ?? 0) + 1)
+    return [...seen].sort((a, b) => a[0].localeCompare(b[0])).map(([value, n]) => ({ value, count: n }))
+  }
+  const base = tracks.filter((t) => match(t, { q: q.q, kind: q.kind }))
+  const byGenre = base.filter((t) => match(t, { genre: q.genre }))
+  const byArtist = byGenre.filter((t) => match(t, { artist: q.artist }))
+  return {
+    genres: count(base, (t) => t.genre),
+    artists: count(byGenre, (t) => t.albumArtist),
+    albums: count(byArtist, (t) => t.album),
+  }
+}
+
+const smart = (name: string, id: string, pick: () => Track[]): [Playlist, () => Track[]] => [
+  { id, name, smart: 'rules', rules: null, trackCount: pick().length, createdAt: Date.UTC(2026, 0, 1), rev: 1 },
+  pick,
+]
+
+const PLAYLISTS: Array<[Playlist, () => Track[]]> = [
+  smart('Recently Added', 'p-recent', () => [...tracks].sort((a, b) => b.dateAdded - a.dateAdded).slice(0, 60)),
+  smart('Top 25 Most Played', 'p-top', () => [...tracks].sort((a, b) => b.playCount - a.playCount).slice(0, 25)),
+  smart('Four stars and up', 'p-loved', () => tracks.filter((t) => t.rating >= 4)),
+  [
+    { id: 'p-jazz', name: 'Jazz for the evening', smart: null, rules: null,
+      trackCount: tracks.filter((t) => t.genre === 'Jazz').length, createdAt: Date.UTC(2026, 2, 4), rev: 1 },
+    () => tracks.filter((t) => t.genre === 'Jazz'),
+  ],
+]
+
+const SOURCES: Source[] = [
+  { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 0,
+    lastScanAt: Date.UTC(2026, 7, 16), rev: 1 },
+]
+
+/** Returns the body for a route, or `undefined` when the demo has nothing to say. */
+function route(path: string, params: URLSearchParams, method: string, body: string | null): unknown {
+  const q = Object.fromEntries(params) as TrackQuery
+
+  if (path === '/tracks' && method === 'GET') {
+    const found = select(q)
+    return { items: found.slice(0, Number(q.limit ?? 300)), next: null, revision }
+  }
+  if (path === '/tracks' && method === 'PATCH') {
+    const { ids, patch } = JSON.parse(body ?? '{}') as { ids: string[]; patch: Record<string, unknown> }
+    const set = new Set(ids)
+    let updated = 0
+    for (const t of tracks) {
+      if (!set.has(t.id)) continue
+      Object.assign(t, patch, { rev: ++revision })
+      updated++
+    }
+    return { updated, revision, job: null }
+  }
+  if (path === '/tracks/count') return { count: select(q).length }
+  if (path === '/facets') return facets(q)
+  if (path.startsWith('/tracks/')) return tracks.find((t) => t.id === path.slice(8))
+  if (path === '/playlists') return { items: PLAYLISTS.map(([p]) => p) }
+  if (path === '/sources') return { items: SOURCES }
+  if (path === '/devices' || path === '/jobs') return { items: [] }
+
+  const pl = path.match(/^\/playlists\/([^/]+)\/tracks$/)
+  if (pl) {
+    const entry = PLAYLISTS.find(([p]) => p.id === pl[1])
+    return entry ? { items: entry[1](), next: null, revision } : undefined
+  }
+  return undefined
+}
+
+const json = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } })
+
+/** Patches `fetch` for `/api/v1` only. Everything else goes to the network untouched. */
+export function installDemoApi() {
+  const real = globalThis.fetch.bind(globalThis)
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const url = new URL(href, location.href)
+    const at = url.pathname.indexOf('/api/v1')
+    if (at === -1) return real(input, init)
+
+    const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
+    const payload = typeof init?.body === 'string' ? init.body : null
+    const data = route(url.pathname.slice(at + 7), url.searchParams, method, payload)
+    return data === undefined
+      ? json({ error: { code: 'not_in_demo', message: `${method} ${url.pathname} is not part of the demo` } }, 404)
+      : json(data)
+  }
+}

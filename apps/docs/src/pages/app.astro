@@ -1,0 +1,36 @@
+---
+// The demo shell: the fake API is installed first, then the real front end is
+// imported. Loading the app's own `index.html` instead would race — the bundle
+// would fetch before anything could answer it.
+import { readFileSync } from 'node:fs'
+import { url } from '../lib/url'
+
+// Read from the working directory, not from `import.meta.url`: at build time this
+// module has already been bundled into `dist/.prerender/`, and relative paths
+// would resolve from there.
+const manifest = JSON.parse(readFileSync('public/build/.vite/manifest.json', 'utf8'))
+const entry = manifest['index.html']
+const app = url(`/build/${entry.file}`)
+const styles: string[] = (entry.css ?? []).map((c: string) => url(`/build/${c}`))
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>jukebox — demo</title>
+    <meta name="robots" content="noindex" />
+    {styles.map((href) => <link rel="stylesheet" href={href} />)}
+  </head>
+  <body>
+    <div id="root" data-app={app}></div>
+    <script>
+      import { installDemoApi } from '../scripts/demo-api'
+
+      installDemoApi()
+      const src = document.getElementById('root')!.dataset.app!
+      await import(/* @vite-ignore */ src)
+    </script>
+  </body>
+</html>

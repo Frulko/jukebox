@@ -10,3 +10,4 @@ data/
 .env.*
 .fixtures/
 apps/docs/.astro/
+apps/docs/public/build/

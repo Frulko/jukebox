@@ -1,0 +1,65 @@
+---
+import { url } from '../lib/url'
+import Base from './Base.astro'
+
+interface Props {
+  title: string
+  description?: string
+  /** The API reference is mostly tables and route blocks: it reads better unconstrained. */
+  wide?: boolean
+}
+const { title, description, wide = false } = Astro.props
+const here = Astro.url.pathname.replace(/\/$/, '')
+
+const sections = [
+  {
+    title: 'Understand',
+    links: [
+      { href: '/docs/', label: 'Overview' },
+      { href: '/docs/architecture/', label: 'Architecture' },
+      { href: '/docs/stack/', label: 'Stack' },
+    ],
+  },
+  {
+    title: 'Reference',
+    links: [
+      { href: '/docs/api/', label: 'API' },
+      { href: '/docs/ui-evolution/', label: 'UI evolution' },
+    ],
+  },
+  {
+    title: 'See it',
+    links: [
+      { href: '/demo/', label: 'The interface' },
+      { href: '/map/', label: 'System map' },
+    ],
+  },
+]
+---
+
+<Base title={`${title} — jukebox`} description={description}>
+  <div class="wrap doc">
+    <aside>
+      {
+        sections.map((s) => (
+          <>
+            <strong>{s.title}</strong>
+            <ol>
+              {s.links.map((l) => (
+                <li>
+                  <a href={url(l.href)} aria-current={here === url(l.href).replace(/\/$/, '') ? 'page' : undefined}>
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </>
+        ))
+      }
+    </aside>
+    <article class={wide ? 'prose full' : 'prose'}>
+      <h1>{title}</h1>
+      <slot />
+    </article>
+  </div>
+</Base>

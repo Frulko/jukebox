@@ -1,0 +1,195 @@
+/* The site. Restrained: this is documentation, the app is the star.
+   Same frame as trieur's site — the palette is the one the system map already
+   uses, Apple Music red on slate ink. */
+
+:root {
+  --bg: #f7f7f9;
+  --panel: #fff;
+  --ink: #2d3142;
+  --dim: #4f5d75;
+  --line: #e3e4ec;
+  --accent: #fa243c;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  --measure: 70ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131620;
+    --panel: #1b1f2b;
+    --ink: #e7e9f1;
+    --dim: #99a1b8;
+    --line: #292e3c;
+    --accent: #ff5a6e;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.65 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+
+code, kbd, pre { font-family: var(--mono); }
+code { font-size: 0.9em; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 5px; }
+pre {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* --- frame --- */
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+.wrap.wide { max-width: 1320px; }
+.prose { max-width: var(--measure); }
+.prose h2 { margin-top: 2.6em; scroll-margin-top: 90px; }
+.prose h3 { margin-top: 2em; scroll-margin-top: 90px; }
+.prose li { margin: 0.3em 0; }
+.prose table { width: 100%; }
+/* The API doc leans on wide tables and route blocks; the measure would crop them. */
+.prose.full { max-width: none; }
+
+header.top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.top .wrap { display: flex; align-items: center; gap: 20px; height: 58px; }
+.brand { font-weight: 620; letter-spacing: -0.02em; text-decoration: none; color: var(--ink); font-size: 17px; }
+.brand span { color: var(--accent); }
+.top nav { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
+.top nav a { color: var(--dim); text-decoration: none; }
+.top nav a:hover, .top nav a[aria-current='page'] { color: var(--ink); }
+
+footer.bottom {
+  margin-top: 90px;
+  border-top: 1px solid var(--line);
+  padding: 28px 0 60px;
+  color: var(--dim);
+  font-size: 14px;
+}
+
+/* --- hero --- */
+.hero { padding: 72px 0 40px; }
+.hero h1 { font-size: clamp(38px, 6vw, 58px); line-height: 1.02; letter-spacing: -0.035em; margin: 0 0 18px; }
+.hero p.lead { font-size: 19px; color: var(--dim); max-width: 60ch; margin: 0 0 26px; }
+.tagline { font-family: var(--mono); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin: 0 0 16px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14.5px;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { color: #fff; filter: brightness(1.08); }
+
+/* --- blocks --- */
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+.card h3 { margin: 0 0 8px; font-size: 16px; }
+.card p { margin: 0; color: var(--dim); font-size: 14.5px; }
+
+table { border-collapse: collapse; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--dim); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+td code { white-space: nowrap; }
+
+.note {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 16px;
+  color: var(--dim);
+  margin: 24px 0;
+}
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 24px 0;
+  padding: 2px 0 2px 16px;
+  color: var(--dim);
+}
+
+/* --- the embedded app ---
+   The front is a full application with its own three themes: it is framed, not
+   restyled. The chrome around it says so. */
+.demo {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px;
+}
+.demo iframe {
+  display: block;
+  width: 100%;
+  height: min(78vh, 760px);
+  border: 0;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 10px;
+  font-size: 12.5px;
+  color: var(--dim);
+  font-family: var(--mono);
+}
+.demo-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.demo-bar a { margin-left: auto; }
+
+/* --- docs --- */
+.doc { display: grid; grid-template-columns: 210px 1fr; gap: 48px; padding-top: 44px; }
+@media (max-width: 880px) { .doc { grid-template-columns: 1fr; gap: 20px; } }
+.doc aside { position: sticky; top: 78px; align-self: start; font-size: 14px; }
+.doc aside ol { list-style: none; margin: 0; padding: 0; }
+.doc aside li { margin: 0 0 2px; }
+.doc aside a { display: block; padding: 5px 10px; border-radius: 7px; color: var(--dim); text-decoration: none; }
+.doc aside a:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); }
+.doc aside a[aria-current='page'] { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.doc aside strong { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 22px 0 6px 10px; }
+
+/* --- phones --- */
+@media (max-width: 640px) {
+  .wrap { padding: 0 14px; }
+  .hero { padding: 40px 0 26px; }
+  .hero p.lead { font-size: 16.5px; }
+  .grid { gap: 12px; }
+  .card { padding: 15px 16px; border-radius: 12px; }
+  .card h3 { font-size: 15px; }
+  .card p, .btn { font-size: 13.5px; }
+  .demo { padding: 6px; border-radius: 14px; }
+  .demo iframe { height: 70vh; height: 70dvh; }
+  pre { font-size: 11.5px; padding: 12px 13px; }
+  h1 { font-size: clamp(26px, 7vw, 34px); }
+  h2 { font-size: 21px; }
+  table { font-size: 13px; }
+}

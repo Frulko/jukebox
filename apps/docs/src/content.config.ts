@@ -1,12 +1,14 @@
-import { defineCollection } from 'astro:content'
-import { docsSchema } from '@astrojs/starlight/schema'
+import { defineCollection, z } from 'astro:content'
 import { glob } from 'astro/loaders'
 
-// `docsLoader()` hardcodes `src/content/docs`; the glob loader is the supported
-// way to point Starlight at a directory outside the Astro project.
+// The site renders the repository's `docs/` folder in place: one source of
+// truth, readable on GitHub, published here. No copy, no drift.
 export const collections = {
   docs: defineCollection({
     loader: glob({ base: '../../docs', pattern: '**/[^_]*.md' }),
-    schema: docsSchema(),
+    schema: z.object({
+      title: z.string(),
+      description: z.string().optional(),
+    }),
   }),
 }

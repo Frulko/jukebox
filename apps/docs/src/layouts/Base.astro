@@ -1,0 +1,65 @@
+---
+import { url } from '../lib/url'
+import '../styles/site.css'
+
+interface Props {
+  title: string
+  description?: string
+}
+const { title, description = 'Self-hosted manager for your own music library, with an iTunes-style interface.' } =
+  Astro.props
+
+const here = Astro.url.pathname.replace(/\/$/, '')
+const nav = [
+  { href: url('/demo/'), label: 'Demo' },
+  { href: url('/docs/architecture/'), label: 'Docs' },
+  { href: url('/map/'), label: 'Map' },
+  { href: 'https://github.com/Frulko/jukebox', label: 'GitHub', external: true },
+]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🎵</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap">
+        <a class="brand" href={url('/')}>jukebox<span>.</span></a>
+        <nav>
+          {
+            nav.map((n) => (
+              <a
+                href={n.href}
+                aria-current={!n.external && here.startsWith(n.href.replace(/\/$/, '')) ? 'page' : undefined}
+              >
+                {n.label}
+              </a>
+            ))
+          }
+        </nav>
+      </div>
+    </header>
+
+    <slot />
+
+    <footer class="bottom">
+      <div class="wrap">
+        <p>
+          Node ≥ 22.13, <code>node:sqlite</code>, no native modules — the same install on x64, ARM, a NAS and a
+          Raspberry Pi.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

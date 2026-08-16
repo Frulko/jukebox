@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run build:app",
     "dev": "astro dev",
+    "prebuild": "npm run build:app",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "build:app": "VITE_DEMO=1 npm run build --workspace @jukebox/web -- --base=/jukebox/build/ --outDir ../docs/public/build --emptyOutDir --manifest"
   },
   "devDependencies": {
-    "@astrojs/starlight": "^0.41.7",
     "astro": "^7.2.2"
   }
 }

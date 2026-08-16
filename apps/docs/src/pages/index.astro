@@ -1,0 +1,83 @@
+---
+import Base from '../layouts/Base.astro'
+import Demo from '../components/Demo.astro'
+import { url } from '../lib/url'
+---
+
+<Base title="jukebox — your music library, on your server">
+  <section class="wrap hero">
+    <p class="tagline">self-hosted · your own library</p>
+    <h1>A library,<br />surrounded by players.</h1>
+    <p class="lead">
+      The server indexes, transcodes and serves. The players stay where they already are — a browser, a Sonos, an
+      AirPlay speaker, a Raspberry Pi with a DAC — and iPods sync through satellites. An iTunes-style interface on top,
+      because the shape was right the first time.
+    </p>
+    <p>
+      <a class="btn primary" href={url('/docs/architecture/')}>Read the architecture</a>
+      <a class="btn" href={url('/demo/')}>Try the interface</a>
+    </p>
+  </section>
+
+  <section class="wrap wide">
+    <Demo />
+  </section>
+
+  <section class="wrap" style="margin-top:70px">
+    <h2>Three directions, kept apart</h2>
+    <p class="lead" style="font-size:16.5px">
+      Most projects conflate them, and then cannot explain why casting to a Sonos is not the same as filling an iPod.
+    </p>
+    <div class="grid">
+      <div class="card">
+        <h3>Renderer</h3>
+        <p>Plays <em>right now</em>. A browser, a Sonos, a tablet, a sound card. It gets a stream, not files.</p>
+      </div>
+      <div class="card">
+        <h3>Device</h3>
+        <p>
+          <em>Holds a copy</em>. An iPod. Files have to be transferred, converted and checked — the phase where a power
+          cut corrupts something.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Emitter</h3>
+        <p>Lets <em>others read</em> the library. An OpenSubsonic server, DLNA, an outgoing radio stream.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap prose" style="margin-top:70px">
+    <h2>What runs today</h2>
+    <table>
+      <thead>
+        <tr><th>Piece</th><th>State</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Server</b> — Hono on <code>node:sqlite</code></td>
+          <td>
+            Library index, streaming folder scan, tag read and in-place write, acoustic fingerprints, manual and smart
+            playlists, a job queue resumable after a crash, cursor pagination, delta sync by revision, SSE.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Interface</b> — React + TanStack</td>
+          <td>
+            Virtualized table over the real API, multi-selection, drag and drop, bulk editing, three themes (iTunes 8,
+            iTunes 12, Apple Music), generated artwork.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Satellites, plugins, emitters</b></td>
+          <td>Specified in the architecture, not written yet. The contracts come first on purpose.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      Node ≥ 22.13, zero native modules, no install script: the same install on x64, ARM, a NAS and a Raspberry Pi.
+      That constraint decided half the stack — see <a href={url('/docs/stack/')}>Stack</a>.
+    </div>
+  </section>
+</Base>
