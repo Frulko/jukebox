@@ -35,6 +35,7 @@ import {
   revokeToken, userForToken, type User,
 } from './auth.ts'
 import { subsonicRouter } from './subsonic.ts'
+import { buildOpenApi } from './openapi.ts'
 import {
   advertisedBase, discover as discoverRenderers, pause as pauseRenderer, playUrl,
   setVolume as setRendererVolume, stop as stopRenderer, type Renderer,
@@ -157,7 +158,7 @@ export function createApp(dbFile: string) {
    * not need credentials, and `/auth/*`, or logging in would require being
    * logged in.
    */
-  const OPEN_PATHS = ['/health', '/auth/login', '/auth/setup', '/auth/state']
+  const OPEN_PATHS = ['/health', '/openapi.json', '/auth/login', '/auth/setup', '/auth/state']
 
   api.use('*', async (c, next) => {
     if (isOpen(db) || OPEN_PATHS.includes(c.req.path.replace(/^\/api\/v1/, ''))) return next()
@@ -174,6 +175,16 @@ export function createApp(dbFile: string) {
   })
 
   api.get('/health', (c) => c.json({ ok: true, revision: revision(db) }))
+
+  /**
+   * The API, described.
+   *
+   * Generated from the router itself, so it cannot claim routes that do not
+   * exist or quietly omit ones that do. Open without credentials for the same
+   * reason a README is: a third party deciding whether to write a client should
+   * not need an account first.
+   */
+  api.get('/openapi.json', (c) => c.json(buildOpenApi(app)))
 
   /** Whether this install has been claimed yet. Always answerable. */
   api.get('/auth/state', (c) => c.json({ open: isOpen(db), users: listUsers(db).length }))

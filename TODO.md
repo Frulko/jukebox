@@ -37,7 +37,8 @@ hands out a URL.
       ETag cache, `paginate`, typed errors, SSE). Tested against the real app as `Request →
       Response`, no port involved: if server and client drift apart, the test breaks before the
       interface does.
-- [ ] **1.8b** Move the routes to `@hono/zod-openapi` and **generate** the SDK — today the types
+- [ ] **1.8b** Generate the SDK from the spec too — the paths are generated now, the schemas
+      are still prose. Today the types
       are hand-written in `api-types`, so they can drift from the routes.
 - [~] **1.9** Frontend on the real API — the `Track` shape matches the server and
       `apps/web/src/api.ts` carries the TanStack Query hooks; what remains is swapping the data
@@ -156,7 +157,8 @@ hands out a URL.
 
 - [ ] **7.1** Keyboard shortcuts + shortcut sheet (carried over from `trieur`)
 - [ ] **7.2** Astro site — docs + playable demo on a fake backend
-- [ ] **7.3** Published OpenAPI reference
+- [x] **7.3** OpenAPI at `GET /openapi.json` — generated from the router, so it cannot claim
+      routes that do not exist or omit ones that do. A test fails on any undocumented route
 - [x] **7.4** Docker image + compose — `node:22-bookworm-slim` because the alpine images do
       not publish `linux/arm/v7`, which is the platform the Node 22 ceiling exists for.
       Built locally for this arch; the multi-arch push is a CI step (7.5)

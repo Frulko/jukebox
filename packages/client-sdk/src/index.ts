@@ -86,6 +86,8 @@ export function createClient(opts: ClientOptions = {}) {
 
   return {
     health: () => request<{ ok: boolean; revision: number }>('/health'),
+    /** The API described, generated from the router. Readable without a token. */
+    openapi: () => request<Record<string, unknown>>('/openapi.json'),
 
     auth: {
       /** Whether this install has been claimed. Always answerable, signed in or not. */
