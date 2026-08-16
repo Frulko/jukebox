@@ -204,3 +204,55 @@ test('tracks the pattern cannot render are reported, not guessed at', { skip }, 
     assert.ok(!plan.moves.some((m: any) => m.trackId === ids[0]))
   } finally { await h.cleanup() }
 })
+
+test('truncating a long name cannot put back the trailing dot it just stripped', () => {
+  // 124 characters, and the cut at 120 lands on the dot of the extension. Done
+  // in the other order -- strip, then slice -- the result ends in `.` again,
+  // which is exactly what the strip exists to prevent. On an SMB share the
+  // server writes `name.`, Windows stores `name`, and the next scan reports the
+  // track missing.
+  const long = sanitize('x'.repeat(119) + '.mp3')
+  assert.ok(long.length <= 120)
+  assert.ok(!/[.\s]$/.test(long), `ends with ${JSON.stringify(long.slice(-3))}`)
+
+  const spaced = sanitize('y'.repeat(118) + '. tail')
+  assert.ok(!/[.\s]$/.test(spaced), `ends with ${JSON.stringify(spaced.slice(-3))}`)
+})
+
+test('a long name is cut by code points, not by UTF-16 units', () => {
+  // An emoji is two units and one character. Slicing by units can halve a
+  // surrogate pair, and half a pair is not a filename any filesystem accepts.
+  const out = sanitize('🎵'.repeat(200))
+  assert.equal([...out].length, 120, 'cut at 120 characters, not 120 units')
+  // `encodeURIComponent` throws on an unpaired surrogate and on nothing else,
+  // which makes it the exact question: is this still valid text? Checking the
+  // last UTF-16 unit instead would fail on a *correct* emoji, whose second half
+  // is a low surrogate by construction.
+  assert.doesNotThrow(() => encodeURIComponent(out), 'half a surrogate pair survived the cut')
+})
+
+test('the names Windows reserves are not used as they are', () => {
+  // A file called AUX or COM1 cannot be created on a Windows filesystem at all,
+  // and SMB shares are a supported source now, so "the server is Linux" stopped
+  // being an answer.
+  for (const name of ['CON', 'con', 'AUX', 'NUL', 'COM1', 'LPT9', 'PRN']) {
+    assert.notEqual(sanitize(name).toUpperCase(), name.toUpperCase(), name)
+  }
+  // And an ordinary name that merely starts with one is left alone.
+  assert.equal(sanitize('Conway Twitty'), 'Conway Twitty')
+  assert.equal(sanitize('Nullify'), 'Nullify')
+})
+
+test('hostile metadata cannot walk out of the music folder', () => {
+  for (const nasty of ['../../etc', '..', '.', './x', 'a/b', 'a\\b']) {
+    const out = sanitize(nasty)
+    assert.ok(!out.includes('/') && !out.includes('\\'), `${nasty} kept a separator`)
+    assert.ok(out !== '..' && !out.startsWith('..'), `${nasty} stayed a traversal`)
+  }
+  // And the second line of defence agrees, since sanitisation is per segment
+  // and a pattern joins several of them.
+  assert.equal(insideRoot('/music', '../etc'), false)
+  assert.equal(insideRoot('/music', '/etc/passwd'), false)
+  assert.equal(insideRoot('/music', 'a/../../b'), false)
+  assert.equal(insideRoot('/music', 'a/../b'), true, 'staying inside is still allowed')
+})

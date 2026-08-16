@@ -53,21 +53,44 @@ const FIELDS = new Set([
 ])
 
 /**
+ * The device names Windows still reserves, forty years on.
+ *
+ * A file called `AUX` or `COM1` cannot be created on a Windows filesystem at
+ * all, with or without an extension — and this project now supports SMB shares
+ * explicitly, so "the server is Linux" stopped being an answer.
+ */
+const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i
+
+/**
  * One path segment, made safe.
  *
  * The separators and `..` go first: a tag of `../../etc` is how a rename leaves
  * the music folder. Then the characters Windows and macOS refuse, then trailing
  * dots and spaces, which Windows silently strips and then cannot find the file
  * it just wrote.
+ *
+ * **The truncation happens before the trailing strip, not after.** That order is
+ * the whole correctness of the last rule: cutting a 124-character name at 120
+ * can land the cut on a dot, putting back exactly the trailing character the
+ * strip had just removed. On an SMB share the server then writes `name.`,
+ * Windows stores `name`, and the next scan reports the track missing — which is
+ * the failure the strip exists to prevent, reintroduced by doing it first.
+ *
+ * Cut by code points rather than by `slice`, which counts UTF-16 units and can
+ * halve a surrogate pair into an invalid filename.
  */
 export function sanitize(segment: string): string {
-  return segment
+  const cleaned = segment
     .replace(/[/\\]/g, '-')
     .replace(/\.{2,}/g, '.')
     .replace(/[<>:"|?*\x00-\x1f]/g, '_')
-    .replace(/^[-.\s]+|[-.\s]+$/g, '')
-    .slice(0, 120)
-    .trim()
+
+  const cut = [...cleaned].slice(0, 120).join('')
+  const trimmed = cut.replace(/^[-.\s]+|[-.\s]+$/g, '').trim()
+
+  // Prefixed rather than rejected: the track still has to go somewhere, and a
+  // folder called `_AUX` is obvious to a human reading it.
+  return RESERVED.test(trimmed) ? `_${trimmed}` : trimmed
 }
 
 /**
