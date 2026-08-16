@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createColumnHelper } from '@tanstack/react-table'
 import type { DuplicateGroup } from '@jukebox/client-sdk'
 import { api } from './api'
 import { fmtSize, fmtTime } from './data'
 import { Icon } from './Icon'
+import { DataTable } from './DataTable'
+import type { features } from './tableFeatures'
 import { useScrollMemory } from './viewState'
 import { useViewSearch, ViewSearch } from './ViewSearch'
+
+type Copy = DuplicateGroup['tracks'][number]
+const h = createColumnHelper<typeof features, Copy>()
 
 /**
  * The same song, twice.
@@ -33,6 +39,36 @@ function Group({
 
   const others = group.tracks.filter((t) => t.id !== keeper)
   const first = group.tracks[0]
+
+  const columns = useMemo(
+    () => [
+      h.display({
+        id: 'keep',
+        header: 'Keep',
+        size: 44,
+        enableResizing: false,
+        cell: ({ row }) => <input type="radio" readOnly checked={row.id === keeper} tabIndex={-1} />,
+      }),
+      h.accessor('format', { header: 'Format', size: 70, cell: (c) => c.getValue().toUpperCase() }),
+      h.accessor('bitRate', {
+        header: 'Bit rate',
+        size: 78,
+        cell: (c) => <span className="num">{c.getValue() ? `${c.getValue()} kbps` : '—'}</span>,
+      }),
+      h.accessor('size', { header: 'Size', size: 78, cell: (c) => <span className="num">{fmtSize(c.getValue())}</span> }),
+      // Plays and a rating are the only things a merge cannot rebuild, which is
+      // why the server suggests the copy that has them — and why they are next
+      // to each other rather than at opposite ends of the row.
+      h.accessor('rating', {
+        header: 'Rating',
+        size: 74,
+        cell: (c) => <span className="num">{c.getValue() ? '★'.repeat(c.getValue()) : '—'}</span>,
+      }),
+      h.accessor('playCount', { header: 'Plays', size: 56, cell: (c) => <span className="num">{c.getValue() || '—'}</span> }),
+      h.accessor('renditions', { header: 'Files', size: 52, cell: (c) => <span className="num">{c.getValue()}</span> }),
+    ],
+    [keeper],
+  )
 
   const merge = async () => {
     setBusy(true)
@@ -62,30 +98,25 @@ function Group({
         </span>
       </div>
 
-      <table className="dup-table">
-        <thead>
-          <tr>
-            <th>Keep</th><th>Format</th><th>Bit rate</th><th>Size</th><th>Rating</th><th>Plays</th><th>Files</th>
-          </tr>
-        </thead>
-        <tbody>
-          {group.tracks.map((t) => (
-            <tr key={t.id} className={t.id === keeper ? 'on' : ''}>
-              <td>
-                <input type="radio" checked={t.id === keeper} onChange={() => setKeeper(t.id)} />
-              </td>
-              <td>{t.format.toUpperCase()}</td>
-              <td className="num">{t.bitRate ? `${t.bitRate} kbps` : '—'}</td>
-              <td className="num">{fmtSize(t.size)}</td>
-              {/* Plays and a rating are the only things a merge cannot rebuild,
-                  which is why the server suggests the copy that has them. */}
-              <td className="num">{t.rating ? '★'.repeat(t.rating) : '—'}</td>
-              <td className="num">{t.playCount || '—'}</td>
-              <td className="num">{t.renditions}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* The same table as everywhere else, sized to its rows: sortable and
+          resizable headers, one row height, one selection. Choosing the keeper
+          *is* selecting the row — the radio draws the state rather than being a
+          second control that can disagree with it. */}
+      <DataTable
+        data={group.tracks}
+        columns={columns}
+        getRowId={(t) => t.id}
+        memoryKey={`dup:${group.keeperId}`}
+        rowHeight={22}
+        fit
+        selected={new Set([keeper])}
+        onSelectedChange={(next) => {
+          // Exactly one copy is kept, so the last row clicked wins rather than
+          // the selection growing into something the merge cannot use.
+          const id = [...next].pop()
+          if (id) setKeeper(id)
+        }}
+      />
 
       <div className="dup-foot">
         {failed && <span className="dup-failed">{failed}</span>}

@@ -26,6 +26,15 @@ export function DataTable<T extends RowData>({
   getRowId,
   memoryKey,
   rowHeight = 26,
+  /**
+   * Sized to its rows rather than to a pane.
+   *
+   * The default is a table that owns a region and scrolls in it. A short list
+   * that is one of many on a page — the copies of one song — wants the
+   * opposite: no minimum height, no scrollbar, and nothing below it but the
+   * next group.
+   */
+  fit = false,
   rowClass,
   empty,
   selected,
@@ -39,6 +48,7 @@ export function DataTable<T extends RowData>({
   /** Keys the remembered scroll position; usually the view's own id. */
   memoryKey: string
   rowHeight?: number
+  fit?: boolean
   rowClass?: (row: T) => string
   empty?: React.ReactNode
   /**
@@ -85,7 +95,7 @@ export function DataTable<T extends RowData>({
   }
 
   return (
-    <div className="tracklist data-table">
+    <div className={`tracklist data-table ${fit ? 'fit' : ''}`}>
       <div className="thead" ref={headRef}>
         {table.getFlatHeaders().map((header) => {
           const sorted = header.column.getIsSorted()
@@ -114,7 +124,16 @@ export function DataTable<T extends RowData>({
         <div className="th filler" />
       </div>
 
-      <div className="tbody" ref={bodyRef} onScroll={onScroll} style={{ ['--row-h' as string]: `${rowHeight}px` }}>
+      <div
+        className="tbody"
+        ref={bodyRef}
+        onScroll={onScroll}
+        style={{
+          ['--row-h' as string]: `${rowHeight}px`,
+          // Exactly the rows, when the table is sized to them.
+          ...(fit ? { height: rows.length * rowHeight } : null),
+        }}
+      >
         <div className="tbody-sizer" style={{ height: virtualizer.getTotalSize(), width: table.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((v) => {
             const row = rows[v.index]

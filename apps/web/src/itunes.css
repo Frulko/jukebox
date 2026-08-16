@@ -1770,11 +1770,6 @@ input[type="range"]::-webkit-slider-thumb {
 .dup-head .dim { font-size: 11.5px; }
 .dup-why { margin-left: auto; font-size: 10px; padding: 1px 7px; border-radius: 99px; color: var(--dim); background: color-mix(in srgb, currentColor 12%, transparent); }
 .dup-why.fingerprint { color: #1f9d4d; }
-.dup-table { width: 100%; font-size: 12px; }
-.dup-table th { text-align: left; font-weight: 600; color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px 4px; }
-.dup-table td { padding: 4px 10px; border-top: 1px solid var(--line-soft); }
-.dup-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.dup-table tr.on { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .dup-foot { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line-soft); }
 .dup-foot .dim { font-size: 11px; }
 .dup-foot button { margin-left: auto; }
@@ -1956,6 +1951,11 @@ input[type="range"]::-webkit-slider-thumb {
    in the one place where it also hid the interesting half. */
 .data-table .tr.orphan .td.name { font-weight: 600; }
 .data-table .tr.playing .td.name { color: var(--accent); font-weight: 600; }
+/* Sized to its rows: one of several tables on a page, not a pane that scrolls.
+   The min-height and the scrollbar both belong to the other case. */
+.data-table.fit { min-height: 0; }
+.data-table.fit .tbody { overflow: hidden; }
+.data-table .td input[type="radio"] { margin: 0; }
 
 /* ---------------- filter chips ----------------
    One control for every dimension a listing can be narrowed by, so a second
