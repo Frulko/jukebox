@@ -57,20 +57,29 @@ Navidrome's newer web clients.
 
 What it takes from the current consensus, and why:
 
+- **The transport moves to the bottom.** This is the layout every streaming
+  client converged on: library on the left, content in the middle, and a bar
+  across the full width at the bottom holding what is playing. The player is
+  still rendered *first* in the DOM — where it belongs for the keyboard and for
+  a screen reader — and the three children of the shell are reordered with flex
+  `order`. No component knows about it.
 - **A canvas, not a window.** The other three fill one framed rectangle. Studio
   puts the sidebar and the content on a near-black canvas as separate rounded
   panels with a gap between them. The panel edges do the work borders used to.
-- **An elevation ladder.** Canvas `#08090c` → sidebar `#0e1219` → content
-  `#0c1015` → popovers `#171c24`. A surface is higher because it is lighter, not
+- **An elevation ladder.** Canvas `#0a0b0e` → content `#0d0f13` → sidebar
+  `#101217` → popovers `#171a21`. A surface is higher because it is lighter, not
   because it is outlined. Flat dark themes lose their hierarchy the moment two
   panels touch; this is the fix that stuck.
-- **Depth as the only decoration.** Long, soft shadows under the panels, one
-  blurred surface — the now-playing card — and nothing else translucent.
-  Glassmorphism came back refined: applied to floating chrome, never to the page.
-- **One saturated colour.** A single green (`#2fe08a`) for selection, stars,
-  scrubber and the active mode. Everything else is a grey. Two accents in a dark
-  interface and neither means anything.
-- **Bigger targets.** 30 px rows, 30 px sidebar entries, 9 px radii, pill
+- **No glass.** A blurred now-playing card was the first thing tried and the
+  first thing cut: it is the decoration a dark theme reaches for when it has
+  nothing to say. The panels are opaque, the separation comes from the gap
+  between them.
+- **One saturated colour, used four times.** The playing row, the scrubber under
+  the cursor, the active mode and focus. Selection is a grey fill and the stars
+  are a light grey: tinting those too turned the table into a wall of green, and
+  an accent that is everywhere marks nothing. The play button is the single
+  filled control, in white, so the eye finds it without hunting.
+- **Bigger targets.** 30 px rows, 32 px sidebar entries, 8 px radii, pill
   controls. Density was iTunes 8's argument; it is not this one's.
 
 It is not a repaint. Because every structural branch is keyed off
@@ -81,11 +90,12 @@ swap.
 
 | | **Music.app** | **Studio** |
 |---|---|---|
+| Player | Top bar, LCD in the middle | Full-width bar at the bottom |
 | Ground | One window, black | Canvas, panels floating on it |
 | Hierarchy | Borders + fills | Elevation and shadow |
 | Accent | Apple red | One green |
-| Rows | 26 px, pill selection | 30 px, card selection with an accent hairline |
-| Radius | 6 px | 9 px panels, 14 px surfaces |
+| Rows | 26 px, pill selection | 30 px, grey fill; the playing row is marked in the margin |
+| Radius | 6 px | 8 px controls, 12 px panels |
 | Type | SF Pro, 12 px | Inter, 12.5 px, uppercase micro-heads |
 
 ## What the prototype implements
@@ -99,9 +109,16 @@ swap.
     artwork thumbnail in the Name column.
   - `music` / `studio` → generated playlist quilt in the sidebar, tall rows,
     rounded selection, row hover.
-  - `studio` → the frame itself changes: the shell becomes a canvas and the
-    sidebar and content become floating panels. `THEME_ROW_H` must track
-    `--row-h` (30 px here) or the virtualiser drifts as you scroll.
+  - `studio` → the frame itself changes: the shell becomes a canvas, the sidebar
+    and content become floating panels, and the player is reordered to the
+    bottom.
+- **Row height crosses the CSS/JS boundary.** `THEME_ROW_H` must track `--row-h`
+  in the matching theme block, because the virtualiser positions rows from the
+  number and the browser draws them from the token. They also have to be
+  re-measured when the theme changes: TanStack Virtual caches its measurements
+  and a new `estimateSize` does not invalidate them, so before the fix every
+  theme switch left the rows on the *previous* pitch — a 30 px row in a 21 px
+  slot, its hover and selection band spilling onto the rows above and below.
 - **Generated artwork** (`Artwork.tsx`): FNV-1a hash of the artist—album pair →
   hue, angle and one of six geometric patterns. Deterministic, so an album keeps
   its artwork from one reload to the next. Playlists reuse iTunes' 2×2 quilt,

@@ -1196,150 +1196,221 @@ input[type="range"]::-webkit-slider-thumb {
 .devtracks-row.orphan .c-name { font-weight: 600; }
 
 /* ================================================================
-   THEME · Studio — dark canvas, floating surfaces, one green.
+   THEME · Studio — the streaming-client layout.
 
-   The first skin that is not an Apple product. Where the other three
-   sit inside a single window frame, this one breaks the app into
-   panels that float on a near-black canvas: depth carries the
-   hierarchy instead of borders, which is what music apps settled on
-   once dark mode stopped being an option. Surfaces get lighter as
-   they rise — canvas, sidebar, content, popovers — and the only
-   saturated colour in the interface is the accent.
+   The other three skins are Apple archaeology. This one follows the
+   shape every streaming client converged on, Spotify first: the
+   transport leaves the top of the window and becomes a bar across the
+   bottom, the library sits in a panel on the left, and the content is
+   a card floating on a dark canvas.
+
+   The reordering is done with flex `order` on the three children of
+   `.itunes` — the player is still rendered first in the DOM, which is
+   where it belongs for a screen reader and for the keyboard.
+
+   Green is used four times: the playing row, the scrubber, the active
+   mode and focus. Everywhere else is grey. A dark interface that tints
+   everything with its accent has no accent left.
    ================================================================ */
 
 [data-theme="studio"] {
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --fs: 12.5px;
 
-  /* the elevation ladder: every surface is one step lighter than the one under it */
-  --canvas: #08090c;
-  --raised: #14181f;
+  /* the elevation ladder: a surface is higher because it is lighter */
+  --canvas: #0a0b0e;
+  --raised: #171a21;
 
-  --chrome: transparent;
-  --chrome-line: transparent;
-  --chrome-text: #e6eaf2;
+  --chrome: #12141a;
+  --chrome-line: #1e222b;
+  --chrome-text: #e7eaf0;
   --chrome-inset: none;
 
-  --btn: #171c24;
-  --btn-line: #232a35;
-  --btn-text: #c3cad6;
-  --btn-shadow: 0 1px 2px rgba(0, 0, 0, .4);
-  --btn-on: #2fe08a;
-  --btn-on-line: #2fe08a;
-  --btn-on-text: #06120c;
+  --btn: transparent;
+  --btn-line: transparent;
+  --btn-text: #9aa3b2;
+  --btn-shadow: none;
+  --btn-on: rgba(47, 224, 138, .14);
+  --btn-on-line: transparent;
+  --btn-on-text: #2fe08a;
 
-  --sidebar: #0e1219;
+  --sidebar: #101217;
   --sidebar-line: transparent;
-  --sidebar-text: #aab3c2;
-  --sidebar-section: #626c7e;
-  --sidebar-sel: rgba(47, 224, 138, .13);
-  --sidebar-sel-text: #eafff5;
+  --sidebar-text: #a7afbd;
+  --sidebar-section: #5c6577;
+  --sidebar-sel: #1c2029;
+  --sidebar-sel-text: #f2f5f9;
   --sidebar-sel-icon: #2fe08a;
   --sidebar-sel-shadow: none;
   --sidebar-shadow: none;
 
-  --content: #0c1015;
-  --text: #e8ecf3;
-  --dim: #7f8899;
-  --line: #1c222c;
-  --line-soft: #161b23;
+  --content: #0d0f13;
+  --text: #e7eaf0;
+  --dim: #798199;
+  --line: #1b1f27;
+  --line-soft: #161a21;
 
   --head: transparent;
-  --head-line: #1c222c;
-  --head-text: #6d7688;
-  --head-sorted: rgba(47, 224, 138, .09);
+  --head-line: #1b1f27;
+  --head-text: #6a7386;
+  --head-sorted: rgba(255, 255, 255, .04);
 
   --stripe: transparent;
-  --sel: rgba(47, 224, 138, .16);
-  --sel-text: #eafff5;
-  --sel-blur: rgba(255, 255, 255, .06);
+  --sel: #1c2029;
+  --sel-text: #f2f5f9;
+  --sel-blur: #16191f;
   --row-h: 30px;
-  --row-radius: 9px;
+  --row-radius: 6px;
 
-  --lcd: rgba(255, 255, 255, .05);
-  --lcd-line: rgba(255, 255, 255, .09);
-  --lcd-shadow: 0 8px 24px rgba(0, 0, 0, .45);
-  --track-bg: #262d38;
+  --lcd: transparent;
+  --lcd-line: transparent;
+  --lcd-shadow: none;
+  --track-bg: #2a303b;
 
   --status: transparent;
-  --panel: #14181f;
-  --field: #10151c;
-  --field-line: #262d38;
+  --panel: #171a21;
+  --field: #12151b;
+  --field-line: #242a34;
   --accent: #2fe08a;
-  --focus: rgba(47, 224, 138, .3);
-  --menu: #171c24;
-  --menu-text: #e8ecf3;
-  --menu-line: #262d38;
-  --star: #2fe08a;
-  --star-off: #2b323d;
-  --scroll-thumb: #262d38;
-  --scroll-thumb-hover: #38414f;
+  --focus: rgba(47, 224, 138, .28);
+  --menu: #171a21;
+  --menu-text: #e7eaf0;
+  --menu-line: #242a34;
+  --star: #b9c1d0;
+  --star-off: #2a303b;
+  --scroll-thumb: #262c36;
+  --scroll-thumb-hover: #39414f;
   --scroll-track: transparent;
-  --radius: 9px;
+  --radius: 8px;
 }
 
-/* --- the window becomes a canvas with panels floating on it --- */
+/* --- the shell: library and content on a canvas, player underneath --- */
 [data-theme="studio"] body { background: var(--canvas); }
-[data-theme="studio"] .itunes { background: var(--canvas); border: 0; padding: 8px; gap: 8px; }
-[data-theme="studio"] .topbar { height: 54px; padding: 0 4px; border-bottom: 0; }
-[data-theme="studio"] .main { gap: 8px; }
+[data-theme="studio"] .itunes { background: var(--canvas); border: 0; padding: 8px 8px 0; gap: 8px; }
+[data-theme="studio"] .main { order: 1; gap: 8px; }
+[data-theme="studio"] .statusbar { order: 2; }
+[data-theme="studio"] .topbar { order: 3; }
+
 [data-theme="studio"] .sidebar,
 [data-theme="studio"] .content {
   border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  border-radius: 12px;
   overflow: hidden;
 }
-[data-theme="studio"] .sidebar { width: 196px; border-right: 1px solid var(--line-soft); padding-top: 4px; }
-[data-theme="studio"] .statusbar { border-top: 0; padding-top: 6px; }
+[data-theme="studio"] .sidebar { width: 208px; border-right: 1px solid var(--line-soft); padding-top: 6px; }
 
-/* --- controls: pills, no bevel --- */
+/* --- the bottom bar: transport, what is playing, tools --- */
+[data-theme="studio"] .topbar {
+  height: 72px;
+  padding: 0 6px;
+  border-top: 1px solid var(--chrome-line);
+  border-bottom: 0;
+  background: transparent;
+}
+[data-theme="studio"] .transport { gap: 6px; }
 [data-theme="studio"] .transport button,
-[data-theme="studio"] .right-tools > button { width: 30px; height: 26px; border-radius: 8px; }
+[data-theme="studio"] .right-tools > button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--btn-text);
+}
 [data-theme="studio"] .transport button:hover,
-[data-theme="studio"] .right-tools > button:hover { background: #1d232c; }
+[data-theme="studio"] .right-tools > button:hover { background: #1a1e26; color: var(--text); }
+/* the one filled control in the interface — you always know where play is */
+[data-theme="studio"] .transport .play {
+  width: 36px;
+  height: 36px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: #f2f5f9;
+  color: #0a0b0e;
+}
+[data-theme="studio"] .transport .play:hover { background: #fff; filter: none; transform: scale(1.05); }
+[data-theme="studio"] .volume { margin-left: 12px; }
 
-/* --- now playing: the one glass surface, floating over the canvas --- */
 [data-theme="studio"] .lcd {
-  border-radius: 12px;
-  border: 1px solid var(--lcd-line);
-  backdrop-filter: blur(14px);
-}
-[data-theme="studio"] .lcd-title { font-weight: 600; letter-spacing: -.01em; }
-[data-theme="studio"] .lcd-scrub .knob,
-[data-theme="studio"] input[type="range"]::-webkit-slider-thumb {
+  height: 56px;
+  max-width: 520px;
+  padding: 0 8px;
+  gap: 12px;
   border: 0;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(47, 224, 138, .18);
+  background: transparent;
+  box-shadow: none;
 }
+[data-theme="studio"] .lcd-art { border-radius: 6px; }
+[data-theme="studio"] .lcd-title { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+[data-theme="studio"] .lcd-sub { font-size: 11.5px; }
+[data-theme="studio"] .lcd-main { gap: 3px; }
+[data-theme="studio"] .lcd-scrub { width: 100%; }
+/* grey until you reach for it — the scrubber is not a decoration */
+[data-theme="studio"] .lcd-scrub .fill { background: #9aa3b2; }
+[data-theme="studio"] .lcd-scrub:hover .fill { background: var(--accent); }
+[data-theme="studio"] .lcd-scrub .knob { opacity: 0; border: 0; background: #fff; box-shadow: none; }
+[data-theme="studio"] .lcd-scrub:hover .knob { opacity: 1; }
+[data-theme="studio"] input[type="range"]::-webkit-slider-thumb { border: 0; background: #cfd6e2; }
+[data-theme="studio"] .lcd-idle-label { font-size: 12px; letter-spacing: .1em; text-transform: lowercase; }
+/* the bar is 56 px tall here, not 44: pinned to the top the button floated
+   above the scrubber with nothing under it */
+[data-theme="studio"] .lcd-eye { align-self: center; margin-top: 0; border-radius: 6px; padding: 5px; }
+/* the column browser does not exist in this skin, so its toggle should not sit
+   there lit up */
+[data-theme="studio"] .right-tools > button:nth-of-type(3) { display: none; }
 
-/* --- the list: rows are cards, not lines --- */
-[data-theme="studio"] .tbody { padding: 4px 8px; }
+[data-theme="studio"] .statusbar { height: 26px; border-top: 0; padding: 0 12px; color: var(--dim); }
+[data-theme="studio"] .sb-btn { color: var(--dim); }
+
+/* --- the list --- */
+[data-theme="studio"] .tbody { padding: 6px 8px; }
 [data-theme="studio"] .tr { width: calc(100% - 16px); }
-[data-theme="studio"] .tr:not(.sel):hover { background: #151a22; }
-[data-theme="studio"] .tr.sel { box-shadow: inset 0 0 0 1px rgba(47, 224, 138, .35); }
-[data-theme="studio"] .tr.sel .stars i.on { color: var(--accent); }
-[data-theme="studio"] .thead { padding: 0 8px; height: 30px; }
+[data-theme="studio"] .tr:not(.sel):hover { background: #151920; }
+[data-theme="studio"] .thead { padding: 0 8px; height: 32px; }
 [data-theme="studio"] .th {
   border-right: 0;
   text-transform: uppercase;
-  letter-spacing: .09em;
+  letter-spacing: .1em;
   font-size: 9px;
   font-weight: 600;
 }
+/* the playing row is marked in the margin, not by tinting the whole line */
+[data-theme="studio"] .tr.playing .td.name { color: var(--accent); }
+[data-theme="studio"] .tr.playing::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+[data-theme="studio"] .thumb { border-radius: 4px; }
+[data-theme="studio"] .tr.sel .stars i.on { color: var(--star); }
 
-/* --- sidebar: taller targets, the selection is a pill --- */
-[data-theme="studio"] .sidebar .src { height: 30px; padding: 0 10px; border-radius: 9px; margin: 1px 8px; }
+/* checkboxes: a column of filled accent squares was the loudest thing on
+   screen, and it was decoration — the state it shows is "enabled", not the
+   selection. Outline when off, a tick in the accent when on. */
+[data-theme="studio"] input[type="checkbox"] { border-radius: 4px; border-color: #2a303b; background: transparent; }
+[data-theme="studio"] input[type="checkbox"]:checked { background: #232935; border-color: #323a48; }
+[data-theme="studio"] input[type="checkbox"]:checked::after { border-color: var(--accent); }
+[data-theme="studio"] .tr.sel input[type="checkbox"] { border-color: #39414f; background: transparent; }
+[data-theme="studio"] .tr.sel input[type="checkbox"]:checked { background: #2b323f; border-color: #3d4657; }
+
+/* --- sidebar --- */
+[data-theme="studio"] .sidebar .src { height: 32px; padding: 0 12px; border-radius: 8px; margin: 1px 8px; }
 [data-theme="studio"] .sidebar .src.on { font-weight: 600; }
-[data-theme="studio"] .sidebar .section { padding: 14px 16px 4px; letter-spacing: .1em; }
+[data-theme="studio"] .sidebar .section { padding: 16px 20px 4px; letter-spacing: .11em; }
 
-/* --- artwork and popovers keep the same soft geometry --- */
+/* --- grids, popovers --- */
+[data-theme="studio"] .modebar { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+[data-theme="studio"] .modebar button { padding: 4px 14px; border-radius: 99px; }
+[data-theme="studio"] .modebar button.on { background: var(--accent); color: #06120c; }
 [data-theme="studio"] .tile-art .cover,
-[data-theme="studio"] .album-detail > .cover { border-radius: 12px; }
-[data-theme="studio"] .grid { gap: 26px 20px; padding: 22px; }
+[data-theme="studio"] .album-detail > .cover { border-radius: 10px; }
+[data-theme="studio"] .grid { gap: 24px 20px; padding: 20px; }
 [data-theme="studio"] .cb-pane li:nth-child(even) { background: transparent; }
-[data-theme="studio"] .cb-pane li:hover { background: #151a22; }
-[data-theme="studio"] .modal-backdrop { background: rgba(0, 0, 0, .6); }
-[data-theme="studio"] .modal { border-radius: 16px; box-shadow: 0 30px 70px rgba(0, 0, 0, .6); }
-[data-theme="studio"] .modal-titlebar .close { border-color: transparent; background: #2b323d; }
-[data-theme="studio"] .cap-bar { background: #262d38; }
+[data-theme="studio"] .cb-pane li:hover { background: #151920; }
+[data-theme="studio"] .modal { border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .55); }
+[data-theme="studio"] .modal-titlebar .close { border-color: transparent; background: #2a303b; }
+[data-theme="studio"] .modal-backdrop { background: rgba(0, 0, 0, .55); }
+[data-theme="studio"] .cap-bar { background: #2a303b; }

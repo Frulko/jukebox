@@ -131,6 +131,13 @@ export function TrackList(p: Props) {
     overscan: 12,
   })
 
+  // The row height is the theme's. TanStack Virtual keeps its measurements in a
+  // cache that a new `estimateSize` does not invalidate: switching theme changed
+  // the CSS height of every row while they stayed on the old pitch, so a 30 px
+  // row sat in a 21 px slot and its hover and selection band spilled over the
+  // rows above and below. Re-measuring is the documented way out.
+  useLayoutEffect(() => { virtualizer.measure() }, [p.rowHeight, virtualizer])
+
   // Restore where this source was last left, before paint so there is no jump.
   useLayoutEffect(() => {
     const at = scrollMemory.get(p.viewKey)
