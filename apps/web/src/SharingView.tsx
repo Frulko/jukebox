@@ -3,6 +3,7 @@ import { ApiError, type Account, type Source } from '@jukebox/client-sdk'
 import { api, DEMO, useSources } from './api'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
+import { getLocale } from './i18n'
 
 /** Where a remote source actually lives, for a page about who is on the other end. */
 function hostOf(source: Source & { config?: Record<string, unknown> }) {
@@ -119,7 +120,7 @@ export function SharingView({ onGoToSources }: { onGoToSources: () => void }) {
             </span>
             <span className="spacer" />
             <span className="dim">
-              {u.lastSeenAt ? `last seen ${new Date(u.lastSeenAt).toLocaleDateString('en-US')}` : 'never signed in'}
+              {u.lastSeenAt ? `last seen ${new Date(u.lastSeenAt).toLocaleDateString(getLocale())}` : 'never signed in'}
             </span>
           </div>
         ))

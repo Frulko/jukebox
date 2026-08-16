@@ -7,6 +7,7 @@ import { DeviceTracks } from './DeviceTracks'
 import { Icon } from './Icon'
 import type { Playlist } from './data'
 import type { Play } from './App'
+import { getLocale } from './i18n'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -18,7 +19,7 @@ const gb = (b: number) =>
   : `${Math.max(1, Math.round(b / 1024))} KB`
 const when = (ms: number | null) =>
   ms
-    ? new Date(ms).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    ? new Date(ms).toLocaleString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'Never'
 
 /** Percent done, and 0 rather than NaN for a job that has not counted yet. */

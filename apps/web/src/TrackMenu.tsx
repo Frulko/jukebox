@@ -4,6 +4,7 @@ import type { PluginEntry } from './pluginMenu'
 import { MembershipsPopover } from './MembershipsPopover'
 import { Submenu } from './Submenu'
 import { useMenuPosition } from './useMenuPosition'
+import { num, t, useLocale } from './i18n'
 
 /**
  * Everything a track can be told to do.
@@ -48,6 +49,7 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
   /** "Where is this?" — opened from the menu, at the same point. */
   const [where, setWhere] = useState<{ id: string; x: number; y: number } | null>(null)
   const position = useMenuPosition(menu)
+  useLocale()
 
   /** `queue` is what playing from here would play through, in the order shown. */
   const open = (e: React.MouseEvent, tracks: Track[], queue?: string[]) => {
@@ -97,13 +99,13 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
           style={position.floatingStyles}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <button onClick={() => (actions.onPlay(ids[0], menu.queue), close())}>Play</button>
-          <button onClick={() => (actions.onPlayNext(ids), close())}>Play Next</button>
+          <button onClick={() => (actions.onPlay(ids[0], menu.queue), close())}>{t('Play')}</button>
+          <button onClick={() => (actions.onPlayNext(ids), close())}>{t('Play Next')}</button>
           <button onClick={() => (actions.onEnqueue(ids), close())}>
-            {many ? `Add ${ids.length} to Queue` : 'Add to Queue'}
+            {many ? t('Add {n} to Queue', { n: ids.length }) : t('Add to Queue')}
           </button>
           <button onClick={() => (actions.onGetInfo(ids), close())}>
-            {many ? `Get Info (${ids.length} items)` : 'Get Info'}
+            {many ? `${t('Get Info')} (${num(ids.length)})` : t('Get Info')}
           </button>
           {/* The album of the track you pointed at, not of the selection: ten
               selected rows can be ten albums, and going to one of them is not
@@ -112,7 +114,7 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
             <button
               onClick={() => (actions.onOpenAlbum(menu.tracks[0].album, menu.tracks[0].albumArtist), close())}
             >
-              Go to Album
+              {t('Go to Album')}
             </button>
           )}
           <button
@@ -121,10 +123,10 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
               close()
             }}
           >
-            Where is this track…
+            {t('Where is this track…')}
           </button>
           <button onClick={() => (actions.onConvert(ids), close())}>
-            {many ? `Convert ${ids.length} Tracks…` : 'Convert…'}
+            {many ? t('Convert {n} Tracks…', { n: ids.length }) : t('Convert…')}
           </button>
 
           {actions.pluginEntries.length > 0 && <hr />}
@@ -141,10 +143,10 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
           ))}
 
           <hr />
-          <Submenu label="Rating">
+          <Submenu label={t('Rating')}>
             {[0, 1, 2, 3, 4, 5].map((n) => (
               <button key={n} onClick={() => (actions.onUpdate(ids, { rating: n }), close())}>
-                {n ? '★'.repeat(n) : 'None'}
+                {n ? '★'.repeat(n) : t('None')}
               </button>
             ))}
           </Submenu>
@@ -153,10 +155,10 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
               is ticked only when *every* selected track carries it, so choosing
               it on a mixed selection adds it to the rest rather than toggling
               half of them off. */}
-          <Submenu label="Tag">
+          <Submenu label={t('Tag')}>
             <input
               className="tag-new"
-              placeholder="New tag…"
+              placeholder={t('New tag…')}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
@@ -168,23 +170,23 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
               }}
             />
             {actions.tags.length > 0 && <hr />}
-            {actions.tags.map((t) => {
-              const all = menu.tracks.every((x) => x.tags.includes(t.value))
+            {actions.tags.map((tag) => {
+              const all = menu.tracks.every((x) => x.tags.includes(tag.value))
               return (
                 <button
-                  key={t.value}
+                  key={tag.value}
                   className={all ? 'on' : ''}
-                  onClick={() => (actions.onTag(ids, all ? [] : [t.value], all ? [t.value] : []), close())}
+                  onClick={() => (actions.onTag(ids, all ? [] : [tag.value], all ? [tag.value] : []), close())}
                 >
-                  {all ? '✓' : ' '}&nbsp;&nbsp;{t.value}
-                  <em className="dim">{t.count.toLocaleString('en-US')}</em>
+                  {all ? '✓' : ' '}&nbsp;&nbsp;{tag.value}
+                  <em className="dim">{num(tag.count)}</em>
                 </button>
               )
             })}
           </Submenu>
 
-          <Submenu label="Add to Playlist">
-            <button onClick={() => (actions.onNewPlaylistFrom(ids), close())}>New Playlist…</button>
+          <Submenu label={t('Add to Playlist')}>
+            <button onClick={() => (actions.onNewPlaylistFrom(ids), close())}>{t('New Playlist…')}</button>
             <hr />
             {actions.playlists
               .filter((pl) => !pl.smart)
@@ -198,7 +200,7 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
           {/* Absent with nothing connected — iTunes never showed a menu entry
               that could not do anything. */}
           {actions.devices.length > 0 && (
-            <Submenu label="Add to Device">
+            <Submenu label={t('Add to Device')}>
               {actions.devices.map((d) => (
                 <button key={d.id} onClick={() => (actions.onAddToDevice(d.id, ids), close())}>
                   {d.name}
@@ -208,14 +210,14 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
           )}
 
           <hr />
-          <button onClick={() => (actions.onUpdate(ids, { enabled: true }), close())}>Check Selection</button>
-          <button onClick={() => (actions.onUpdate(ids, { enabled: false }), close())}>Uncheck Selection</button>
+          <button onClick={() => (actions.onUpdate(ids, { enabled: true }), close())}>{t('Check Selection')}</button>
+          <button onClick={() => (actions.onUpdate(ids, { enabled: false }), close())}>{t('Uncheck Selection')}</button>
           <button onClick={() => (actions.onUpdate(ids, { playCount: 0, lastPlayed: null }), close())}>
-            Reset Plays
+            {t('Reset Plays')}
           </button>
           <hr />
           <button onClick={() => (actions.onDelete(ids), close())}>
-            {options.inPlaylist ? 'Remove from Playlist' : 'Delete from Library'}
+            {options.inPlaylist ? t('Remove from Playlist') : t('Delete from Library')}
           </button>
         </div>
       )}

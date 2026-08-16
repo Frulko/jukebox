@@ -11,6 +11,7 @@ import { isUnavailable } from './trackBadges'
 import { useMenuPosition } from './useMenuPosition'
 import { titleIfClipped } from './Tooltip'
 import { useTrackMenu, type TrackActions } from './TrackMenu'
+import { getLocale, t, useLocale } from './i18n'
 import { usePersisted, useScrollMemory } from './viewState'
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
@@ -61,6 +62,7 @@ export function TrackList(p: Props) {
     (stored, fresh) => [...stored.filter((id) => fresh.includes(id)), ...fresh.filter((id) => !stored.includes(id))],
   )
   const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('jukebox.sizes', {})
+  useLocale()
   /** Only the two menus that belong to *this* table: its header and its format
    *  column. A row's menu is the shared one — see TrackMenu. */
   const [menu, setMenu] = useState<{ x: number; y: number; kind: 'header' | 'format' } | null>(null)
@@ -457,7 +459,10 @@ export function TrackList(p: Props) {
                 }}
                 onDragEnd={() => setDragCol(null)}
               >
-                <table.FlexRender header={header} />
+                {/* The label rather than the column's own header renderer: the
+                    table's definitions are in English and this is where the
+                    reader's language is applied. */}
+                {t(COLUMN_LABELS[header.column.id] ?? header.column.id)}
               </span>
               {header.column.id === 'format' && (
                 <button
@@ -573,7 +578,7 @@ export function TrackList(p: Props) {
         </div>
         {/* "No songs" is a claim about the library; while the answer is still
             on its way it is not one we can make. */}
-        {!rows.length && <div className="list-empty">{p.loading ? 'Loading…' : 'No songs'}</div>}
+        {!rows.length && <div className="list-empty">{p.loading ? t('Loading…') : t('No songs')}</div>}
       </div>
 
       {menu && (
@@ -600,7 +605,7 @@ export function TrackList(p: Props) {
                   onClick={() => (p.onFormat(f.value), setMenu(null))}
                 >
                   {f.value.toUpperCase()}
-                  <em className="dim">{f.count.toLocaleString('en-US')}</em>
+                  <em className="dim">{f.count.toLocaleString(getLocale())}</em>
                 </button>
               ))}
             </>

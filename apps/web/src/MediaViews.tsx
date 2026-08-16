@@ -11,9 +11,10 @@ import {
   STORE_FEATURED,
   type Show,
 } from './media'
+import { getLocale } from './i18n'
 
 const art = (hue: number) => ({ background: `linear-gradient(150deg, hsl(${hue} 52% 58%), hsl(${(hue + 40) % 360} 46% 38%))` })
-const day = (ms: number) => new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+const day = (ms: number) => new Date(ms).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' })
 
 /* ---------------- TV / Podcasts / Audiobooks: shows + episodes ---------------- */
 
@@ -160,7 +161,7 @@ export function RadioView({ search }: { search: string }) {
                     <Icon name="radio" size={10} /> {s.name}
                   </span>
                   <span className="c-time num">{s.bitrate} kbps</span>
-                  <span className="c-date num">{s.listeners.toLocaleString('en-US')}</span>
+                  <span className="c-date num">{s.listeners.toLocaleString(getLocale())}</span>
                 </div>
               ))}
           </div>

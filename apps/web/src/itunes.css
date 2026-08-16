@@ -561,6 +561,12 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .sb-btn.on { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }
 .statusbar .summary { flex: 1; text-align: center; }
+.lang-picker {
+  height: 15px; padding: 0 2px; margin-right: 6px;
+  font: inherit; font-size: 10px;
+  color: var(--text); background: var(--btn); border: 1px solid var(--btn-line);
+  border-radius: 3px;
+}
 .theme-picker { display: flex; align-items: center; gap: 3px; margin-right: 4px; }
 .theme-picker button {
   height: 16px;

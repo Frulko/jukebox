@@ -10,6 +10,7 @@ import { useScrollMemory } from './viewState'
 import { useViewSearch, ViewSearch } from './ViewSearch'
 import { DataTable } from './DataTable'
 import type { features } from './tableFeatures'
+import { getLocale } from './i18n'
 
 /** What the sources route adds for a local source, and api-types does not name yet. */
 type Mounted = Source & {
@@ -173,7 +174,7 @@ const columns = [
 ]
 
 const when = (ms: number) =>
-  new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+  new Date(ms).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' })
 
 /**
  * The tracks whose files the scanner can no longer find.
@@ -249,7 +250,7 @@ export function MissingView() {
       </div>
 
       <p className="missing-lead">
-        {all.length.toLocaleString('en-US')} track{all.length > 1 ? 's' : ''} the last scan could not find.
+        {all.length.toLocaleString(getLocale())} track{all.length > 1 ? 's' : ''} the last scan could not find.
         Nothing has been deleted — ratings, play counts and playlist places are kept. If a disk was unplugged,
         plug it back and rescan: they return as they were.
       </p>

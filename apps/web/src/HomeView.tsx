@@ -5,6 +5,7 @@ import { api, useSources } from './api'
 import { Icon } from './Icon'
 import { PlaylistCover } from './Artwork'
 import { usePersisted, useScrollMemory } from './viewState'
+import { getLocale } from './i18n'
 
 /**
  * Which playlists were opened, most recent first.
@@ -25,7 +26,7 @@ export function useRecentPlaylists() {
 }
 
 const day = (ms: number) =>
-  new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+  new Date(ms).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })
 
 /**
  * The page the app opens on.
@@ -80,7 +81,7 @@ export function HomeView({
               <button key={pl.id} className="home-card" onClick={() => onOpenPlaylist(pl.id, pl.smart)}>
                 <PlaylistCover seed={`${pl.id} ${pl.name}`} size={120} label={pl.name} />
                 <span className="t">{pl.name}</span>
-                <span className="s">{pl.trackCount.toLocaleString('en-US')} tracks</span>
+                <span className="s">{pl.trackCount.toLocaleString(getLocale())} tracks</span>
               </button>
             ))}
           </div>

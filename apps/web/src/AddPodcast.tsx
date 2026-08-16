@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, useFacets, useSources } from './api'
 import { Icon } from './Icon'
+import { getLocale } from './i18n'
 
 /**
  * Two ways a podcast gets into a library, and they are not the same operation.
@@ -146,7 +147,7 @@ export function AddPodcast({
                   >
                     <Icon name="music" size={9} />
                     <span className="p">{f.value}</span>
-                    <em className="dim">{f.count.toLocaleString('en-US')}</em>
+                    <em className="dim">{f.count.toLocaleString(getLocale())}</em>
                   </button>
                 ))}
               </div>

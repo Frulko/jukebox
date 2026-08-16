@@ -5,8 +5,9 @@ import { api, useJobs, useStats } from './api'
 import { fmtSize } from './data'
 import { Icon } from './Icon'
 import { useRemembered, useScrollMemory } from './viewState'
+import { getLocale } from './i18n'
 
-const num = (n: number) => n.toLocaleString('en-US')
+const num = (n: number) => n.toLocaleString(getLocale())
 
 /** Days and hours, because a library is measured in days and a job in minutes. */
 const duration = (seconds: number) => {
@@ -17,7 +18,7 @@ const duration = (seconds: number) => {
 }
 
 const when = (ms: number | null) =>
-  ms ? new Date(ms).toLocaleString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never'
+  ms ? new Date(ms).toLocaleString(getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never'
 
 function JobRow({ job, onCancel }: { job: Job; onCancel: () => void }) {
   const pct = job.progress.total ? Math.round((job.progress.done / job.progress.total) * 100) : null

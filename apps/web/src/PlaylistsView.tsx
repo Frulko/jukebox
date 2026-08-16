@@ -3,6 +3,7 @@ import { Icon } from './Icon'
 import { PlaylistCover } from './Artwork'
 import { useScrollMemory } from './viewState'
 import { useViewSearch, ViewSearch } from './ViewSearch'
+import { getLocale, t } from './i18n'
 
 /**
  * Every playlist, as a wall rather than a list.
@@ -28,7 +29,7 @@ export function PlaylistsView({
   return (
     <div className="media" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="pl-head">
-        <h2>All Playlists</h2>
+        <h2>{t('All Playlists')}</h2>
         <span className="dim">{playlists.length}</span>
         <ViewSearch value={search.query} onChange={search.setQuery} placeholder="Filter playlists" count={shown.length} />
         <button className="prim" onClick={onNew}>
@@ -54,7 +55,7 @@ export function PlaylistsView({
                 {pl.name}
               </span>
               <span className="s">
-                {pl.trackCount.toLocaleString('en-US')} track{pl.trackCount === 1 ? '' : 's'}
+                {pl.trackCount.toLocaleString(getLocale())} track{pl.trackCount === 1 ? '' : 's'}
               </span>
             </button>
           ))}

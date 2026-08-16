@@ -3,6 +3,7 @@ import { api } from './api'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
+import { getLocale } from './i18n'
 
 /**
  * What is going to play, in order.
@@ -115,7 +116,7 @@ export function QueueView({
             />
           ))}
           {hidden > 0 && (
-            <li className="q-more">and {hidden.toLocaleString('en-US')} more after that</li>
+            <li className="q-more">and {hidden.toLocaleString(getLocale())} more after that</li>
           )}
         </ul>
       )}

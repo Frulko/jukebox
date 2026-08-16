@@ -35,6 +35,7 @@ import { usePluginMenu } from './pluginMenu'
 import { FilterBar, type FilterChip } from './FilterBar'
 import { NowPlayingPanel } from './NowPlayingPanel'
 import './itunes.css'
+import { getLocale, LOCALES, setLocale, t, useLocale, type Locale } from './i18n'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
 
@@ -72,6 +73,9 @@ const GAP_PHRASE: Record<string, string> = {
 
 export default function App() {
   const qc = useQueryClient()
+  // Read here, at the root: everything below is rendered by this component, so
+  // one subscription is what makes a language change repaint the whole app.
+  const locale = useLocale()
   const [view, setViewState] = useState<View>({ kind: 'library', id: 'music' })
   const [browse, setBrowse] = useState<Browse>({ genre: null, artist: null, album: null })
   const [browserOpen, setBrowserOpen] = useState(true)
@@ -891,7 +895,7 @@ export default function App() {
                   and a second one would have needed its own again. */}
               {reviewing && (
                 <p className="review-lead">
-                  <b>{reviewCount.toLocaleString('en-US')}</b> track{reviewCount === 1 ? '' : 's'}{' '}
+                  <b>{reviewCount.toLocaleString(getLocale())}</b> track{reviewCount === 1 ? '' : 's'}{' '}
                   {reviewCount === 1 ? 'has' : 'have'}{' '}
                   {/* The sentence follows the chip: with one chosen, "a field
                       left empty" is vaguer than what the page is showing. */}
@@ -973,28 +977,44 @@ export default function App() {
       </div>
 
       <div className="statusbar">
-        <button className="sb-btn" onClick={() => newPlaylist()} title="New playlist">
+        <button className="sb-btn" onClick={() => newPlaylist()} title={t('New playlist')}>
           <Icon name="plus" size={9} />
         </button>
-        <button className={`sb-btn ${shuffle ? 'on' : ''}`} onClick={toggleShuffle} title="Shuffle">
+        <button className={`sb-btn ${shuffle ? 'on' : ''}`} onClick={toggleShuffle} title={t('Shuffle')}>
           <Icon name="shuffle" size={10} />
         </button>
-        <button className={`sb-btn ${repeat !== 'off' ? 'on' : ''}`} onClick={cycleRepeat} title="Repeat">
+        <button className={`sb-btn ${repeat !== 'off' ? 'on' : ''}`} onClick={cycleRepeat} title={t('Repeat')}>
           <Icon name="repeat" size={10} />
         </button>
         <span className="summary">
           {notice ??
             (view.kind === 'library' && view.id !== 'music'
               ? view.id === 'audiobooks'
-                ? `${audiobookCount.books} audiobook${audiobookCount.books === 1 ? '' : 's'}, ${audiobookCount.chapters.toLocaleString('en-US')} chapters`
+                ? `${audiobookCount.books} audiobook${audiobookCount.books === 1 ? '' : 's'}, ${audiobookCount.chapters.toLocaleString(getLocale())} chapters`
                 : view.id === 'podcasts'
                 // Counted from the feeds themselves: the fabricated list this
                 // replaced would have gone on saying "4 podcasts" to someone
                 // subscribed to one.
-                ? `${podcastCount.shows} podcast${podcastCount.shows === 1 ? '' : 's'}, ${podcastCount.episodes.toLocaleString('en-US')} episodes`
+                ? `${podcastCount.shows} podcast${podcastCount.shows === 1 ? '' : 's'}, ${podcastCount.episodes.toLocaleString(getLocale())} episodes`
                 : mediaSummary(view.id)
               : media ? '' : summarize(tracks))}
         </span>
+        {/* A native select. The list of languages is five items long and this
+            is the one control in the app where the words around it are, by
+            definition, in a language the reader may not read — so it shows the
+            language names in their own language, which is legible either way. */}
+        <select
+          className="lang-picker"
+          value={locale}
+          title={t('Language')}
+          onChange={(e) => setLocale(e.target.value as Locale)}
+        >
+          {Object.entries(LOCALES).map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
         <div className="theme-picker">
           {THEMES.map(([id, label]) => (
             <button key={id} className={theme === id ? 'on' : ''} onClick={() => setTheme(id)}>
@@ -1002,7 +1022,7 @@ export default function App() {
             </button>
           ))}
         </div>
-        <button className="sb-btn right" onClick={() => qc.invalidateQueries()} title="Refresh">
+        <button className="sb-btn right" onClick={() => qc.invalidateQueries()} title={t('Refresh')}>
           <Icon name="sync" size={10} />
         </button>
       </div>

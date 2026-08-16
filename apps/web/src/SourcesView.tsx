@@ -4,6 +4,7 @@ import type { Source } from '@jukebox/client-sdk'
 import { api, useSources, useTrackCount } from './api'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
+import { getLocale } from './i18n'
 
 /** The mount the sources route adds for a local source; api-types does not name it yet. */
 type Mounted = Source & {
@@ -20,7 +21,7 @@ const KINDS: Record<string, { label: string; needs: string }> = {
 }
 
 const when = (ms: number | null) =>
-  ms ? new Date(ms).toLocaleString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never'
+  ms ? new Date(ms).toLocaleString(getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never'
 
 /**
  * One source, with the two things that are actually asked about it: how much of
@@ -73,7 +74,7 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
         </div>
         <div>
           <dt>Tracks</dt>
-          <dd>{(tracks.data?.count ?? 0).toLocaleString('en-US')}</dd>
+          <dd>{(tracks.data?.count ?? 0).toLocaleString(getLocale())}</dd>
         </div>
         <div>
           <dt>Last scan</dt>

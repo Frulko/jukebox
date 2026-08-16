@@ -1,5 +1,6 @@
 import type { TrackQuery } from '@jukebox/client-sdk'
 import { useFacets } from './api'
+import { t } from './i18n'
 
 export type Browse = { genre: string | null; artist: string | null; album: string | null }
 
@@ -23,10 +24,10 @@ function Pane({
 }) {
   return (
     <div className="cb-pane">
-      <div className="cb-head">{title}</div>
+      <div className="cb-head">{t(title)}</div>
       <ul>
         <li className={selected === null ? 'on' : ''} onClick={() => onSelect(null)}>
-          All ({values.length} {title.toLowerCase()})
+          {t('All ({n} {what})', { n: values.length, what: t(title).toLowerCase() })}
         </li>
         {values.map((v) => (
           <li

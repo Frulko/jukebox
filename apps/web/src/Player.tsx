@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Job } from '@jukebox/client-sdk'
 import { useAudioTime, type Audio } from './audio'
 import { useJobs } from './api'
+import { num, t, useLocale } from './i18n'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
@@ -137,6 +138,7 @@ export function Player({
 }) {
   // Fall back to the tag only until the decoder has read the file.
   // The decoder's duration beats the tag's on a VBR file whose header lies.
+  useLocale()
   const { position, duration } = useAudioTime(audio)
   // Only what is still moving: a finished scan is history, and this display is
   // for what is happening now. Asked here because this is the only thing that
@@ -170,13 +172,13 @@ export function Player({
   return (
     <div className="topbar">
       <div className="transport">
-        <button onClick={onPrev} title="Previous">
+        <button onClick={onPrev} title={t('Previous')}>
           <Icon name="prev" size={13} />
         </button>
-        <button className="play" onClick={onToggle} title="Play/Pause">
+        <button className="play" onClick={onToggle} title={t('Play/Pause')}>
           <Icon name={playing ? 'pause' : 'play'} size={15} />
         </button>
-        <button onClick={onNext} title="Next">
+        <button onClick={onNext} title={t('Next')}>
           <Icon name="next" size={13} />
         </button>
         <div className="volume">
@@ -191,13 +193,13 @@ export function Player({
           <>
             <div className="lcd-main">
               <div className="lcd-title">
-                {JOB_LABEL[job.kind] ?? job.kind}
+                {t(JOB_LABEL[job.kind] ?? job.kind)}
                 {job.state === 'paused' && ' — paused'}
               </div>
               <div className="lcd-sub">
                 {job.progress.total
-                  ? `${job.progress.done.toLocaleString('en-US')} of ${job.progress.total.toLocaleString('en-US')}`
-                  : `${job.progress.done.toLocaleString('en-US')} so far`}
+                  ? t('{done} of {total}', { done: num(job.progress.done), total: num(job.progress.total) })
+                  : t('{done} so far', { done: num(job.progress.done) })}
                 {job.error ? ` · ${job.error}` : ''}
               </div>
               <div className="lcd-scrub">
@@ -257,7 +259,7 @@ export function Player({
       </div>
 
       <div className="right-tools">
-        <button className={shuffle ? 'on' : ''} onClick={onShuffle} title="Shuffle">
+        <button className={shuffle ? 'on' : ''} onClick={onShuffle} title={t('Shuffle')}>
           <Icon name="shuffle" size={13} />
         </button>
         <button
@@ -268,13 +270,13 @@ export function Player({
           <Icon name="repeat" size={13} />
           {repeat === 'one' && <em>1</em>}
         </button>
-        <button className={browserOpen ? 'on' : ''} onClick={onToggleBrowser} title="Column Browser">
+        <button className={browserOpen ? 'on' : ''} onClick={onToggleBrowser} title={t('Column Browser')}>
           <Icon name="columns" size={13} />
         </button>
         <button
           className={queueOpen ? 'on' : ''}
           onClick={onToggleQueue}
-          title={queueLength ? `${queueLength} in the queue` : 'The queue'}
+          title={queueLength ? t('{n} in the queue', { n: queueLength }) : t('The queue')}
         >
           <Icon name="queue" size={13} />
         </button>
@@ -303,7 +305,7 @@ export function Player({
               ))}
             </div>
           )}
-          <input value={search} placeholder="Search" onChange={(e) => onSearch(e.target.value)} />
+          <input value={search} placeholder={t('Search')} onChange={(e) => onSearch(e.target.value)} />
           {search && (
             <button className="clear" onClick={() => onSearch('')} title="Clear">
               <Icon name="close" size={9} />

@@ -1,4 +1,5 @@
 import type { Playlist, Track, TrackKind } from '@jukebox/api-types'
+import { getLocale, t } from './i18n'
 
 /**
  * The front end speaks the same shape as the server: `Track` comes from
@@ -146,7 +147,7 @@ export const fmtSize = (b: number) =>
   b > 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${(b / 1e6).toFixed(1)} MB`
 
 export const fmtDate = (ms: number | null) =>
-  ms ? new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  ms ? new Date(ms).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 
 /** iTunes status bar: "1,234 songs, 3.2 days, 8.45 GB" */
 export function summarize(tracks: Track[]) {
@@ -155,9 +156,16 @@ export function summarize(tracks: Track[]) {
   const days = secs / 86400
   const dur =
     days >= 1
-      ? `${days.toFixed(1)} days`
+      ? t('{n} days', { n: days.toFixed(1) })
       : secs >= 3600
         ? `${Math.floor(secs / 3600)}:${String(Math.floor((secs % 3600) / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
         : fmtTime(secs)
-  return `${tracks.length.toLocaleString('en-US')} songs, ${dur}, ${fmtSize(bytes)}`
+  // One sentence rather than three concatenated fragments: French says
+  // "1 234 morceaux" and German "1.234 Titel", and only a whole string lets a
+  // translation move the number.
+  return t('{n} songs, {duration}, {size}', {
+    n: tracks.length.toLocaleString(getLocale()),
+    duration: dur,
+    size: fmtSize(bytes),
+  })
 }

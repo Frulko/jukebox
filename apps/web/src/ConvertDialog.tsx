@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
 import { Icon } from './Icon'
+import { getLocale } from './i18n'
 
 /** Bitrate means nothing to a lossless encoder, and ffmpeg treats it as an error. */
 const LOSSY = new Set(['mp3', 'aac', 'opus', 'vorbis'])
@@ -86,7 +87,7 @@ export function ConvertDialog({
           {caps.data?.available && (
             <>
               <p className="convert-lead">
-                {ids.length.toLocaleString('en-US')} track{ids.length > 1 ? 's' : ''} selected. A track that is
+                {ids.length.toLocaleString(getLocale())} track{ids.length > 1 ? 's' : ''} selected. A track that is
                 already in the target format is skipped rather than converted twice.
               </p>
 

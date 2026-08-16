@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react'
 import { Icon } from './Icon'
+import { getLocale, t, useLocale } from './i18n'
 
 export type FilterOption = { value: string; label: string; count?: number }
 
@@ -48,7 +49,10 @@ function Chip({ chip }: { chip: FilterChip }) {
         className={`chip ${chip.value ? 'on' : ''}`}
         onClick={() => setOpen((v) => !v)}
       >
-        {chip.label}
+        {/* The chip's own name is translated; the chosen value is not — a
+            genre or a codec is the same word in every language, and translating
+            data rather than chrome is how a filter stops matching. */}
+        {t(chip.label)}
         {chosen && <b>{chosen.label}</b>}
         <span className="tri" />
       </button>
@@ -67,9 +71,9 @@ function Chip({ chip }: { chip: FilterChip }) {
               setOpen(false)
             }}
           >
-            Any {chip.label.toLowerCase()}
+            {t('Any {what}', { what: t(chip.label).toLowerCase() })}
           </button>
-          {chip.options.length === 0 && <div className="ctx-empty">{chip.emptyHint ?? 'Nothing to filter by'}</div>}
+          {chip.options.length === 0 && <div className="ctx-empty">{chip.emptyHint ?? t('Nothing to filter by')}</div>}
           {chip.options.map((o) => (
             <button
               key={o.value}
@@ -80,7 +84,7 @@ function Chip({ chip }: { chip: FilterChip }) {
               }}
             >
               {o.label}
-              {o.count !== undefined && <em className="dim">{o.count.toLocaleString('en-US')}</em>}
+              {o.count !== undefined && <em className="dim">{o.count.toLocaleString(getLocale())}</em>}
             </button>
           ))}
         </div>
@@ -90,6 +94,7 @@ function Chip({ chip }: { chip: FilterChip }) {
 }
 
 export function FilterBar({ chips, onClear }: { chips: FilterChip[]; onClear?: () => void }) {
+  useLocale()
   const active = chips.filter((c) => c.value)
   return (
     <div className="filter-bar">
@@ -101,7 +106,7 @@ export function FilterBar({ chips, onClear }: { chips: FilterChip[]; onClear?: (
           and showing nothing is otherwise three clicks from making sense. */}
       {active.length > 1 && onClear && (
         <button className="chip clear" onClick={onClear}>
-          Clear {active.length} filters
+          {t('Clear {n} filters', { n: active.length })}
         </button>
       )}
     </div>

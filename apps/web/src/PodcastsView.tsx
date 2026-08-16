@@ -6,6 +6,7 @@ import { AddPodcast } from './AddPodcast'
 import { Icon } from './Icon'
 import { fmtBytes } from './media'
 import { useRemembered, useScrollMemory } from './viewState'
+import { getLocale } from './i18n'
 
 /** The publisher's host, for a line that says where the sound comes from. */
 export const hostOf = (url: string) => {
@@ -68,7 +69,7 @@ const runtime = (s: number) =>
   s >= 3600 ? `${Math.floor(s / 3600)}h ${String(Math.round((s % 3600) / 60)).padStart(2, '0')}min` : `${Math.round(s / 60)} min`
 
 const day = (ms: number | null) =>
-  ms ? new Date(ms).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  ms ? new Date(ms).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 
 /** Deterministic colour for a feed with no artwork, so a show looks like itself. */
 const hue = (id: string) => [...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)
