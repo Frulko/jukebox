@@ -93,8 +93,15 @@ hands out a URL.
       control routes until a HomeKit pairing is done (SRP6a, Curve25519, ChaCha20-Poly1305,
       a PIN on a television) — found, named in the error, not yet performed. RAOP is
       deliberately out: it would put an ALAC encoder and an RTP clock in the server
-- [ ] **3.7** Chromecast — `mdns.ts` already finds it at `_googlecast._tcp`; what is left is
-      the protobuf channel over TLS
+- [x] **3.7** Chromecast — `castv2.ts` is the wire protocol by hand: seven protobuf fields,
+      four-byte framing, varints. The framing is tested at every possible split point, which
+      is the bug that works on a desk and breaks the first time a status payload gets long.
+      `chromecast.ts` does the four steps in the order the device demands — connect, launch,
+      connect *again* to the app's transport id, load — the third being the one that fails
+      silently when skipped. Volume works here, unlike AirPlay. Tested against a faithful
+      fake device over a plain socket; **not yet against real hardware**, since there is no
+      Chromecast on this network (the mDNS reader itself is proven here: it finds the six
+      Sonos and both AirPlay endpoints)
 - [ ] **3.8** `live` family — YouTube/Twitch + ffmpeg relay (a job like any other)
 
 ## M4b · One song, several files

@@ -25,6 +25,7 @@ import { configOf, open as rcOpen, RcloneError, version as rcVersion } from './r
 import { configOf as jfConfigOf, info as jfInfo, open as jfOpen } from './jellyfin.ts'
 import { configOf as plexConfigOf, info as plexInfo, open as plexOpen } from './plex.ts'
 import * as airplay from './airplay.ts'
+import * as cast from './chromecast.ts'
 
 /**
  * A renderer, whichever protocol found it.
@@ -38,6 +39,7 @@ import * as airplay from './airplay.ts'
 type Output =
   | { kind: 'upnp'; id: string; name: string; upnp: Renderer }
   | { kind: 'airplay'; id: string; name: string; airplay: airplay.AirPlayDevice }
+  | { kind: 'cast'; id: string; name: string; cast: cast.CastDevice }
 import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
@@ -613,14 +615,40 @@ export function createApp(dbFile: string) {
    * still list what the other found.
    */
   async function discoverOutputs(): Promise<Output[]> {
-    const [upnp, air] = await Promise.all([
+    const [upnp, air, casts] = await Promise.all([
       discoverRenderers().catch(() => [] as Renderer[]),
       airplay.discover().catch(() => [] as airplay.AirPlayDevice[]),
+      cast.discover().catch(() => [] as cast.CastDevice[]),
     ])
     return [
       ...upnp.map((r): Output => ({ kind: 'upnp', id: r.id, name: r.name, upnp: r })),
       ...air.map((d): Output => ({ kind: 'airplay', id: d.id, name: d.name, airplay: d })),
+      ...casts.map((d): Output => ({ kind: 'cast', id: d.id, name: d.name, cast: d })),
     ]
+  }
+
+  /**
+   * Cast sessions, held open.
+   *
+   * The odd one out: UPnP and AirPlay are stateless HTTP calls, but a
+   * Chromecast's media session id only exists inside a connection. Reconnecting
+   * per command would mean a pause with nothing to pause, so the connection
+   * lives as long as the music does.
+   */
+  const castSessions = new Map<string, cast.CastSession>()
+
+  async function castSessionFor(d: cast.CastDevice): Promise<cast.CastSession> {
+    const existing = castSessions.get(d.id)
+    if (existing) return existing
+    const session = new cast.CastSession({ host: d.address, port: d.port })
+    await session.open()
+    castSessions.set(d.id, session)
+    return session
+  }
+
+  function closeCast(id: string): void {
+    castSessions.get(id)?.close()
+    castSessions.delete(id)
   }
 
   /**
@@ -630,13 +658,43 @@ export function createApp(dbFile: string) {
    * dispatch works for both and why AirPlay is here at all: its other protocol,
    * RAOP, would mean encoding and packetising the stream on this side.
    */
-  const startOn = (o: Output, t: any, url: string) =>
-    o.kind === 'upnp'
-      ? playUrl(o.upnp, { name: t.name, artist: t.artist, album: t.album, duration: t.duration, url })
-      : airplay.play(o.airplay, url)
+  async function startOn(o: Output, t: any, url: string): Promise<void> {
+    if (o.kind === 'upnp') {
+      await playUrl(o.upnp, { name: t.name, artist: t.artist, album: t.album, duration: t.duration, url })
+      return
+    }
+    if (o.kind === 'airplay') {
+      await airplay.play(o.airplay, url)
+      return
+    }
+    const session = await castSessionFor(o.cast)
+    await session.load({
+      url,
+      // A Chromecast decides what it can play from the content type, so this is
+      // the one place the format has to be named honestly rather than guessed.
+      contentType: mimeFor(t.format, t.path),
+      title: t.name, artist: t.artist, album: t.album, duration: t.duration,
+    })
+  }
 
-  const pauseOn = (o: Output) => o.kind === 'upnp' ? pauseRenderer(o.upnp) : airplay.pause(o.airplay)
-  const stopOn = (o: Output) => o.kind === 'upnp' ? stopRenderer(o.upnp) : airplay.stop(o.airplay)
+  async function pauseOn(o: Output): Promise<void> {
+    if (o.kind === 'upnp') return pauseRenderer(o.upnp).then(() => undefined)
+    if (o.kind === 'airplay') return airplay.pause(o.airplay)
+    const session = castSessions.get(o.cast.id)
+    if (!session) throw new Error('nothing is playing on this device')
+    return session.pause()
+  }
+
+  async function stopOn(o: Output): Promise<void> {
+    if (o.kind === 'upnp') return stopRenderer(o.upnp).then(() => undefined)
+    if (o.kind === 'airplay') return airplay.stop(o.airplay)
+    const session = castSessions.get(o.cast.id)
+    if (!session) return
+    await session.stop().catch(() => undefined)
+    // Stopped means done: holding the connection open afterwards keeps the
+    // receiver app on screen for a device nobody is listening to.
+    closeCast(o.cast.id)
+  }
 
   /**
    * Renderers on the network.
@@ -670,15 +728,17 @@ export function createApp(dbFile: string) {
           id: o.id,
           name: o.name,
           kind: o.kind,
-          manufacturer: o.kind === 'upnp' ? o.upnp.manufacturer : 'Apple',
-          model: o.kind === 'upnp' ? o.upnp.model : o.airplay.model,
-          address: o.kind === 'upnp' ? o.upnp.address : `${o.airplay.address}:${o.airplay.port}`,
+          manufacturer: o.kind === 'upnp' ? o.upnp.manufacturer : o.kind === 'airplay' ? 'Apple' : 'Google',
+          model: o.kind === 'upnp' ? o.upnp.model : o.kind === 'airplay' ? o.airplay.model : o.cast.model,
+          address: o.kind === 'upnp' ? o.upnp.address
+            : o.kind === 'airplay' ? `${o.airplay.address}:${o.airplay.port}`
+              : `${o.cast.address}:${o.cast.port}`,
           formats: [],
           stale: false,
-          // Volume lives in RTSP on AirPlay, which is a protocol this does not
-          // speak. Saying so lets the UI hide the slider rather than offer one
-          // that does nothing.
-          volume: o.kind === 'upnp' ? Boolean(o.upnp.volumeUrl) : false,
+          // Whether a volume slider would do anything. AirPlay's volume lives
+          // in RTSP, a protocol this does not speak, so saying so lets the UI
+          // hide the control rather than offer one that silently does nothing.
+          volume: o.kind === 'upnp' ? Boolean(o.upnp.volumeUrl) : o.kind === 'cast',
         })),
         ...registered,
       ],
@@ -753,12 +813,17 @@ export function createApp(dbFile: string) {
     if (!renderer) return fail(c, 404, 'not_found', 'unknown output')
     const b = await c.req.json().catch(() => null)
     if (typeof b?.volume !== 'number') return fail(c, 400, 'bad_body', 'expected { volume: 0-100 }')
-    if (renderer.kind !== 'upnp') {
+    if (renderer.kind === 'airplay') {
       // Not a refusal and not a bug: AirPlay's volume lives in RTSP
       // SET_PARAMETER, on the protocol this deliberately does not speak.
       return fail(c, 501, 'not_supported', 'AirPlay volume is not available over its HTTP interface')
     }
     try {
+      if (renderer.kind === 'cast') {
+        const session = await castSessionFor(renderer.cast)
+        await session.setVolume(b.volume)
+        return c.body(null, 204)
+      }
       await setRendererVolume(renderer.upnp, b.volume)
       return c.body(null, 204)
     } catch (err) {
@@ -1753,5 +1818,9 @@ export function createApp(dbFile: string) {
   app.route('/rest', subsonic.app)
   app.notFound((c) => fail(c, 404, 'not_found', 'unknown route'))
 
-  return { app, db, jobs, scheduler, plugins, events }
+  // A cast connection is a live socket, so it has to be given back. Without
+  // this the process will not exit on its own.
+  const closeOutputs = () => { for (const id of [...castSessions.keys()]) closeCast(id) }
+
+  return { app, db, jobs, scheduler, plugins, events, closeOutputs }
 }

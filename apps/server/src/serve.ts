@@ -6,7 +6,7 @@ import { createApp } from './app.ts'
 const port = Number(process.env.PORT ?? 8787)
 const dbFile = process.env.JUKEBOX_DB ?? './data/library.db'
 
-const { app, jobs, scheduler, plugins } = createApp(dbFile)
+const { app, jobs, scheduler, plugins, closeOutputs } = createApp(dbFile)
 
 /**
  * The web app, when it has been built.
@@ -51,6 +51,9 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     jobs.stop()
     scheduler.stop()
+    // A cast session is a live socket: the process will not exit while one is
+    // open, and the receiver keeps showing an app nobody is talking to.
+    closeOutputs()
     // Plugins get told too: one holding a socket open would otherwise keep the
     // process from closing cleanly, and its own `deactivate` never runs.
     void Promise.all(plugins.active().map((id) => plugins.deactivate(id)))
