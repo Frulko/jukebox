@@ -19,7 +19,8 @@
     "no-native": "node scripts/no-native.mjs",
     "fixtures": "node scripts/fixtures.mjs",
     "verify": "node scripts/verify.mjs",
-    "dev:satellite": "npm run dev --workspace @jukebox/satellite"
+    "dev:satellite": "npm run dev --workspace @jukebox/satellite",
+    "api-reference": "node --experimental-strip-types --no-warnings scripts/api-reference.mjs"
   },
   "devDependencies": {
     "typescript": "~5.9.2",
