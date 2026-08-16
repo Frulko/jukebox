@@ -1,6 +1,6 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Source, Track, TrackPatch, TrackQuery, TracksDelta,
+  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta,
 } from '@jukebox/api-types'
 
 /**
@@ -162,8 +162,10 @@ export function createClient(opts: ClientOptions = {}) {
       stats: (id: string) => request<DeviceStats>(`/devices/${id}/stats`, {}, true),
       update: (id: string, patch: Partial<Pick<Device, 'name' | 'autoSync' | 'syncMode' | 'syncPlaylistIds'>>) =>
         request<Device>(`/devices/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
-      sync: (id: string, opts: { dryRun?: boolean } = {}) =>
-        request<Job>(`/devices/${id}/sync`, { method: 'POST', body: JSON.stringify(opts) }),
+      sync: (id: string) => request<Job>(`/devices/${id}/sync`, { method: 'POST', body: '{}' }),
+      /** What the sync would do, without doing it. */
+      syncPlan: (id: string) =>
+        request<SyncPlan>(`/devices/${id}/sync`, { method: 'POST', body: JSON.stringify({ dryRun: true }) }),
       backup: (id: string) => request<Job>(`/devices/${id}/backup`, { method: 'POST', body: '{}' }),
     },
 
@@ -198,5 +200,5 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Source, Track, TrackPatch, TrackQuery, TracksDelta,
+  Source, SyncPlan, Track, TrackPatch, TrackQuery, TracksDelta,
 }

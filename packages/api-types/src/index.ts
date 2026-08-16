@@ -143,6 +143,18 @@ export type DeviceTrack = {
   syncedAt: number | null
 }
 
+/** What a sync would do. Returned by `POST /devices/:id/sync` with `dryRun`. */
+export type SyncPlan = {
+  add: { trackId: string; name: string; artist: string; size: number; transcode: string | null }[]
+  remove: { deviceLocalId: string; name: string; size: number }[]
+  keep: number
+  bytesAdded: number
+  bytesFreed: number
+  free: number
+  /** Non-null when the plan does not fit: how many bytes short it is. */
+  shortBy: number | null
+}
+
 export type DeviceStats = { tracks: number; orphans: number; bytes: number; seconds: number }
 
 /** Cursor pagination. `next` of `null` means: last page. */

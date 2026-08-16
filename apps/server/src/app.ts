@@ -8,6 +8,7 @@ import { JobQueue, publicJob, type JobKind } from './jobs.ts'
 import { makeScanHandler } from './scan.ts'
 import { makeWritebackHandler } from './writeback.ts'
 import { makeAcquireHandler } from './acquire.ts'
+import { makeSyncHandler, planSync } from './sync.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
@@ -23,6 +24,7 @@ export function createApp(dbFile: string) {
   jobs.register('scan', makeScanHandler(db))
   jobs.register('writeback', makeWritebackHandler(db))
   jobs.register('acquire', makeAcquireHandler(db))
+  jobs.register('sync', makeSyncHandler(db))
   jobs.start()
   seedPresets(db)
 
@@ -300,18 +302,33 @@ export function createApp(dbFile: string) {
    * this lays down the contract so the UI is honest right now and will not have
    * to change when the satellite lands.
    */
-  for (const [route, kind] of [['sync', 'sync'], ['backup', 'backup']] as const) {
-    api.post(`/devices/:id/${route}`, async (c) => {
-      const id = c.req.param('id')
-      if (!db.prepare(`SELECT id FROM devices WHERE id = ?`).get(id)) {
-        return fail(c, 404, 'not_found', 'unknown device')
-      }
-      const body = await c.req.json().catch(() => ({}))
-      const job = jobs.create(kind, { deviceId: id, ...body },
-        { idempotencyKey: c.req.header('idempotency-key') ?? `${kind}-${id}` })
-      return c.json(publicJob(job), 202)
-    })
-  }
+  /**
+   * `dryRun` returns the plan and writes nothing. Seeing "340 to add, 12 to
+   * remove, 2.1 GB short" before a three-hour transfer is worth more than any
+   * progress bar during it.
+   */
+  api.post('/devices/:id/sync', async (c) => {
+    const id = c.req.param('id')
+    if (!db.prepare(`SELECT id FROM devices WHERE id = ?`).get(id)) {
+      return fail(c, 404, 'not_found', 'unknown device')
+    }
+    const body = await c.req.json().catch(() => ({}))
+    if (body?.dryRun) return c.json(planSync(db, id))
+
+    const job = jobs.create('sync', { deviceId: id },
+      { idempotencyKey: c.req.header('idempotency-key') ?? `sync-${id}` })
+    return c.json(publicJob(job), 202)
+  })
+
+  api.post('/devices/:id/backup', async (c) => {
+    const id = c.req.param('id')
+    if (!db.prepare(`SELECT id FROM devices WHERE id = ?`).get(id)) {
+      return fail(c, 404, 'not_found', 'unknown device')
+    }
+    const job = jobs.create('backup', { deviceId: id },
+      { idempotencyKey: c.req.header('idempotency-key') ?? `backup-${id}` })
+    return c.json(publicJob(job), 202)
+  })
 
   /** What is actually on the device, independently of the library. */
   api.get('/devices/:id/tracks', (c) =>
