@@ -189,7 +189,12 @@ export function useTrackQuery(input: {
     if (input.browse.artist) q.artist = input.browse.artist
     if (input.browse.album) q.album = input.browse.album
     if (input.format) q.format = input.format
-    if (input.view.kind === 'library' && input.view.id !== 'music') q.kind = input.view.id as never
+    // Only the ids that are actually a kind of track. The library also holds
+    // places — albums, artists, playlists, missing — and sending one of those
+    // as `kind` would ask the server for a kind of music that does not exist.
+    if (input.view.kind === 'library' && (input.view.id === 'podcasts' || input.view.id === 'audiobooks')) {
+      q.kind = (input.view.id === 'podcasts' ? 'podcast' : 'audiobook') as never
+    }
     if (input.deviceFilter) {
       if (input.deviceFilter.mode === 'on') q.onDevice = input.deviceFilter.deviceId
       else q.notOnDevice = input.deviceFilter.deviceId

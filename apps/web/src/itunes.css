@@ -1654,3 +1654,13 @@ input[type="range"]::-webkit-slider-thumb {
 .q-remove:hover { color: var(--accent); }
 .q-empty { margin: 0; padding: 22px 16px; color: var(--dim); font-size: 12px; line-height: 1.5; }
 .q-more { padding: 10px 12px; color: var(--dim); font-size: 11px; text-align: center; }
+
+/* ---------------- all playlists ---------------- */
+.pl-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 4px; }
+.pl-head h2 { margin: 0; font-size: 17px; }
+.pl-head .dim { color: var(--dim); font-size: 12px; }
+.pl-head button { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
+.pl-grid { padding: 12px 20px 24px; }
+.pl-tile { border: 0; background: none; text-align: left; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.pl-tile .t { display: flex; align-items: center; gap: 5px; font-size: 12.5px; }
+.pl-tile .s { color: var(--dim); font-size: 11.5px; }

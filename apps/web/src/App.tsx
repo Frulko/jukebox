@@ -16,7 +16,8 @@ import { Icon } from './Icon'
 import { AppsView, AudiobooksView, mediaSummary, PodcastsView, RadioView, StoreView } from './MediaViews'
 import { MissingView } from './MissingView'
 import { QueueView } from './QueueView'
-import { AlbumsView, ArtistsView, type LibraryMode } from './LibraryViews'
+import { AlbumsView, ArtistsView } from './LibraryViews'
+import { PlaylistsView } from './PlaylistsView'
 import './itunes.css'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -51,7 +52,6 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
-  const [mode, setMode] = useState<LibraryMode>('songs')
   /** "What is left to put on the iPod" — computed server-side, never on a page. */
   const [deviceFilter, setDeviceFilter] = useState<{ deviceId: string; mode: 'on' | 'not' } | null>(null)
   // A drop on a device moves nothing yet, so it has to say what it did. The
@@ -123,13 +123,17 @@ export default function App() {
     return rest
   }, [query])
   const formats = useFacets(formatQuery).data?.formats ?? []
-  const libraryPage = useTracks(query, view.kind === 'library' && view.id === 'music')
+  // Songs, Albums and Artists are three ways of drawing one query: the same
+  // page of tracks, grouped differently. Only the drawing changes with the view.
+  const isLibraryList =
+    view.kind === 'library' && (view.id === 'music' || view.id === 'albums' || view.id === 'artists')
+  const libraryPage = useTracks(query, isLibraryList)
   const playlistPage = usePlaylistTracks(view.kind === 'playlist' ? view.id : null, query)
 
   const tracks: Track[] =
     view.kind === 'playlist'
       ? playlistPage.data?.items ?? NO_TRACKS
-      : view.kind === 'library' && view.id === 'music'
+      : isLibraryList
         ? libraryPage.data?.items ?? NO_TRACKS
         : NO_TRACKS
 
@@ -322,6 +326,10 @@ export default function App() {
   const infoTracks = infoIds ? tracks.filter((t) => infoIds.includes(t.id)) : []
   const device = view.kind === 'device' ? devices.find((d) => d.id === view.id) : undefined
   const viewKey = `${view.kind}:${view.id}`
+  // Albums and Artists are places in the sidebar now, not a mode inside Songs.
+  // One piece of state — the view — with the mode bar as a second control onto
+  // it, rather than two that can disagree about where you are.
+  const mode = view.kind === 'library' && (view.id === 'albums' || view.id === 'artists') ? view.id : 'songs'
 
   const MEDIA: Record<string, React.ReactNode> = {
     podcasts: <PodcastsView search={search} />,
@@ -329,6 +337,13 @@ export default function App() {
     apps: <AppsView search={search} />,
     radio: <RadioView search={search} />,
     missing: <MissingView />,
+    playlists: (
+      <PlaylistsView
+        playlists={playlists}
+        onOpen={(id, smart) => setView({ kind: 'playlist', id, smart: smart ?? undefined })}
+        onNew={() => newPlaylist()}
+      />
+    ),
   }
   const media =
     view.kind === 'store'
@@ -448,8 +463,12 @@ export default function App() {
               )}
               {theme !== 'classic' && (
                 <div className="modebar">
-                  {(['songs', 'albums', 'artists'] as LibraryMode[]).map((m) => (
-                    <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
+                  {(['songs', 'albums', 'artists'] as const).map((m) => (
+                    <button
+                      key={m}
+                      className={mode === m ? 'on' : ''}
+                      onClick={() => setView({ kind: 'library', id: m === 'songs' ? 'music' : m })}
+                    >
                       {m[0].toUpperCase() + m.slice(1)}
                     </button>
                   ))}
@@ -458,7 +477,7 @@ export default function App() {
               {theme === 'classic' && browserOpen && (
                 <ColumnBrowser value={browse} onChange={setBrowse} query={query} />
               )}
-              {theme !== 'classic' && mode === 'albums' ? (
+              {mode === 'albums' ? (
                 <AlbumsView
                   tracks={tracks}
                   nowPlaying={nowPlaying}
@@ -467,7 +486,7 @@ export default function App() {
                   onPlayNext={playNext}
                   onGetInfo={setInfoIds}
                 />
-              ) : theme !== 'classic' && mode === 'artists' ? (
+              ) : mode === 'artists' ? (
                 <ArtistsView
                   tracks={tracks}
                   nowPlaying={nowPlaying}
