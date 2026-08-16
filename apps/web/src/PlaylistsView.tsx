@@ -46,7 +46,7 @@ export function PlaylistsView({
         <div className="grid pl-grid">
           {shown.map((pl) => (
             <button key={pl.id} className="tile pl-tile" onDoubleClick={() => onOpen(pl.id, pl.smart)}>
-              <PlaylistCover seed={`${pl.id} ${pl.name}`} size={148} />
+              <PlaylistCover seed={`${pl.id} ${pl.name}`} size={148} label={pl.name} />
               <span className="t">
                 {/* A smart playlist is a query, not a list, and the difference
                     decides whether dragging a track onto it does anything. */}

@@ -1019,25 +1019,15 @@ input[type="range"]::-webkit-slider-thumb {
 .cover { position: relative; overflow: hidden; border-radius: 3px; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
 .cover.round { border-radius: 50%; }
 .cover.empty { background: var(--track-bg); }
-.cover-pattern { position: absolute; inset: 0; width: 100%; height: 100%; }
-.cover-label {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 7px;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: .01em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .55);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
+/* The whole cover is one drawing now, type included — see Artwork.tsx. The
+   label used to be an HTML overlay at a fixed 10px, which meant it was the same
+   size on a 64-pixel thumbnail and a 248-pixel panel, and clamped mid-word by
+   the browser. In the SVG it scales with the box and wraps where the words are. */
+.cover-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cover-art text { font-family: inherit; }
 .cover.quilt { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .quilt-cell { position: relative; overflow: hidden; }
+.quilt-type { z-index: 1; }
 .td .cover.thumb { border-radius: 2px; margin-right: 1px; }
 .sidebar .pl-art { border-radius: 2px; }
 

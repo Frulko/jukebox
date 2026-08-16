@@ -78,7 +78,7 @@ export function HomeView({
           <div className="home-strip">
             {played.map((pl) => (
               <button key={pl.id} className="home-card" onClick={() => onOpenPlaylist(pl.id, pl.smart)}>
-                <PlaylistCover seed={`${pl.id} ${pl.name}`} size={120} />
+                <PlaylistCover seed={`${pl.id} ${pl.name}`} size={120} label={pl.name} />
                 <span className="t">{pl.name}</span>
                 <span className="s">{pl.trackCount.toLocaleString('en-US')} tracks</span>
               </button>
