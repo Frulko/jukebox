@@ -1580,3 +1580,20 @@ input[type="range"]::-webkit-slider-thumb {
 .tr.unavailable .td:not(.status) { opacity: .5; }
 /* File formats are tokens, not prose: tabular so a column of them lines up. */
 .format { font-variant-numeric: tabular-nums; letter-spacing: .02em; font-size: .95em; }
+
+/* The format column's filter handle: quiet until it is doing something, then
+   accented — a filter you forgot you set is how a library looks empty. */
+.th-filter {
+  border: 0;
+  background: none;
+  color: var(--head-text);
+  opacity: .55;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 1;
+}
+.th-filter:hover { opacity: 1; }
+.th-filter.on { opacity: 1; color: var(--accent); }
+.ctx-empty { padding: 3px 10px; color: var(--dim); font-size: 11px; }
+.ctx button em { margin-left: auto; padding-left: 12px; font-style: normal; }
+.ctx button { display: flex; align-items: center; width: 100%; }

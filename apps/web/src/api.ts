@@ -178,6 +178,7 @@ export function useTrackQuery(input: {
   view: { kind: string; id: string; smart?: string }
   search: string
   browse: { genre: string | null; artist: string | null; album: string | null }
+  format?: string | null
   sort?: TrackQuery['sort']
   deviceFilter?: { deviceId: string; mode: 'on' | 'not' } | null
 }): TrackQuery {
@@ -187,6 +188,7 @@ export function useTrackQuery(input: {
     if (input.browse.genre) q.genre = input.browse.genre
     if (input.browse.artist) q.artist = input.browse.artist
     if (input.browse.album) q.album = input.browse.album
+    if (input.format) q.format = input.format
     if (input.view.kind === 'library' && input.view.id !== 'music') q.kind = input.view.id as never
     if (input.deviceFilter) {
       if (input.deviceFilter.mode === 'on') q.onDevice = input.deviceFilter.deviceId
@@ -194,5 +196,5 @@ export function useTrackQuery(input: {
     }
     return q
   }, [input.view.kind, input.view.id, input.search, input.browse.genre, input.browse.artist,
-      input.browse.album, input.sort, input.deviceFilter?.deviceId, input.deviceFilter?.mode])
+      input.browse.album, input.format, input.sort, input.deviceFilter?.deviceId, input.deviceFilter?.mode])
 }

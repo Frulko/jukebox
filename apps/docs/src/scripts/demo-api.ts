@@ -33,6 +33,7 @@ function match(t: Track, q: TrackQuery) {
   if (q.genre && t.genre !== q.genre) return false
   if (q.artist && t.albumArtist !== q.artist && t.artist !== q.artist) return false
   if (q.album && t.album !== q.album) return false
+  if (q.format && t.format.toLowerCase() !== q.format.toLowerCase()) return false
   if (q.q) {
     const needle = norm(q.q)
     if (![t.name, t.artist, t.album, t.albumArtist, t.genre].some((f) => norm(f).includes(needle))) return false
@@ -73,6 +74,9 @@ function facets(q: TrackQuery) {
     genres: count(base, (t) => t.genre),
     artists: count(byGenre, (t) => t.albumArtist),
     albums: count(byArtist, (t) => t.album),
+    // Not cascaded, on purpose: computed through the format filter, picking
+    // FLAC would leave FLAC as the only choice.
+    formats: count(tracks, (t) => t.format),
   }
 }
 

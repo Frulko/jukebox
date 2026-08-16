@@ -28,6 +28,11 @@ type Props = {
   devices: { id: string; name: string }[]
   /** Sources the server reports. A track from anywhere else cannot be played. */
   sourceIds: string[]
+  /** The format being filtered on, or null for all of them. */
+  format: string | null
+  /** What the library actually holds, with counts. Never a hardcoded list. */
+  formats: { value: string; count: number }[]
+  onFormat: (format: string | null) => void
   playlists: Playlist[]
   nowPlaying: string | null
   /** The second argument is the queue this play starts from, in the order shown. */
@@ -57,7 +62,7 @@ export function TrackList(p: Props) {
     (stored, fresh) => [...stored.filter((id) => fresh.includes(id)), ...fresh.filter((id) => !stored.includes(id))],
   )
   const [columnSizing, setColumnSizing] = usePersisted<Record<string, number>>('jukebox.sizes', {})
-  const [menu, setMenu] = useState<{ x: number; y: number; kind: 'row' | 'header' } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: 'row' | 'header' | 'format' } | null>(null)
   const [dropRow, setDropRow] = useState<number | null>(null)
   const [dragCol, setDragCol] = useState<string | null>(null)
   const anchor = useRef<string | null>(null)
@@ -253,7 +258,7 @@ export function TrackList(p: Props) {
   }
 
   /* ---- context menu ---- */
-  const openMenu = (e: React.MouseEvent, kind: 'row' | 'header') => {
+  const openMenu = (e: React.MouseEvent, kind: 'row' | 'header' | 'format') => {
     e.preventDefault()
     setMenu({ x: e.clientX, y: e.clientY, kind })
   }
@@ -297,6 +302,19 @@ export function TrackList(p: Props) {
               >
                 <table.FlexRender header={header} />
               </span>
+              {header.column.id === 'format' && (
+                <button
+                  className={`th-filter ${p.format ? 'on' : ''}`}
+                  title={p.format ? `Showing ${p.format.toUpperCase()} only` : 'Filter by format'}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openMenu(e, 'format')
+                  }}
+                >
+                  ▾
+                </button>
+              )}
               {sorted && <b className={`sort-arrow ${sorted}`} />}
               {header.column.getCanResize() && (
                 <span
@@ -367,7 +385,28 @@ export function TrackList(p: Props) {
 
       {menu && (
         <div className="ctx" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
-          {menu.kind === 'header' ? (
+          {menu.kind === 'format' ? (
+            <>
+              <div className="ctx-title">Format</div>
+              <button
+                className={p.format ? '' : 'on'}
+                onClick={() => (p.onFormat(null), setMenu(null))}
+              >
+                All formats
+              </button>
+              {p.formats.length === 0 && <div className="ctx-empty">Nothing scanned yet</div>}
+              {p.formats.map((f) => (
+                <button
+                  key={f.value}
+                  className={p.format === f.value ? 'on' : ''}
+                  onClick={() => (p.onFormat(f.value), setMenu(null))}
+                >
+                  {f.value.toUpperCase()}
+                  <em className="dim">{f.count.toLocaleString('en-US')}</em>
+                </button>
+              ))}
+            </>
+          ) : menu.kind === 'header' ? (
             <>
               <div className="ctx-title">View Options</div>
               {columnOrder

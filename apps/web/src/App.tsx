@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
 import {
-  api, useDevices, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
+  api, useDevices, useFacets, useJobs, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
   useTrackQuery, useTracks, useUpdateTracks,
 } from './api'
 import { useAudio } from './audio'
@@ -45,6 +45,7 @@ export default function App() {
   const [view, setView] = useState<View>({ kind: 'library', id: 'music' })
   const [browse, setBrowse] = useState<Browse>({ genre: null, artist: null, album: null })
   const [browserOpen, setBrowserOpen] = useState(true)
+  const [format, setFormat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
@@ -104,7 +105,14 @@ export default function App() {
    * locally can end up rendering three, and the UI looks empty while 40,000
    * tracks are still sitting behind it.
    */
-  const query = useTrackQuery({ view, search, browse, deviceFilter })
+  const query = useTrackQuery({ view, search, browse, format, deviceFilter })
+  // Which formats the library holds is asked without the format filter applied:
+  // computed through it, picking FLAC would leave FLAC as the only choice.
+  const formatQuery = useMemo(() => {
+    const { format: _skip, ...rest } = query
+    return rest
+  }, [query])
+  const formats = useFacets(formatQuery).data?.formats ?? []
   const libraryPage = useTracks(query, view.kind === 'library' && view.id === 'music')
   const playlistPage = usePlaylistTracks(view.kind === 'playlist' ? view.id : null, query)
 
@@ -415,6 +423,9 @@ export default function App() {
                 key={viewKey}
                 viewKey={viewKey}
                 sourceIds={sourceIds}
+                format={format}
+                formats={formats}
+                onFormat={setFormat}
                 rowHeight={THEME_ROW_H[theme]}
                 showArtwork={theme !== 'classic'}
                 devices={devices}
