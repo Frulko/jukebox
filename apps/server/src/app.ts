@@ -13,6 +13,7 @@ import { makeWritebackHandler } from './writeback.ts'
 import { makeAcquireHandler } from './acquire.ts'
 import { makeSyncHandler, planSync } from './sync.ts'
 import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
+import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandler } from './podcasts.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, playlistTracks, smartTracks, tracksDelta,
 } from './library.ts'
@@ -33,6 +34,7 @@ export function createApp(dbFile: string) {
   jobs.register('writeback', makeWritebackHandler(db))
   jobs.register('acquire', makeAcquireHandler(db))
   jobs.register('sync', makeSyncHandler(db))
+  jobs.register('podcast', makePodcastHandler(db))
   jobs.start()
   const scheduler = new Scheduler(db, jobs)
   scheduler.start()
@@ -246,6 +248,75 @@ export function createApp(dbFile: string) {
   api.delete('/jobs/:id', (c) => {
     const job = jobs.cancel(c.req.param('id'))
     return job ? c.json(publicJob(job)) : fail(c, 404, 'not_found', 'unknown job')
+  })
+
+  /* ---------------- podcasts ---------------- */
+
+  api.get('/podcasts', (c) => withETag(c, { items: listPodcasts(db) }))
+
+  api.post('/podcasts', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.feedUrl) return fail(c, 400, 'bad_body', 'expected { feedUrl }')
+    try {
+      // Rejected here rather than on the first refresh: a typo in a feed URL
+      // should be an error at the moment it is typed.
+      const u = new URL(b.feedUrl)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('scheme')
+    } catch {
+      return fail(c, 400, 'bad_feed_url', 'expected an http or https URL')
+    }
+    if (b.cron && !parseCron(b.cron)) {
+      return fail(c, 400, 'bad_cron', `not a five-field cron expression: ${b.cron}`)
+    }
+    if (db.prepare(`SELECT id FROM podcasts WHERE feedUrl = ? AND deletedAt IS NULL`).get(b.feedUrl)) {
+      return fail(c, 409, 'already_subscribed', 'already subscribed to this feed')
+    }
+
+    const p = createPodcast(db, b)
+    // Fetched immediately: a subscription that shows nothing until the next
+    // scheduled refresh looks broken.
+    const job = jobs.create('podcast', { podcastId: p.id }, { idempotencyKey: `podcast-${p.id}` })
+    return c.json({ ...p, job: publicJob(job) }, 201)
+  })
+
+  api.get('/podcasts/:id', (c) => {
+    const p = getPodcast(db, c.req.param('id'))
+    return p ? c.json(p) : fail(c, 404, 'not_found', 'unknown podcast')
+  })
+
+  api.patch('/podcasts/:id', async (c) => {
+    const id = c.req.param('id')
+    if (!getPodcast(db, id)) return fail(c, 404, 'not_found', 'unknown podcast')
+    const b = await c.req.json().catch(() => ({}))
+    if (b.cron !== undefined && b.cron !== null && !parseCron(b.cron)) {
+      return fail(c, 400, 'bad_cron', `not a five-field cron expression: ${b.cron}`)
+    }
+    const ALLOWED = ['title', 'cron', 'keepLast', 'autoDownload', 'targetSourceId', 'targetPath'] as const
+    const cols = ALLOWED.filter((k) => b[k] !== undefined)
+    if (!cols.length) return fail(c, 400, 'no_field', 'no editable field')
+    const values = cols.map((k) => (k === 'autoDownload' ? (b[k] ? 1 : 0) : b[k]))
+    db.prepare(`UPDATE podcasts SET ${cols.map((k) => `${k} = ?`).join(', ')}, rev = ? WHERE id = ?`)
+      .run(...([...values, nextRev(db), id] as never[]))
+    return c.json(getPodcast(db, id))
+  })
+
+  api.delete('/podcasts/:id', (c) => {
+    const r = db.prepare(`UPDATE podcasts SET deletedAt = ?, rev = ? WHERE id = ? AND deletedAt IS NULL`)
+      .run(Date.now(), nextRev(db), c.req.param('id'))
+    return r.changes ? c.body(null, 204) : fail(c, 404, 'not_found', 'unknown podcast')
+  })
+
+  api.get('/podcasts/:id/episodes', (c) => {
+    const id = c.req.param('id')
+    if (!getPodcast(db, id)) return fail(c, 404, 'not_found', 'unknown podcast')
+    return c.json(listEpisodes(db, id, { cursor: c.req.query('cursor'), limit: c.req.query('limit') }))
+  })
+
+  api.post('/podcasts/:id/refresh', (c) => {
+    const id = c.req.param('id')
+    if (!getPodcast(db, id)) return fail(c, 404, 'not_found', 'unknown podcast')
+    const job = jobs.create('podcast', { podcastId: id }, { idempotencyKey: `podcast-${id}` })
+    return c.json(publicJob(job), 202)
   })
 
   /* ---------------- schedules ---------------- */

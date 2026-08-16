@@ -103,8 +103,10 @@ hands out a URL.
 
 ## M6 · Podcasts and radios
 
-- [ ] **6.1** Podcasts — folder or RSS feed, covers, metadata, manual editing
-- [ ] **6.2** Per-feed cron + `keepLast: N` · **6.3** Destination set in the settings
+- [x] **6.1** Podcasts — RSS subscription with conditional GET, episodes keyed by guid,
+      channel metadata and artwork from the feed
+- [x] **6.2** Per-feed cron + `keepLast: N` — pruning clears the file, keeps the episode row
+- [ ] **6.3** Destination set in the settings UI (the API takes `targetSourceId` already)
 - [ ] **6.4** Radios CRUD · **6.5** Auto cover (favicon, ICY, Radio-Browser) or upload
 
 ## M7 · Distribution

@@ -204,6 +204,50 @@ export type Schedule = {
   lastJobId: string | null
 }
 
+export type Podcast = {
+  id: string
+  feedUrl: string
+  title: string
+  description: string
+  author: string
+  imageUrl: string | null
+  siteUrl: string | null
+  /** Per-feed refresh. `null` means manual only. */
+  cron: string | null
+  /** Newest N downloaded episodes kept on disk. 0 keeps every one. */
+  keepLast: number
+  autoDownload: 0 | 1
+  targetSourceId: string | null
+  targetPath: string
+  lastFetchAt: number | null
+  /** Why the last refresh failed. A feed dead for a month should say so. */
+  lastError: string | null
+  episodeCount: number
+  downloadedCount: number
+}
+
+export type Episode = {
+  id: string
+  podcastId: string
+  /** The feed's identity for this episode. Never the URL — those get rewritten. */
+  guid: string
+  title: string
+  description: string
+  pubDate: number | null
+  duration: number
+  episodeNumber: number | null
+  season: number | null
+  enclosureUrl: string | null
+  enclosureLength: number
+  enclosureType: string
+  imageUrl: string | null
+  /** Set once downloaded into the library. */
+  trackId: string | null
+  played: 0 | 1
+  /** Resume point in seconds. */
+  position: number
+}
+
 /** Cursor pagination. `next` of `null` means: last page. */
 export type Page<T> = { items: T[]; next: string | null; revision?: number }
 

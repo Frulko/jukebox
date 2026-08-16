@@ -177,6 +177,54 @@ CREATE TABLE IF NOT EXISTS job_items (
   PRIMARY KEY (jobId, idx)
 );
 
+CREATE TABLE IF NOT EXISTS podcasts (
+  id             TEXT PRIMARY KEY,
+  feedUrl        TEXT NOT NULL UNIQUE,
+  title          TEXT NOT NULL DEFAULT '',
+  description    TEXT NOT NULL DEFAULT '',
+  author         TEXT NOT NULL DEFAULT '',
+  imageUrl       TEXT,
+  siteUrl        TEXT,
+  cron           TEXT,                        -- per-feed refresh; NULL = manual only
+  keepLast       INTEGER NOT NULL DEFAULT 0,  -- 0 = keep every downloaded episode
+  autoDownload   INTEGER NOT NULL DEFAULT 0,
+  targetSourceId TEXT REFERENCES sources(id),
+  targetPath     TEXT NOT NULL DEFAULT 'Podcasts',
+  -- Kept from the last fetch so the next one can be conditional. A feed polled
+  -- hourly that has not changed should cost a 304 and no body.
+  etag           TEXT,
+  lastModified   TEXT,
+  lastFetchAt    INTEGER,
+  lastError      TEXT,
+  createdAt      INTEGER NOT NULL,
+  rev            INTEGER NOT NULL,
+  deletedAt      INTEGER
+);
+
+-- The guid identifies an episode, never the URL: a feed moving to a new CDN
+-- rewrites every enclosure URL and keeps its guids.
+CREATE TABLE IF NOT EXISTS episodes (
+  id              TEXT PRIMARY KEY,
+  podcastId       TEXT NOT NULL REFERENCES podcasts(id) ON DELETE CASCADE,
+  guid            TEXT NOT NULL,
+  title           TEXT NOT NULL DEFAULT '',
+  description     TEXT NOT NULL DEFAULT '',
+  pubDate         INTEGER,
+  duration        INTEGER NOT NULL DEFAULT 0,
+  episodeNumber   INTEGER,
+  season          INTEGER,
+  enclosureUrl    TEXT,
+  enclosureLength INTEGER NOT NULL DEFAULT 0,
+  enclosureType   TEXT NOT NULL DEFAULT '',
+  imageUrl        TEXT,
+  trackId         TEXT REFERENCES tracks(id) ON DELETE SET NULL,  -- set once downloaded
+  played          INTEGER NOT NULL DEFAULT 0,
+  position        INTEGER NOT NULL DEFAULT 0,   -- resume point, seconds
+  rev             INTEGER NOT NULL,
+  UNIQUE (podcastId, guid)
+);
+CREATE INDEX IF NOT EXISTS ep_by_date ON episodes (podcastId, pubDate DESC, id);
+
 -- Scheduled work: the overnight sync, the podcast refresh. The cron expression
 -- is stored as written rather than as a computed next-fire time, so a schedule
 -- means the same thing across a restart and across a DST boundary.

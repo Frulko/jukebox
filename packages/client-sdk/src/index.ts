@@ -1,6 +1,7 @@
 import type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  JobItem, JobItemsPage, JobItemState, JobKind, Schedule, Source, SyncPlan, Track, TrackPatch, TrackQuery,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Schedule, Source, SyncPlan,
+  Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 } from '@jukebox/api-types'
 
@@ -146,6 +147,20 @@ export function createClient(opts: ClientOptions = {}) {
         request<JobItemsPage>(`/jobs/${id}/items${qs(q)}`),
     },
 
+    podcasts: {
+      list: () => request<{ items: Podcast[] }>('/podcasts', {}, true),
+      get: (id: string) => request<Podcast>(`/podcasts/${id}`),
+      /** Subscribes and fetches straight away — a feed showing nothing looks broken. */
+      subscribe: (p: { feedUrl: string; cron?: string | null; keepLast?: number; autoDownload?: boolean; targetSourceId?: string; targetPath?: string }) =>
+        request<Podcast & { job: Job }>('/podcasts', { method: 'POST', body: JSON.stringify(p) }),
+      update: (id: string, patch: Partial<Pick<Podcast, 'title' | 'cron' | 'keepLast' | 'targetSourceId' | 'targetPath'>> & { autoDownload?: boolean }) =>
+        request<Podcast>(`/podcasts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+      unsubscribe: (id: string) => request<void>(`/podcasts/${id}`, { method: 'DELETE' }),
+      episodes: (id: string, q: { cursor?: string; limit?: number } = {}) =>
+        request<Page<Episode>>(`/podcasts/${id}/episodes${qs(q)}`),
+      refresh: (id: string) => request<Job>(`/podcasts/${id}/refresh`, { method: 'POST' }),
+    },
+
     schedules: {
       list: () => request<{ items: Schedule[] }>('/schedules', {}, true),
       create: (s: { name: string; cron: string; kind: JobKind; payload?: unknown; enabled?: boolean }) =>
@@ -228,6 +243,7 @@ export function createClient(opts: ClientOptions = {}) {
 export type Client = ReturnType<typeof createClient>
 export type {
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  JobItem, JobItemsPage, JobItemState, JobKind, Schedule, Source, SyncPlan, Track, TrackPatch, TrackQuery,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, Podcast, Schedule, Source, SyncPlan,
+  Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }
