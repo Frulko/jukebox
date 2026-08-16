@@ -2186,3 +2186,28 @@ input[type="range"]::-webkit-slider-thumb {
 .book-foot { display: flex; align-items: center; gap: 10px; flex: none; padding: 8px 11px; border-top: 1px solid var(--line-soft); }
 .audiobooks .show .meta .s:last-child { color: var(--dim); }
 .ep .c-dot .spk { color: var(--accent); }
+
+/* ---------------- radio stations ----------------
+   A station is not a track: no length, no queue, no next. The row is built
+   around what you actually do with one — play it, correct what the probe got
+   wrong, and remove it. */
+.radio-add { display: flex; gap: 6px; flex: 1; margin-left: 12px; }
+.radio-add input { flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 3px 6px; }
+.radio-genre { margin-bottom: 14px; }
+.radio-genre h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; font-size: 12px; }
+.radio-genre h3 em { font-style: normal; font-size: 10px; }
+.station { display: flex; align-items: center; gap: 8px; padding: 5px 9px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel); margin-bottom: 5px; }
+.station.playing { border-color: var(--accent); }
+.station .spacer { flex: 1; }
+.station .st-name { font-weight: 600; }
+.station.playing .st-name { color: var(--accent); }
+.station .st-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch; font-size: 11px; }
+.station .st-play { flex: none; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.station .st-fav { color: var(--dim); }
+.station .st-fav.on { color: var(--accent); }
+.station .st-home { font-size: 11px; color: var(--dim); text-decoration: none; }
+.station .st-home:hover { color: var(--accent); text-decoration: underline; }
+.station .st-rename { flex: 1; max-width: 220px; font: inherit; padding: 1px 4px; }
+.station button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
+.radio-note { margin: 6px 0 18px; padding: 9px 11px; border-radius: var(--radius); background: var(--stripe); color: var(--dim); line-height: 1.55; }
+.radio-note b { color: var(--text); }

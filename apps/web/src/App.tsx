@@ -16,7 +16,8 @@ import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
-import { AppsView, mediaSummary, RadioView, StoreView } from './MediaViews'
+import { AppsView, mediaSummary, StoreView } from './MediaViews'
+import { RadioView } from './RadioView'
 import { AudiobooksView } from './AudiobooksView'
 import { episodeAsTrack, hostOf, PodcastsView } from './PodcastsView'
 import { MissingView } from './MissingView'
@@ -412,10 +413,11 @@ export default function App() {
     // whichever comes first, never under thirty seconds. The front only reports
     // what was heard; a play count that the client could set is not a fact.
     onPlayed: (id, seconds, startedAt) => {
-      // A podcast episode that is only in its feed has no track behind it, so
-      // there is nothing to count a play against. The server would refuse the
-      // id anyway; not asking is the honest version of the same answer.
-      if (id.startsWith('ep:')) return
+      // A podcast episode that is only in its feed, or a radio station, has no
+      // track behind it — there is nothing to count a play against. The server
+      // would refuse the id anyway; not asking is the honest version of the
+      // same answer.
+      if (id.startsWith('ep:') || id.startsWith('radio:')) return
       api.tracks
         .play(id, seconds, startedAt)
         .then((r) => {
@@ -467,6 +469,38 @@ export default function App() {
       setNotice(`Streaming “${ep.title}” from ${hostOf(ep.enclosureUrl)} — it is not in your library`)
     },
     [audio, playTrack],
+  )
+
+  /**
+   * A radio station.
+   *
+   * Like an undownloaded episode: a URL rather than a library track, so it
+   * plays outside the queue — and unlike everything else here it has no end, so
+   * nothing steps to a next. The id is prefixed for the same reason: anything
+   * tempted to send it to the server has to notice it is not a track.
+   */
+  const playStation = useCallback(
+    (station: { id: string; name: string; streamUrl: string; genre: string; imageUrl: string | null }) => {
+      const id = `radio:${station.id}`
+      audio.play(id, station.streamUrl)
+      setNowPlaying(id)
+      setPlayingEpisode({
+        ...episodeAsTrack(
+          {
+            id: station.id, podcastId: '', guid: '', title: station.name, description: '',
+            pubDate: null, duration: 0, episodeNumber: null, season: null,
+            enclosureUrl: station.streamUrl, enclosureLength: 0, enclosureType: '',
+            imageUrl: station.imageUrl, trackId: null, played: 0, position: 0,
+          },
+          { title: station.genre || 'Radio', author: 'Live', imageUrl: station.imageUrl } as never,
+        ),
+        id,
+        kind: 'music',
+        album: station.genre || 'Radio',
+      })
+      setNotice(`Tuned to ${station.name} — it plays until you stop it`)
+    },
+    [audio],
   )
 
   /**
@@ -698,7 +732,14 @@ export default function App() {
       <AudiobooksView search={search} nowPlaying={nowPlaying} onPlay={playTrack} actions={trackActions} />
     ),
     apps: <AppsView search={search} />,
-    radio: <RadioView search={search} />,
+    radio: (
+      <RadioView
+        search={search}
+        nowPlaying={nowPlaying}
+        onPlayStream={playStation}
+        onNotice={setNotice}
+      />
+    ),
     missing: <MissingView />,
     admin: <AdminView />,
     sources: <SourcesView onNotice={setNotice} />,

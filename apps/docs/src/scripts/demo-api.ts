@@ -10,8 +10,8 @@
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
 import type {
-  Device, DeviceTrack, Episode, Job, MissingTrack, Playlist, Podcast, Source, Stats, SyncPlan, Track,
-  TrackQuery,
+  Device, DeviceTrack, Episode, Job, MissingTrack, Playlist, Podcast, Radio, Source, Stats, SyncPlan,
+  Track, TrackQuery,
 } from '@jukebox/api-types'
 
 const all = makeLibrary()
@@ -399,6 +399,23 @@ for (const [book, author, chapters] of [
   }
 }
 
+/** A handful of stations, as the server stores them. */
+const RADIOS: Radio[] = [
+  { id: 'r-1', name: 'FIP', streamUrl: 'https://icecast.radiofrance.fr/fip-midfi.mp3',
+    homepageUrl: 'https://www.fip.fr', imageUrl: null, genre: 'Eclectic', country: 'FR',
+    bitrate: 128, codec: 'mp3', favorite: 1 },
+  { id: 'r-2', name: 'NTS 1', streamUrl: 'https://stream-relay-geo.ntslive.net/stream',
+    homepageUrl: 'https://www.nts.live', imageUrl: null, genre: 'Eclectic', country: 'GB',
+    bitrate: 128, codec: 'mp3', favorite: 0 },
+  { id: 'r-3', name: 'SomaFM Groove Salad', streamUrl: 'https://ice1.somafm.com/groovesalad-128-mp3',
+    homepageUrl: 'https://somafm.com', imageUrl: null, genre: 'Ambient', country: 'US',
+    bitrate: 128, codec: 'mp3', favorite: 0 },
+  // One with nothing known, which is what a station added from a bare URL that
+  // did not answer looks like.
+  { id: 'r-4', name: 'http://stream.example.invalid/live', streamUrl: 'http://stream.example.invalid/live',
+    homepageUrl: null, imageUrl: null, genre: '', country: '', bitrate: 0, codec: '', favorite: 0 },
+]
+
 const SOURCES: Source[] = [
   // With its mount, as the real route reports it: a UI that can say "this share
   // is not mounted" instead of showing an empty library needs the answer to
@@ -762,6 +779,54 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     }
     SOURCES.push(added)
     return added
+  }
+  if (path === '/radios' && method === 'GET') return { items: RADIOS }
+  if (path === '/radios' && method === 'POST') {
+    const b = JSON.parse(body ?? '{}') as { streamUrl?: string }
+    let host = ''
+    try {
+      host = new URL(b.streamUrl ?? '').hostname
+    } catch {
+      throw new DemoError(400, 'bad_stream_url', 'expected an http or https URL')
+    }
+    // The server probes the stream and fills what it learns; the demo invents
+    // the same shape, including the case where nothing answered.
+    const answered = !host.includes('invalid')
+    const made = {
+      id: `r-${RADIOS.length + 1}`,
+      name: answered ? host.replace(/^www\./, '') : (b.streamUrl ?? ''),
+      streamUrl: b.streamUrl ?? '',
+      homepageUrl: answered ? `https://${host}` : null,
+      imageUrl: null,
+      genre: answered ? 'Unfiled' : '',
+      country: answered ? 'FR' : '',
+      bitrate: answered ? 128 : 0,
+      codec: answered ? 'mp3' : '',
+      favorite: 0 as 0 | 1,
+    }
+    RADIOS.push(made)
+    return { ...made, probeError: answered ? null : 'the stream did not answer' }
+  }
+  const radio = path.match(/^\/radios\/([^/]+)$/)
+  if (radio && method === 'PATCH') {
+    const r = RADIOS.find((x) => x.id === radio[1])
+    if (!r) return undefined
+    Object.assign(r, JSON.parse(body ?? '{}'))
+    return r
+  }
+  if (radio && method === 'DELETE') {
+    const i = RADIOS.findIndex((x) => x.id === radio[1])
+    if (i >= 0) RADIOS.splice(i, 1)
+    return null
+  }
+  const radioProbe = path.match(/^\/radios\/([^/]+)\/discover$/)
+  if (radioProbe && method === 'POST') {
+    const r = RADIOS.find((x) => x.id === radioProbe[1])
+    if (!r) return undefined
+    // Fills blanks only, like the real one: it never undoes a rename.
+    if (!r.genre) r.genre = 'Unfiled'
+    if (!r.bitrate) r.bitrate = 128
+    return { ...r, probeError: null }
   }
   if (path === '/podcasts') return { items: FEEDS }
   if (path === '/tracks/tags' && method === 'POST') {
