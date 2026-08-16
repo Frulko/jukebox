@@ -531,7 +531,12 @@ export default function App() {
                 />
               ) : (
               <TrackList
-                key={viewKey}
+                // No `key` on purpose: keying the list on the view remounted
+                // the whole table on every navigation — header, columns,
+                // virtualiser and all — and that remount is the flash. What it
+                // was buying is smaller than what it cost: the scroll position,
+                // which viewState keys itself, and the selection, which the
+                // list now clears when the view changes.
                 viewKey={viewKey}
                 sourceIds={sourceIds}
                 format={format}

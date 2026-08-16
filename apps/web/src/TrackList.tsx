@@ -131,6 +131,14 @@ export function TrackList(p: Props) {
     overscan: 12,
   })
 
+  // The list is no longer remounted per view, so what the remount used to reset
+  // has to be reset here: a selection belongs to the list you made it in.
+  useLayoutEffect(() => {
+    table.resetRowSelection()
+    anchor.current = null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.viewKey])
+
   // A plugin answered with tracks: show them as a selection rather than as a
   // playlist nobody asked to keep.
   useLayoutEffect(() => {
