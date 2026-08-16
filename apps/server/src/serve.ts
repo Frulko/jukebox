@@ -25,6 +25,9 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     jobs.stop()
     scheduler.stop()
+    // Plugins get told too: one holding a socket open would otherwise keep the
+    // process from closing cleanly, and its own `deactivate` never runs.
+    void Promise.all(plugins.active().map((id) => plugins.deactivate(id)))
     server.close(() => process.exit(0))
   })
 }

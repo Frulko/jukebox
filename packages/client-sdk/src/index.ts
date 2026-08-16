@@ -93,6 +93,16 @@ export function createClient(opts: ClientOptions = {}) {
       /** Fetches only what changed since `since`. The main network win. */
       delta: (since: number, limit = 500) => request<TracksDelta>(`/tracks/delta${qs({ since, limit })}`),
       get: (id: string) => request<Track>(`/tracks/${id}`),
+      /**
+       * Records that a track was listened to. Half its length or four minutes,
+       * whichever comes first, and never under thirty seconds — anything less
+       * is recorded as a skip. `startedAt` matters for a client that was
+       * offline: the scrobble carries the time it actually happened.
+       */
+      play: (id: string, played: number, startedAt?: number) =>
+        request<{ counted: boolean; playCount?: number; reason?: string }>(`/tracks/${id}/play`, {
+          method: 'POST', body: JSON.stringify({ played, startedAt }),
+        }),
       /** Tracks whose file has gone. They keep their ratings and come back on rescan. */
       missing: (limit = 200) => request<{ items: MissingTrack[] }>(`/tracks/missing?limit=${limit}`),
       /**

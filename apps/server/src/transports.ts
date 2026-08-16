@@ -101,8 +101,14 @@ export class Resources {
         return socket
       },
 
+      // Unref'd, both of them. A plugin polling every minute must never be the
+      // reason the process refuses to exit: without this, a single scrobbler
+      // keeps the event loop alive and SIGTERM hangs until someone kills it.
+      // They still fire normally for as long as the server is up, which is the
+      // whole of what a plugin needs.
       setInterval: (fn, ms) => {
         const t = setInterval(fn, ms)
+        t.unref?.()
         if (this.#closed) clearInterval(t)
         else this.#timers.add(t)
         return t
@@ -112,6 +118,7 @@ export class Resources {
           this.#timers.delete(t)
           fn()
         }, ms)
+        t.unref?.()
         if (this.#closed) clearTimeout(t)
         else this.#timers.add(t)
         return t

@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import type { DB } from './db.ts'
 import type { JobQueue } from './jobs.ts'
 import { Resources, type Transports } from './transports.ts'
+import type { Events, PlayEvent } from './plays.ts'
 
 /**
  * The plugin host.
@@ -133,12 +134,22 @@ export type Host = {
    * off.
    */
   net: Transports
+  /**
+   * Server events. Currently `play`, which is what a scrobbler needs.
+   *
+   * The returned function unsubscribes, and the host calls it for you when the
+   * plugin stops — a listener that outlives its plugin fires into code that is
+   * no longer there.
+   */
+  on: (event: 'play', handler: (e: PlayEvent) => void) => () => void
 }
 
 type Loaded = {
   manifest: Manifest
   module: { activate?: (host: Host) => unknown; deactivate?: () => unknown }
   resources: Resources
+  /** Unsubscribers for every listener the plugin registered. */
+  off: (() => void)[]
 }
 
 const hydrate = (r: any): Plugin => ({
@@ -165,10 +176,13 @@ export class PluginHost {
   #root: string
   #loaded = new Map<string, Loaded>()
 
-  constructor(db: DB, jobs: JobQueue, root: string) {
+  #events: Events
+
+  constructor(db: DB, jobs: JobQueue, root: string, events: Events) {
     this.#db = db
     this.#jobs = jobs
     this.#root = resolve(root)
+    this.#events = events
   }
 
   get root(): string {
@@ -264,16 +278,19 @@ export class PluginHost {
       // copy Node already has. Node's module cache has no eviction.
       const module = await import(`${pathToFileURL(entry).href}?v=${row.version}-${Date.now()}`)
       const resources = new Resources()
+      const off: (() => void)[] = []
       // Registered before activation, not after: a plugin whose `activate`
       // throws halfway may already have opened a socket, and that socket still
       // has to be closable.
-      this.#loaded.set(id, { manifest: read.manifest, module, resources })
-      await module.activate?.(this.#hostFor(read.manifest, resources))
+      this.#loaded.set(id, { manifest: read.manifest, module, resources, off })
+      await module.activate?.(this.#hostFor(read.manifest, resources, off))
       this.#db.prepare(`UPDATE plugins SET state = 'active', error = NULL WHERE id = ?`).run(id)
     } catch (err) {
       // Whatever it opened before throwing goes too, or a plugin that fails on
       // every restart accumulates sockets each time.
-      this.#loaded.get(id)?.resources.closeAll()
+      const partial = this.#loaded.get(id)
+      for (const off of partial?.off ?? []) off()
+      partial?.resources.closeAll()
       this.#loaded.delete(id)
       this.#db.prepare(`UPDATE plugins SET state = 'failed', error = ? WHERE id = ?`)
         .run(err instanceof Error ? err.message : String(err), id)
@@ -291,6 +308,7 @@ export class PluginHost {
     }
     // After the plugin's own cleanup, and regardless of whether it threw: a
     // plugin that fails to tidy up is exactly the one whose sockets must go.
+    for (const off of loaded.off) off()
     loaded.resources.closeAll()
     this.#loaded.delete(id)
     this.#db.prepare(`UPDATE plugins SET state = 'disabled' WHERE id = ?`).run(id)
@@ -311,7 +329,7 @@ export class PluginHost {
     return getPlugin(this.#db, id)
   }
 
-  #hostFor(manifest: Manifest, resources: Resources): Host {
+  #hostFor(manifest: Manifest, resources: Resources, off: (() => void)[]): Host {
     const db = this.#db
     const jobs = this.#jobs
     return {
@@ -323,6 +341,12 @@ export class PluginHost {
         db.prepare(`UPDATE plugins SET config = ? WHERE id = ?`).run(JSON.stringify(next), manifest.id)
       },
       net: resources.transports(),
+      on: (event, handler) => {
+        this.#events.on(event, handler)
+        const unsubscribe = () => this.#events.off(event, handler)
+        off.push(unsubscribe)
+        return unsubscribe
+      },
       registerJob: (name, handler) => {
         // Namespaced: two plugins registering "sync" must not fight over it, and
         // a plugin must never shadow one of the server's own kinds.

@@ -105,7 +105,10 @@ hands out a URL.
 - [ ] **5.3** Declarative settings (`ui.json`) + UI extension zones
 - [ ] **5.4** Store — git index with tagged releases, permissions shown before install
 - [ ] **5.5** Installed plugins (replaces Purchased)
-- [ ] **5.6** Last.fm scrobble · ListenBrainz · **5.7** AudioMuse · **5.8** Home Assistant + MQTT
+- [x] **5.6b** ListenBrainz scrobbler — the first real plugin, shipped in `plugins/`, with a
+      queue that survives an unreachable server
+- [ ] **5.6** Last.fm scrobble (same shape, plus an MD5-signed parameter dance)
+- [ ] **5.7** AudioMuse · **5.8** Home Assistant + MQTT
 - [ ] **5.9** OpenSubsonic (emitter) · **5.10** Spotify Connect · **5.11** Acquisition
 - [ ] **5.12** Sandboxed iframe for rich UI contributions
 - [ ] **5.13** Extism as an option once the store opens up to unknown authors

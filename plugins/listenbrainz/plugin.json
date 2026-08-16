@@ -1,0 +1,17 @@
+{
+  "id": "listenbrainz",
+  "name": "ListenBrainz",
+  "version": "1.0.0",
+  "hostApi": "^1.0.0",
+  "main": "index.mjs",
+  "description": "Sends your listening history to ListenBrainz.",
+  "author": "jukebox",
+  "permissions": ["network:api.listenbrainz.org", "events:play"],
+  "contributes": {
+    "settings": [
+      { "key": "token", "label": "User token", "type": "password",
+        "help": "From listenbrainz.org/profile — the plugin does nothing until this is set." },
+      { "key": "url", "label": "Server", "type": "text", "default": "https://api.listenbrainz.org" }
+    ]
+  }
+}

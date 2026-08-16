@@ -24,6 +24,7 @@ import { configOf, open as rcOpen, RcloneError } from './rclone.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import { makeOrganizeHandler, makeUndoHandler, planOrganize } from './organize.ts'
 import { getPlugin, HOST_API_VERSION, listPlugins, PluginHost } from './plugins.ts'
+import { Events, recordPlay } from './plays.ts'
 import {
   addTracks, createPlaylist, deletePlaylist, getPlaylist, listPlaylists,
   removeTracks, renamePlaylist, reorder, seedPresets, smartQuery,
@@ -101,7 +102,8 @@ export function createApp(dbFile: string) {
   // awaits it at boot, and a test drives it explicitly. Started here as a
   // floating promise it could still be reading the database after the process
   // that owns it has closed it.
-  const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins')
+  const events = new Events()
+  const plugins = new PluginHost(db, jobs, process.env.JUKEBOX_PLUGINS ?? './plugins', events)
   seedPresets(db)
 
   const app = new Hono()
@@ -161,6 +163,24 @@ export function createApp(dbFile: string) {
          FROM tracks t JOIN sources s ON s.id = t.sourceId
          WHERE t.deletedAt IS NOT NULL ORDER BY t.deletedAt DESC, t.id LIMIT ?`).all(limit),
     })
+  })
+
+  /**
+   * "This was listened to."
+   *
+   * Playback happens in the client, so the server only knows because it is
+   * told. Half the length or four minutes, whichever comes first, and never
+   * under thirty seconds — Last.fm's rule, matched exactly so a play counted
+   * here is a play counted everywhere else. Anything short is recorded as a
+   * skip instead, which is worth knowing too.
+   */
+  api.post('/tracks/:id/play', async (c) => {
+    const b = await c.req.json().catch(() => ({}))
+    if (typeof b?.played !== 'number' || !Number.isFinite(b.played)) {
+      return fail(c, 400, 'bad_body', 'expected { played: seconds }')
+    }
+    const result = recordPlay(db, events, c.req.param('id'), b)
+    return result ? c.json(result) : fail(c, 404, 'not_found', 'unknown track')
   })
 
   api.get('/tracks/:id', (c) => {
@@ -976,5 +996,5 @@ export function createApp(dbFile: string) {
   app.route('/api/v1', api)
   app.notFound((c) => fail(c, 404, 'not_found', 'unknown route'))
 
-  return { app, db, jobs, scheduler, plugins }
+  return { app, db, jobs, scheduler, plugins, events }
 }
