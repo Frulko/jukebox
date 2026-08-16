@@ -58,6 +58,17 @@ function match(t: Track, q: TrackQuery) {
   // "What is already there" and "what is left to sync" — the filter the device
   // chip exists for, and the reason it has to be answered where the whole
   // library is rather than over the page in hand.
+  // `rating=0` filters for never-rated; an absent key filters for nothing. The
+  // difference only survives if the check is against undefined, not falsiness.
+  if (q.rating !== undefined && t.rating !== Number(q.rating)) return false
+  if (q.ratingMin !== undefined && t.rating < Number(q.ratingMin)) return false
+  if (q.lossless !== undefined) {
+    // A query string is all strings, and "false" is truthy — reading this
+    // naively filters for exactly the opposite of what the chip says.
+    const want = String(q.lossless) === 'true'
+    const isLossless = ['flac', 'alac', 'wav', 'aiff'].includes(t.format.toLowerCase())
+    if (isLossless !== want) return false
+  }
   if (q.onDevice && !t.devices.includes(q.onDevice)) return false
   if (q.notOnDevice && t.devices.includes(q.notOnDevice)) return false
   if (q.q) {

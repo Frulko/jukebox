@@ -55,6 +55,8 @@ export default function App() {
   const [browse, setBrowse] = useState<Browse>({ genre: null, artist: null, album: null })
   const [browserOpen, setBrowserOpen] = useState(true)
   const [format, setFormat] = useState<string | null>(null)
+  const [rating, setRating] = useState<string | null>(null)
+  const [lossless, setLossless] = useState<string | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
   const [artOpen, setArtOpen] = useState(false)
   const [recentPlaylists, rememberPlaylist] = useRecentPlaylists()
@@ -134,7 +136,7 @@ export default function App() {
    * locally can end up rendering three, and the UI looks empty while 40,000
    * tracks are still sitting behind it.
    */
-  const query = useTrackQuery({ view, search, browse, format, deviceFilter })
+  const query = useTrackQuery({ view, search, browse, format, rating, lossless, deviceFilter })
   // Which formats the library holds is asked without the format filter applied:
   // computed through it, picking FLAC would leave FLAC as the only choice.
   const formatQuery = useMemo(() => {
@@ -187,6 +189,30 @@ export default function App() {
       emptyHint: 'Nothing scanned yet',
     },
     {
+      id: 'rating',
+      label: 'Rating',
+      value: rating,
+      options: [
+        { value: '5', label: '★★★★★' },
+        { value: '4+', label: '★★★★ and up' },
+        { value: '3+', label: '★★★ and up' },
+        // Not the same question as "no filter", and the one you ask when
+        // tidying: what have I never got round to rating.
+        { value: '0', label: 'Never rated' },
+      ],
+      onChange: setRating,
+    },
+    {
+      id: 'quality',
+      label: 'Quality',
+      value: lossless,
+      options: [
+        { value: 'yes', label: 'Lossless' },
+        { value: 'no', label: 'Lossy' },
+      ],
+      onChange: setLossless,
+    },
+    {
       id: 'device',
       label: 'Device',
       value: deviceFilter ? `${deviceFilter.mode}:${deviceFilter.deviceId}` : null,
@@ -206,6 +232,8 @@ export default function App() {
 
   const clearFilters = () => {
     setFormat(null)
+    setRating(null)
+    setLossless(null)
     setDeviceFilter(null)
   }
 

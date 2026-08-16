@@ -179,6 +179,9 @@ export function useTrackQuery(input: {
   search: string
   browse: { genre: string | null; artist: string | null; album: string | null }
   format?: string | null
+  /** '0'..'5' exact, '4+' for four and up, null for no filter. */
+  rating?: string | null
+  lossless?: string | null
   sort?: TrackQuery['sort']
   deviceFilter?: { deviceId: string; mode: 'on' | 'not' } | null
 }): TrackQuery {
@@ -189,6 +192,13 @@ export function useTrackQuery(input: {
     if (input.browse.artist) q.artist = input.browse.artist
     if (input.browse.album) q.album = input.browse.album
     if (input.format) q.format = input.format
+    // `rating=0` is "never rated", which is a different question from "no
+    // filter" — so the two have to stay distinguishable all the way down.
+    if (input.rating) {
+      if (input.rating.endsWith('+')) q.ratingMin = Number(input.rating.slice(0, -1))
+      else q.rating = Number(input.rating)
+    }
+    if (input.lossless) q.lossless = input.lossless === 'yes'
     // Only the ids that are actually a kind of track. The library also holds
     // places — albums, artists, playlists, missing — and sending one of those
     // as `kind` would ask the server for a kind of music that does not exist.
@@ -201,5 +211,5 @@ export function useTrackQuery(input: {
     }
     return q
   }, [input.view.kind, input.view.id, input.search, input.browse.genre, input.browse.artist,
-      input.browse.album, input.format, input.sort, input.deviceFilter?.deviceId, input.deviceFilter?.mode])
+      input.browse.album, input.format, input.rating, input.lossless, input.sort, input.deviceFilter?.deviceId, input.deviceFilter?.mode])
 }
