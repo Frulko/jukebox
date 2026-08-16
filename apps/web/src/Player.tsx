@@ -7,6 +7,15 @@ import { albumSeed, Cover } from './Artwork'
 export type Repeat = 'off' | 'all' | 'one'
 
 /** What a job is called while it runs, in the display's own voice. */
+/** Where a search applies. Not a filter over one list — a different list. */
+const SCOPES: Array<[string, string]> = [
+  ['music', 'Music'],
+  ['podcasts', 'Podcasts'],
+  ['audiobooks', 'Audiobooks'],
+  ['apps', 'Apps'],
+  ['radio', 'Radio'],
+]
+
 const JOB_LABEL: Record<string, string> = {
   scan: 'Scanning',
   transcode: 'Converting',
@@ -30,6 +39,7 @@ export function Player({
   repeat,
   volume,
   search,
+  scope,
   browserOpen,
   jobs,
   onToggle,
@@ -40,6 +50,7 @@ export function Player({
   onShuffle,
   onRepeat,
   onSearch,
+  onScope,
   onToggleBrowser,
 }: {
   track: Track | null
@@ -51,6 +62,8 @@ export function Player({
   repeat: Repeat
   volume: number
   search: string
+  /** The source the search applies to — one of the library's five. */
+  scope: string
   browserOpen: boolean
   /** Everything else the server is doing. The display cycles through them. */
   jobs: Job[]
@@ -62,6 +75,7 @@ export function Player({
   onShuffle: () => void
   onRepeat: () => void
   onSearch: (s: string) => void
+  onScope: (id: string) => void
   onToggleBrowser: () => void
 }) {
   // Fall back to the tag only until the decoder has read the file.
@@ -79,6 +93,7 @@ export function Player({
     ...jobs.map((j) => ({ key: j.id, job: j })),
   ]
   const [at, setAt] = useState(0)
+  const [scopeOpen, setScopeOpen] = useState(false)
   // A job that finishes takes its slot with it; falling back to what is playing
   // beats leaving the panel on a task that no longer exists.
   useEffect(() => {
@@ -189,7 +204,30 @@ export function Player({
           <Icon name="columns" size={13} />
         </button>
         <div className="search">
-          <Icon name="search" size={10} />
+          <button
+            className="scope"
+            title={`Searching ${SCOPES.find(([id]) => id === scope)?.[1] ?? 'Music'} — click to change`}
+            onClick={() => setScopeOpen((v) => !v)}
+          >
+            <Icon name="search" size={10} />
+            <span className="tri" />
+          </button>
+          {scopeOpen && (
+            <div className="scope-menu" onMouseLeave={() => setScopeOpen(false)}>
+              {SCOPES.map(([id, label]) => (
+                <button
+                  key={id}
+                  className={id === scope ? 'on' : ''}
+                  onClick={() => {
+                    onScope(id)
+                    setScopeOpen(false)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <input value={search} placeholder="Search" onChange={(e) => onSearch(e.target.value)} />
           {search && (
             <button className="clear" onClick={() => onSearch('')} title="Clear">

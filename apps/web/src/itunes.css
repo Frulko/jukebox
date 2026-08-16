@@ -1450,3 +1450,53 @@ input[type="range"]::-webkit-slider-thumb {
 .lcd.job .lcd-main { padding-left: 4px; }
 .lcd.job .lcd-scrub { margin-top: 4px; }
 [data-theme="studio"] .lcd-next { border-radius: 6px; }
+
+/* ---------------- search: which list are we searching ----------------
+   The magnifier is the control, the way it was in iTunes: it opens the list of
+   places rather than sitting there as decoration. Picking one navigates — the
+   scope is the source, not a filter mode kept alongside it. */
+.search .scope {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dim);
+}
+.search .scope .tri {
+  width: 0;
+  height: 0;
+  border: 3px solid transparent;
+  border-top-color: currentColor;
+  margin-top: 2px;
+  opacity: .7;
+}
+.search .scope:hover { color: var(--text); }
+.scope-menu {
+  position: absolute;
+  z-index: 40;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 132px;
+  padding: 3px;
+  border: 1px solid var(--menu-line);
+  border-radius: var(--radius);
+  background: var(--menu);
+  color: var(--menu-text);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .22);
+}
+.scope-menu button {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+  color: inherit;
+}
+.scope-menu button:hover { background: var(--accent); color: #fff; }
+.scope-menu button.on { font-weight: 600; }
+.search { position: relative; }

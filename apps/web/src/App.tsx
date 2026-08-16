@@ -242,10 +242,10 @@ export default function App() {
   const viewKey = `${view.kind}:${view.id}`
 
   const MEDIA: Record<string, React.ReactNode> = {
-    podcasts: <PodcastsView />,
-    audiobooks: <AudiobooksView />,
-    apps: <AppsView />,
-    radio: <RadioView />,
+    podcasts: <PodcastsView search={search} />,
+    audiobooks: <AudiobooksView search={search} />,
+    apps: <AppsView search={search} />,
+    radio: <RadioView search={search} />,
   }
   const media =
     view.kind === 'store'
@@ -265,6 +265,11 @@ export default function App() {
         repeat={repeat}
         volume={volume}
         search={search}
+        // The scope is not a fourth piece of state: it *is* the source being
+        // browsed. Picking one in the search box goes there and keeps what was
+        // typed, which is the same as saying "search over there instead".
+        scope={view.kind === 'library' ? view.id : 'music'}
+        onScope={(id) => setView({ kind: 'library', id })}
         browserOpen={browserOpen}
         jobs={jobs}
         onToggle={toggle}
