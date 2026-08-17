@@ -131,6 +131,18 @@ input[type="checkbox"]::after {
   opacity: 0;
 }
 input[type="checkbox"]:checked::after { opacity: 1; }
+/* Half of them. The DOM only carries this as a property, and without a drawing
+   of its own it looks exactly like "none" — which is the wrong answer to the
+   state a list of a few hundred is usually in. */
+input[type="checkbox"]:indeterminate { border-color: var(--accent); background: var(--accent); }
+input[type="checkbox"]:indeterminate::after {
+  opacity: 1;
+  top: 50%;
+  width: 6px;
+  height: 0;
+  border-width: 0 0 2px;
+  transform: translate(-50%, -50%);
+}
 input[type="checkbox"]:disabled { opacity: .45; }
 .tr.sel input[type="checkbox"] { border-color: rgba(255, 255, 255, .8); background: rgba(255, 255, 255, .22); }
 .tr.sel input[type="checkbox"]:checked { background: #fff; border-color: #fff; }
@@ -454,6 +466,7 @@ input[type="range"]::-webkit-slider-thumb {
 .th .sort-arrow.asc { border-bottom: 4px solid currentColor; margin-bottom: 3px; }
 .th .sort-arrow.desc { border-top: 4px solid currentColor; margin-top: 3px; }
 .hdr-check { font-size: 9px; }
+.thead input.hdr-check { margin: 0 auto; }
 .resizer { position: absolute; right: -2px; top: 0; width: 5px; height: 100%; cursor: col-resize; z-index: 2; }
 
 .tbody { flex: 1; overflow: auto; position: relative; }

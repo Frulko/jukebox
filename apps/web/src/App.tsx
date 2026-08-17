@@ -283,6 +283,10 @@ export default function App() {
   const isLibraryList =
     view.kind === 'library' &&
     (view.id === 'music' || view.id === 'albums' || view.id === 'artists' || reviewing)
+  // The same question the review page asks, for every library listing: the list
+  // holds a page, and the box that ticks a whole column has to be able to say
+  // how much of the answer it is looking at.
+  const matching = useTrackCount(query, isLibraryList).data?.count
   const libraryPage = useTracks(query, isLibraryList)
   const playlistPage = usePlaylistTracks(view.kind === 'playlist' ? view.id : null, query)
 
@@ -1027,6 +1031,17 @@ export default function App() {
                 showArtwork={theme !== 'classic'}
                 devices={devices}
                 tracks={tracks}
+                // The number that belongs to *this* list. A playlist knows its
+                // own length; the library listing asks the server. Passing the
+                // library's count while a playlist is open would have the tick
+                // box announce a filter nobody applied — the count query keeps
+                // its last answer when it is disabled, which is exactly how a
+                // stale number becomes a confident one.
+                total={
+                  view.kind === 'playlist'
+                    ? playlists.find((pl) => pl.id === view.id)?.trackCount
+                    : isLibraryList ? matching : undefined
+                }
                 loading={loading}
                 view={view}
                 playlists={playlists}

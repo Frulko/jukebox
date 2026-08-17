@@ -28,6 +28,10 @@ export type Locale = keyof typeof LOCALES
 type Dict = Record<string, string>
 
 const fr: Dict = {
+  'Tick the {n} shown': 'Cocher les {n} affichés', 'Untick the {n} shown': 'Décocher les {n} affichés',
+  '{total} in all, the rest are not touched': '{total} en tout, le reste n’est pas touché',
+  'Ticked tracks play when the list plays through; nothing to do with what is selected.': 'Les morceaux cochés sont lus quand la liste défile ; sans rapport avec la sélection.',
+
   'That speaker did not take the volume': 'Cette enceinte n’a pas pris le volume',
 
   'Playing on': 'Lecture sur', 'Play on a speaker': 'Lire sur une enceinte',
@@ -90,6 +94,10 @@ const fr: Dict = {
 }
 
 const it: Dict = {
+  'Tick the {n} shown': 'Spunta i {n} mostrati', 'Untick the {n} shown': 'Togli la spunta ai {n} mostrati',
+  '{total} in all, the rest are not touched': '{total} in tutto, il resto non viene toccato',
+  'Ticked tracks play when the list plays through; nothing to do with what is selected.': 'I brani spuntati vengono riprodotti quando la lista scorre; niente a che vedere con la selezione.',
+
   'That speaker did not take the volume': 'Quel diffusore non ha accettato il volume',
 
   'Playing on': 'In riproduzione su', 'Play on a speaker': 'Riproduci su un diffusore',
@@ -148,6 +156,10 @@ const it: Dict = {
 }
 
 const es: Dict = {
+  'Tick the {n} shown': 'Marcar los {n} mostrados', 'Untick the {n} shown': 'Desmarcar los {n} mostrados',
+  '{total} in all, the rest are not touched': '{total} en total, el resto no se toca',
+  'Ticked tracks play when the list plays through; nothing to do with what is selected.': 'Las pistas marcadas suenan cuando la lista se reproduce entera; nada que ver con la selección.',
+
   'That speaker did not take the volume': 'Ese altavoz no aceptó el volumen',
 
   'Playing on': 'Sonando en', 'Play on a speaker': 'Reproducir en un altavoz',
@@ -206,6 +218,10 @@ const es: Dict = {
 }
 
 const de: Dict = {
+  'Tick the {n} shown': 'Die {n} angezeigten anhaken', 'Untick the {n} shown': 'Bei den {n} angezeigten den Haken entfernen',
+  '{total} in all, the rest are not touched': '{total} insgesamt, der Rest bleibt unberührt',
+  'Ticked tracks play when the list plays through; nothing to do with what is selected.': 'Angehakte Titel laufen, wenn die Liste durchläuft; nichts mit der Auswahl zu tun.',
+
   'That speaker did not take the volume': 'Dieser Lautsprecher hat die Lautstärke nicht übernommen',
 
   'Playing on': 'Läuft auf', 'Play on a speaker': 'Auf einem Lautsprecher abspielen',

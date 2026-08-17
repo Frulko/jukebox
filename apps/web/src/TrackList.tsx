@@ -21,6 +21,12 @@ const defaultVisibility = Object.fromEntries(ALL_IDS.map((id) => [id, DEFAULT_VI
 
 type Props = {
   tracks: Track[]
+  /**
+   * How many tracks the query matches on the server, when the list is holding
+   * only a page of them. The column's header box acts on what is shown, and
+   * this is what lets it say so.
+   */
+  total?: number
   view: View
   /** Identity of the current source; keys the scroll memory. */
   viewKey: string
@@ -85,6 +91,11 @@ export function TrackList(p: Props) {
     () => ({
       toggleChecked: (id: string) =>
         p.actions.onUpdate([id], { enabled: !p.tracks.find((t) => t.id === id)?.enabled }),
+      // One call for the whole column rather than one per row: the server takes
+      // a list, and three hundred requests to tick three hundred boxes is the
+      // kind of thing that only shows up on somebody else's library.
+      setChecked: (ids: string[], next: boolean) => p.actions.onUpdate(ids, { enabled: next }),
+      total: p.total,
       rate: (id: string, rating: number) => p.actions.onUpdate([id], { rating }),
       devices: p.devices,
       badgeContext: { sourceIds: p.sourceIds, deviceIds: p.devices.map((d) => d.id) },
@@ -459,10 +470,17 @@ export function TrackList(p: Props) {
                 }}
                 onDragEnd={() => setDragCol(null)}
               >
-                {/* The label rather than the column's own header renderer: the
-                    table's definitions are in English and this is where the
-                    reader's language is applied. */}
-                {t(COLUMN_LABELS[header.column.id] ?? header.column.id)}
+                {/* A column that draws its own header draws it — that is a
+                    control, not a word. Everything else takes the label, which
+                    is where the reader's language is applied: the table's
+                    definitions are all in English.
+
+                    Both branches, because translating the labels made this
+                    render the map for *every* column, which silently threw the
+                    tick column's own renderer away. */}
+                {typeof header.column.columnDef.header === 'function'
+                  ? <table.FlexRender header={header} />
+                  : t(COLUMN_LABELS[header.column.id] ?? header.column.id)}
               </span>
               {header.column.id === 'format' && (
                 <button

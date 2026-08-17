@@ -4,11 +4,20 @@ import { Icon } from './Icon'
 import { badgesFor, type BadgeContext } from './trackBadges'
 import { Tooltip } from './Tooltip'
 import type { features } from './tableFeatures'
+import { num, t } from './i18n'
 
 const h = createColumnHelper<typeof features, Track>()
 
 export type CellActions = {
   toggleChecked: (id: string) => void
+  /** Every row at once, from the box in the column's own header. */
+  setChecked: (ids: string[], next: boolean) => void
+  /**
+   * How many tracks the current filter matches on the server, when that is more
+   * than the list is holding. The header box acts on what is shown, and this is
+   * what lets it say so instead of implying it did the library.
+   */
+  total?: number
   rate: (id: string, rating: number) => void
   /** Connected devices, so the presence column can label its dots. */
   devices: { id: string; name: string }[]
@@ -77,11 +86,50 @@ export const makeColumns = (a: CellActions) =>
   h.columns([
     h.display({
       id: 'checked',
-      header: () => (
-        <span className="hdr-check" title="Ticked tracks play when the list plays through. Nothing to do with what is selected.">
-          ✓
-        </span>
-      ),
+      /**
+       * The box that does the whole column.
+       *
+       * It reads as the state of what is in front of you — ticked when every
+       * row is, half-ticked when some are — and one click flips all of them.
+       * Acting on the rows *shown* rather than on the query behind them is the
+       * honest reading: the list holds a page, the server holds the library,
+       * and a box that quietly ticked forty thousand tracks because it looked
+       * like it meant "all" would be the worst kind of convenience. When the
+       * two numbers differ the title says both.
+       */
+      header: ({ table }) => {
+        const rows = table.getRowModel().rows
+        const ids = rows.map((r) => r.original.id)
+        const on = rows.filter((r) => r.original.enabled).length
+        const all = rows.length > 0 && on === rows.length
+        const some = on > 0 && !all
+        const shown = rows.length
+        const more = a.total !== undefined && a.total > shown ? a.total : 0
+        return (
+          <input
+            type="checkbox"
+            className="hdr-check"
+            checked={all}
+            ref={(el) => {
+              // Half-ticked is a third state the DOM only takes as a property,
+              // and it is the one that matters here: "some of these are on" is
+              // the state a list of a few hundred is usually in.
+              if (el) el.indeterminate = some
+            }}
+            disabled={shown === 0}
+            title={
+              (all ? t('Untick the {n} shown', { n: shown }) : t('Tick the {n} shown', { n: shown })) +
+              // Said in the same breath as the action, not afterwards: this is a
+              // list of a few hundred standing in for a library of thousands,
+              // and the box is about to look like it meant all of them.
+              (more ? ` — ${t('{total} in all, the rest are not touched', { total: num(more) })}` : '') +
+              `. ${t('Ticked tracks play when the list plays through; nothing to do with what is selected.')}`
+            }
+            onMouseDown={(e) => e.stopPropagation()}
+            onChange={() => a.setChecked(ids, !all)}
+          />
+        )
+      },
       size: 24,
       enableResizing: false,
       cell: ({ row }) => (
