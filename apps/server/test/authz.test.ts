@@ -56,7 +56,10 @@ const EXPECTED: Record<string, 'admin' | 'user' | 'guest'> = {
   // Changing the library itself.
   'PATCH /tracks': 'user', 'POST /tracks/tags': 'user', 'POST /transcode': 'user',
   'POST /organize': 'user', 'POST /organize/:jobId/undo': 'user',
-  'POST /duplicates/merge': 'user',
+  'POST /duplicates/merge': 'user', 'POST /tracks/missing/substitute': 'user',
+  // Same act as a merge: it moves one track's history onto another and folds
+  // the first away. Curation of the library, not administration of the server.
+  'POST /tracks/missing/substitute': 'user',
   'POST /devices': 'user', 'PATCH /devices/:id': 'user',
   'POST /devices/:id/sync': 'user', 'POST /devices/:id/import': 'user',
   'POST /devices/:id/backup': 'user', 'POST /devices/:id/eject': 'user',
