@@ -674,6 +674,24 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
   }
   // Before the single-track lookup below, which would otherwise swallow it.
   if (path === '/tracks/missing') return { items: MISSING }
+  if (path === '/tracks/missing/substitute' && method === 'POST') {
+    // The same rules as the server's: the keeper must still have a file, the
+    // row being answered must be one of the missing ones, and the history
+    // crosses over. The row then leaves this list — it is no longer a question.
+    const b = JSON.parse(body ?? '{}') as { keeperId?: string; missingIds?: string[] }
+    const keeper = tracks.find((t) => t.id === b.keeperId)
+    if (!keeper) throw new DemoError(404, 'not_found', 'unknown or deleted keeper track')
+    let merged = 0
+    for (const id of b.missingIds ?? []) {
+      const i = MISSING.findIndex((m) => m.id === id)
+      if (i < 0) continue
+      const [row] = MISSING.splice(i, 1)
+      keeper.playCount += row.playCount
+      keeper.rating = Math.max(keeper.rating, row.rating)
+      merged++
+    }
+    return { keeperId: b.keeperId, merged, renditions: 0 }
+  }
   // Where a track lives. The smart playlists are evaluated here the same way
   // they are evaluated when opened, so the two cannot disagree.
   const member = path.match(/^\/tracks\/([^/]+)\/memberships$/)

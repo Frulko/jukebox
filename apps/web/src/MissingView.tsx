@@ -30,28 +30,65 @@ const fileOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
  * because a web page cannot; it hands over the path instead, which is what you
  * paste into one.
  *
- * The search is the part worth having. A file that was moved rather than lost
- * comes back into the library under its new path at the next scan, so the same
- * name and artist may well be sitting there already — under a different id, in
- * a different folder, with none of this row's history attached to it.
+ * The search is the part worth having, and it now goes further than "is the
+ * same name and artist already in the library". It searches **the sources**,
+ * with whatever words you give it, because the case this exists for is a file
+ * that came back under a different name: a re-rip, a different transfer, an
+ * album re-tagged by somebody else's tool. Choosing one of them is a
+ * substitution — the history crosses over to the file that survived, and the
+ * row stops being a question.
  */
 function WhereDidItGo({
   track,
   source,
+  siblings,
   onClose,
   onRescan,
+  onSubstituted,
 }: {
   track: MissingTrack
   source: Mounted | undefined
+  /** The other tracks of the same album that are also missing. */
+  siblings: MissingTrack[]
   onClose: () => void
   onRescan: () => void
+  onSubstituted: (message: string, foundSourceId: string) => void
 }) {
   const [copied, setCopied] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
   const elsewhere = useTracks({ q: track.name, limit: 5 }, true)
   // Name *and* artist. A library holds a dozen tracks called "Intro", and
   // offering them as "it may have moved here" is a worse answer than none.
   const others = (elsewhere.data?.items ?? []).filter(
     (t) => t.name === track.name && t.artist === track.artist)
+
+  // The open search. Asked of the server, across every source — the page in
+  // hand holds a few hundred tracks and the answer is about all of them.
+  const typed = query.trim()
+  const hunt = useTracks({ q: typed, limit: 30 }, typed.length > 1)
+  const candidates = (hunt.data?.items ?? []).filter((t) => t.id !== track.id)
+
+  const substitute = async (keeperId: string, keeperPath: string, keeperSourceId: string) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      // Only this row. Doing the album in one call would be a bigger promise
+      // than the evidence supports: the reader has looked at *this* file and
+      // said "that one is the same song", which is a judgement about one track.
+      const r = await api.tracks.substitute(keeperId, [track.id])
+      onSubstituted(
+        r.merged
+          ? `${track.name} now points at ${keeperPath} — its rating and plays came across`
+          : `${track.name} was already answered`,
+        keeperSourceId,
+      )
+    } catch (err) {
+      setCopied(err instanceof Error ? err.message : 'the server refused it')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const copy = (what: string, value: string) => {
     const done = navigator.clipboard?.writeText(value)
@@ -132,8 +169,53 @@ function WhereDidItGo({
               <Icon name="music" size={10} />
               <span className="n">{t.artist || t.albumArtist}</span>
               <span className="path" title={t.path}>{t.path}</span>
+              <button disabled={busy} onClick={() => void substitute(t.id, t.path, t.sourceId)}>
+                Use this
+              </button>
             </div>
           ))}
+
+          {/* The open search: the same name is the easy case, and the reason
+              this box exists is the hard one — a re-rip, a different transfer,
+              an album somebody else's tool re-tagged. Asked of the server so
+              it covers every source, not the few hundred rows on this page. */}
+          <h4 className="file-where">Look through your sources</h4>
+          <input
+            className="where-search"
+            value={query}
+            placeholder={`Search every source — try “${track.artist}”`}
+            onChange={(e) => (setQuery(e.target.value), setCopied(null))}
+          />
+          {typed.length > 1 && hunt.isPending && <p className="dim">Asking the server…</p>}
+          {typed.length > 1 && !hunt.isPending && candidates.length === 0 && (
+            <p className="dim">Nothing in any source matches that.</p>
+          )}
+          {candidates.map((t) => (
+            <div key={t.id} className="where-found">
+              <Icon name="music" size={10} />
+              <span className="n">
+                {t.name}
+                <em className="dim"> — {t.artist}</em>
+              </span>
+              <span className="path" title={t.path}>{t.path}</span>
+              <button disabled={busy} onClick={() => void substitute(t.id, t.path, t.sourceId)}>
+                Use this
+              </button>
+            </div>
+          ))}
+
+          {/* Files do not go missing one at a time. If the rest of the album is
+              gone too, the copy you just found is almost certainly sitting next
+              to its neighbours — so the useful next move is a scan of the
+              source it was found in, said here rather than left to be guessed. */}
+          {siblings.length > 0 && (
+            <p className="where-album">
+              <Icon name="alert" size={10} />
+              {siblings.length} more from <b>{track.album || 'this album'}</b>{' '}
+              {siblings.length === 1 ? 'is' : 'are'} missing too. Point this one at a file you found and
+              the next scan of that source will look for the others in the same place.
+            </p>
+          )}
         </div>
 
         <div className="modal-foot">
@@ -195,6 +277,7 @@ export function MissingView() {
   const sources = useSources().data?.items ?? []
   const [scanning, setScanning] = useState<string | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   /** Pointed at, right-clicked, and opened: three states of the same row. */
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [menu, setMenu] = useState<{ x: number; y: number; track: MissingTrack } | null>(null)
@@ -248,6 +331,8 @@ export function MissingView() {
           count={items.length}
         />
       </div>
+
+      {notice && <p className="missing-notice">{notice}</p>}
 
       <p className="missing-lead">
         {all.length.toLocaleString(getLocale())} track{all.length > 1 ? 's' : ''} the last scan could not find.
@@ -323,8 +408,23 @@ export function MissingView() {
         <WhereDidItGo
           track={asking}
           source={sourceOf(asking)}
+          // Same album, still missing, not this row. This is what turns one
+          // repair into the question worth asking next.
+          siblings={all.filter(
+            (t) => t.id !== asking.id && !!t.album && t.album === asking.album && t.artist === asking.artist)}
           onClose={() => setAsking(null)}
           onRescan={() => (rescan(asking.sourceId), setAsking(null))}
+          onSubstituted={(message, foundSourceId) => {
+            setAsking(null)
+            setNotice(message)
+            qc.invalidateQueries({ queryKey: ['tracks'] })
+            // The rest of the album is probably beside the file just chosen, so
+            // the scan that would find them is the one for *that* source — not
+            // the one the missing row came from, which is the disk that lost it.
+            const rest = all.filter(
+              (t) => t.id !== asking.id && !!t.album && t.album === asking.album && t.artist === asking.artist)
+            if (rest.length) void rescan(foundSourceId)
+          }}
         />
       )}
     </div>

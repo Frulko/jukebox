@@ -63,6 +63,15 @@ CREATE TABLE IF NOT EXISTS tracks (
   artworkHash  TEXT,
   rev          INTEGER NOT NULL,
   deletedAt    INTEGER,
+  -- Why the row is gone. deletedAt alone cannot say: a file the scanner can no
+  -- longer find and a row folded into another one are both "deleted", and only
+  -- the first is something to go looking for on a disk.
+  --
+  -- The reference carries no ON DELETE clause on purpose. Nothing hard-deletes
+  -- a track today; if something ever does, this stops the delete rather than
+  -- letting the rows that pointed at it quietly come back to the Missing page
+  -- as lost files -- which is this very bug, reached by a longer road.
+  mergedInto   TEXT REFERENCES tracks(id),
   UNIQUE (sourceId, path)
 );
 
@@ -494,6 +503,31 @@ const MIGRATIONS: Migration[] = [
       );
       -- "everything tagged live" reads the tag, not the track.
       CREATE INDEX IF NOT EXISTS track_tags_tag ON track_tags (tag, trackId)`)
+  },
+
+  // Two very different endings had one column between them.
+  //
+  // `deletedAt` was set both by the scanner, for a file that is no longer on
+  // disk, and by a merge, for a row whose music now lives under another id. The
+  // Missing page asks for `deletedAt IS NOT NULL`, so every duplicate anyone
+  // ever folded away was being reported as a lost file — and the substitution
+  // this was added for would have done the same, once per repair.
+  //
+  // `mergedInto` names the survivor, so "gone" and "became that one" stop being
+  // the same answer, and the row still says where its history went.
+  //
+  // Rows merged *before* this migration cannot be backfilled: nothing recorded
+  // which ones they were, and `deletedAt` alone is exactly the ambiguity being
+  // fixed. They stay on the Missing page until someone rescans that source,
+  // which is a work list going slightly stale rather than anything lost.
+  //
+  // Guarded like migration 2, and for the reason written there: the column is
+  // in SCHEMA as well, so a fresh database already has it and a bare ALTER
+  // would throw `duplicate column name` on the very first open.
+  (db) => {
+    const has = (db.prepare(`PRAGMA table_info(tracks)`).all() as any[])
+      .some((c) => c.name === 'mergedInto')
+    if (!has) db.exec(`ALTER TABLE tracks ADD COLUMN mergedInto TEXT REFERENCES tracks(id)`)
   },
 ]
 

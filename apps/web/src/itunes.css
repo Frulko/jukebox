@@ -2128,6 +2128,29 @@ input[type="range"]::-webkit-slider-thumb {
 .where-found .n { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where-found .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; unicode-bidi: plaintext; }
 .where-modal .modal-foot .dim { flex: 1; }
+.where-found button { flex: none; }
+.where-search { width: 100%; font: inherit; padding: 3px 6px; margin-bottom: 6px; }
+/* Not a warning either: the album's other files are missing, which is a reason
+   to look in one place rather than a reason to worry. */
+.where-album {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--stripe);
+  color: var(--dim);
+  line-height: 1.5;
+}
+.where-album b { color: var(--text); }
+.missing-notice {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  border-left: 3px solid var(--accent);
+  background: var(--stripe);
+  line-height: 1.5;
+}
 
 /* The review page's own line. It is a lead, not a warning: these tracks play
    perfectly well, and the page exists because an album with no album name

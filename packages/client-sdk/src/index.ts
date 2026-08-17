@@ -175,6 +175,17 @@ export function createClient(opts: ClientOptions = {}) {
       /** Tracks whose file has gone. They keep their ratings and come back on rescan. */
       missing: (limit = 200) => request<{ items: MissingTrack[] }>(`/tracks/missing?limit=${limit}`),
       /**
+       * "That file is gone; this one is the same song."
+       *
+       * The missing row's rating, plays and playlist places move to the track
+       * that still has a file. Not a merge: the missing file never crosses
+       * over, because there is no file.
+       */
+      substitute: (keeperId: string, missingIds: string[]) =>
+        request<{ keeperId: string; merged: number; renditions: number }>('/tracks/missing/substitute', {
+          method: 'POST', body: JSON.stringify({ keeperId, missingIds }),
+        }),
+      /**
        * Single or bulk edit — same call either way. The database answers at
        * once; if tags go to disk, a job is returned.
        */

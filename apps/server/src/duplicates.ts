@@ -221,7 +221,11 @@ export function mergeTracks(db: DB, keeperId: string, mergeIds: string[]): Merge
       .run(other.playCount, other.skipCount, other.rating, other.loved,
         other.dateAdded, other.lastPlayed, rev, keeperId)
 
-    db.prepare(`UPDATE tracks SET deletedAt = ?, rev = ? WHERE id = ?`).run(Date.now(), rev, other.id)
+    // `mergedInto` rather than `deletedAt` alone: the Missing page asks for
+    // soft-deleted rows, so without it every duplicate folded away here was
+    // reported to the reader as a file lost off a disk.
+    db.prepare(`UPDATE tracks SET deletedAt = ?, mergedInto = ?, rev = ? WHERE id = ?`)
+      .run(Date.now(), keeperId, rev, other.id)
   }
 
   // `lastPlayed` of 0 means never; MAX above can only have produced it if
@@ -230,4 +234,60 @@ export function mergeTracks(db: DB, keeperId: string, mergeIds: string[]): Merge
   db.exec(`INSERT INTO tracks_fts (tracks_fts) VALUES ('rebuild')`)
 
   return { keeperId, merged: others.length, renditions: moved }
+}
+
+/**
+ * "That file is gone; this one is the same song."
+ *
+ * The other half of a merge, and deliberately not the same function. A merge
+ * folds two rows that both have files; a substitution has exactly one file left
+ * — so the missing row's history crosses over and its **rendition never does**.
+ * Carrying it would hand the keeper a path that is not on any disk, which is
+ * the one thing the Missing page exists to complain about.
+ *
+ * What crosses: the rating, the play and skip counts, the date it was added,
+ * the last time it played, and every playlist and device that pointed at it.
+ * That is the whole reason the row was worth keeping rather than tidying away.
+ */
+export function substituteMissing(db: DB, keeperId: string, missingIds: string[]): MergeResult | null {
+  const keeper = db.prepare(`SELECT * FROM tracks WHERE id = ? AND deletedAt IS NULL`).get(keeperId) as any
+  if (!keeper) return null
+
+  const gone = missingIds
+    .filter((id) => id !== keeperId)
+    // Soft-deleted *and* not already substituted: repeating the call must not
+    // add the same play count twice, and a UI with a stale list will repeat it.
+    .map((id) => db.prepare(
+      `SELECT * FROM tracks WHERE id = ? AND deletedAt IS NOT NULL AND mergedInto IS NULL`).get(id) as any)
+    .filter(Boolean)
+  if (!gone.length) return { keeperId, merged: 0, renditions: 0 }
+
+  const rev = nextRev(db)
+  for (const other of gone) {
+    db.prepare(`UPDATE OR IGNORE playlist_tracks SET trackId = ? WHERE trackId = ?`).run(keeperId, other.id)
+    db.prepare(`DELETE FROM playlist_tracks WHERE trackId = ?`).run(other.id)
+    db.prepare(`UPDATE OR IGNORE device_tracks SET trackId = ? WHERE trackId = ?`).run(keeperId, other.id)
+    db.prepare(`UPDATE OR IGNORE device_wanted SET trackId = ? WHERE trackId = ?`).run(keeperId, other.id)
+    db.prepare(`DELETE FROM device_wanted WHERE trackId = ?`).run(other.id)
+
+    db.prepare(`
+      UPDATE tracks SET
+        playCount = playCount + ?,
+        skipCount = skipCount + ?,
+        rating = MAX(rating, ?),
+        loved = MAX(loved, ?),
+        dateAdded = MIN(dateAdded, ?),
+        lastPlayed = MAX(COALESCE(lastPlayed, 0), COALESCE(?, 0)),
+        rev = ?
+      WHERE id = ?`)
+      .run(other.playCount, other.skipCount, other.rating, other.loved,
+        other.dateAdded, other.lastPlayed, rev, keeperId)
+
+    // The row stays, pointing at where its history went. It leaves the Missing
+    // page because it is no longer missing — it was answered.
+    db.prepare(`UPDATE tracks SET mergedInto = ?, rev = ? WHERE id = ?`).run(keeperId, rev, other.id)
+  }
+
+  db.prepare(`UPDATE tracks SET lastPlayed = NULL WHERE id = ? AND lastPlayed = 0`).run(keeperId)
+  return { keeperId, merged: gone.length, renditions: 0 }
 }

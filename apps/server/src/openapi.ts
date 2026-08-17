@@ -87,6 +87,10 @@ const DOCS: Record<string, Doc> = {
   'GET /tracks/count': { summary: 'How many tracks a query matches.', tag: 'library' },
   'GET /tracks/delta': { summary: 'What changed since a revision. The main network win.', returns: 'TracksDelta', tag: 'library', query: ['since', 'limit'] },
   'GET /tracks/missing': { summary: 'Tracks whose file the scanner can no longer find.', returns: 'MissingTrack[]', tag: 'library' },
+  'POST /tracks/missing/substitute': {
+    summary: 'Move a missing track’s history onto the copy that still has a file.',
+    body: '{ keeperId, missingIds }', tag: 'library',
+  },
   'GET /tracks/:id/memberships': { summary: 'Every playlist and device holding this track. Smart playlists are asked, not read.', returns: 'Memberships', tag: 'library' },
   'GET /tracks/:id': { summary: 'One track.', returns: 'Track', tag: 'library' },
   'PATCH /tracks': { summary: 'Edits one or many. Tag writing to disk becomes a job.', tag: 'library', body: '{ ids, patch, writeToFiles? }' },

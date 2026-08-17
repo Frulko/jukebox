@@ -50,7 +50,7 @@ import { Events, recordPlay } from './plays.ts'
 import { compatible, fetchIndex, install, uninstall } from './store.ts'
 import { FORMATS, tools } from './ffmpeg.ts'
 import { makeConvertHandler } from './convert.ts'
-import { findDuplicates, mergeTracks } from './duplicates.ts'
+import { findDuplicates, mergeTracks, substituteMissing } from './duplicates.ts'
 import {
   authenticate, createToken, createUser, isOpen, listTokens, listUsers,
   can, getUser, revokeToken, setPassword, setSourcesFor, sourcesFor, userForToken,
@@ -678,8 +678,26 @@ export function createApp(dbFile: string) {
         `SELECT t.id, t.sourceId, t.path, t.name, t.artist, t.album, t.duration,
                 t.rating, t.playCount, t.deletedAt, s.name AS sourceName
          FROM tracks t JOIN sources s ON s.id = t.sourceId
-         WHERE t.deletedAt IS NOT NULL ORDER BY t.deletedAt DESC, t.id LIMIT ?`).all(limit),
+         WHERE t.deletedAt IS NOT NULL AND t.mergedInto IS NULL
+         ORDER BY t.deletedAt DESC, t.id LIMIT ?`).all(limit),
     })
+  })
+
+  /**
+   * The file is gone; that one is the same song.
+   *
+   * Missing rows are worth keeping because of what they carry — a rating, a
+   * play count, a place in three playlists — and this is how that reaches the
+   * copy that survived. It is not a merge: the missing file never crosses over,
+   * because there is no file.
+   */
+  api.post('/tracks/missing/substitute', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b?.keeperId || !Array.isArray(b?.missingIds)) {
+      return fail(c, 400, 'bad_body', 'expected { keeperId, missingIds: [] }')
+    }
+    const result = substituteMissing(db, b.keeperId, b.missingIds)
+    return result ? c.json(result) : fail(c, 404, 'not_found', 'unknown or deleted keeper track')
   })
 
   /**
