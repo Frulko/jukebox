@@ -28,6 +28,13 @@ export type Locale = keyof typeof LOCALES
 type Dict = Record<string, string>
 
 const fr: Dict = {
+  'That speaker did not take the volume': 'Cette enceinte n’a pas pris le volume',
+
+  'Playing on': 'Lecture sur', 'Play on a speaker': 'Lire sur une enceinte',
+  'This browser': 'Ce navigateur', 'the tab you are reading': 'l’onglet que tu lis',
+  'Listening for speakers…': 'Recherche d’enceintes…', 'No speakers answered on this network.': 'Aucune enceinte n’a répondu sur ce réseau.',
+  'Look again': 'Chercher encore', 'not answering': 'ne répond pas', 'Speakers fetch from': 'Les enceintes lisent depuis', 'Volume on': 'Volume sur',
+
   live: 'en direct',
 
   '{n} stations, {genres} genres': '{n} stations, {genres} genres',
@@ -83,6 +90,13 @@ const fr: Dict = {
 }
 
 const it: Dict = {
+  'That speaker did not take the volume': 'Quel diffusore non ha accettato il volume',
+
+  'Playing on': 'In riproduzione su', 'Play on a speaker': 'Riproduci su un diffusore',
+  'This browser': 'Questo browser', 'the tab you are reading': 'la scheda che stai leggendo',
+  'Listening for speakers…': 'Ricerca diffusori…', 'No speakers answered on this network.': 'Nessun diffusore ha risposto su questa rete.',
+  'Look again': 'Cerca di nuovo', 'not answering': 'non risponde', 'Speakers fetch from': 'I diffusori leggono da', 'Volume on': 'Volume su',
+
   live: 'in diretta',
 
   '{n} stations, {genres} genres': '{n} stazioni, {genres} generi',
@@ -134,6 +148,13 @@ const it: Dict = {
 }
 
 const es: Dict = {
+  'That speaker did not take the volume': 'Ese altavoz no aceptó el volumen',
+
+  'Playing on': 'Sonando en', 'Play on a speaker': 'Reproducir en un altavoz',
+  'This browser': 'Este navegador', 'the tab you are reading': 'la pestaña que estás leyendo',
+  'Listening for speakers…': 'Buscando altavoces…', 'No speakers answered on this network.': 'Ningún altavoz respondió en esta red.',
+  'Look again': 'Buscar de nuevo', 'not answering': 'no responde', 'Speakers fetch from': 'Los altavoces leen de', 'Volume on': 'Volumen en',
+
   live: 'en directo',
 
   '{n} stations, {genres} genres': '{n} emisoras, {genres} géneros',
@@ -185,6 +206,13 @@ const es: Dict = {
 }
 
 const de: Dict = {
+  'That speaker did not take the volume': 'Dieser Lautsprecher hat die Lautstärke nicht übernommen',
+
+  'Playing on': 'Läuft auf', 'Play on a speaker': 'Auf einem Lautsprecher abspielen',
+  'This browser': 'Dieser Browser', 'the tab you are reading': 'der Tab, den du liest',
+  'Listening for speakers…': 'Suche nach Lautsprechern…', 'No speakers answered on this network.': 'Kein Lautsprecher hat in diesem Netz geantwortet.',
+  'Look again': 'Erneut suchen', 'not answering': 'antwortet nicht', 'Speakers fetch from': 'Lautsprecher laden von', 'Volume on': 'Lautstärke auf',
+
   live: 'live',
 
   '{n} stations, {genres} genres': '{n} Sender, {genres} Genres',

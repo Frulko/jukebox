@@ -490,6 +490,28 @@ export type MissingTrack = {
 }
 
 /** Where the music comes out. `local` means the client that is asking. */
+/**
+ * Somewhere the music can come out that is not this browser.
+ *
+ * Four ways of being a speaker — a UPnP renderer found by shouting on the
+ * network, an AirPlay receiver, a Chromecast, and a satellite that registered
+ * itself — flattened into one shape, because whoever is choosing a room does
+ * not care which protocol answers.
+ */
+export type Output = {
+  id: string
+  name: string
+  kind: 'upnp' | 'airplay' | 'cast' | string
+  manufacturer: string
+  model: string
+  address: string
+  formats: string[]
+  /** Registered but silent for five minutes: probably unplugged, not gone. */
+  stale: boolean
+  /** Whether a volume slider would do anything. AirPlay's volume is elsewhere. */
+  volume?: boolean
+}
+
 export type PlayerTarget = { kind: 'local' } | { kind: 'output'; id: string; name: string }
 
 /**

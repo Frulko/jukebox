@@ -281,6 +281,26 @@ input[type="range"]::-webkit-slider-thumb {
 .lcd-scrub .fill { height: 100%; border-radius: 3px; background: var(--accent); }
 /* A stream: nothing to scrub to, so the bar stops pretending to be a control. */
 .lcd-scrub .track.live { cursor: default; opacity: .55; }
+/* Playing elsewhere: the room in place of a position nobody reported. */
+.lcd-scrub.remote { align-items: center; gap: 6px; color: var(--dim); }
+.lcd-scrub.remote b { color: var(--text); }
+
+/* Where the music comes out. */
+.out-btn.on { color: var(--accent); }
+.out-catch { position: fixed; inset: 0; z-index: 40; }
+.out-menu { min-width: 260px; max-width: 400px; }
+.out-menu button { display: flex; align-items: baseline; gap: 6px; }
+.out-menu .tick { flex: none; width: 9px; }
+.out-menu .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.out-menu button em { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; font-size: 10px; }
+.out-advert {
+  padding: 5px 9px 3px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 .lcd-scrub .knob {
   position: absolute;
   top: -3px;

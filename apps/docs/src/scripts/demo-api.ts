@@ -10,7 +10,7 @@
 // real pagination is the server's job and is tested there.
 import { makeLibrary } from '../../../web/src/data'
 import type {
-  Device, DeviceTrack, Episode, Job, MissingTrack, Playlist, Podcast, Radio, Source, Stats, SyncPlan,
+  Device, DeviceTrack, Episode, Job, MissingTrack, Output, Playlist, Podcast, Radio, Source, Stats, SyncPlan,
   Track, TrackQuery,
 } from '@jukebox/api-types'
 
@@ -57,7 +57,7 @@ const player = {
   trackId: null as string | null,
   playing: false,
   position: 0,
-  target: { kind: 'local' } as { kind: 'local' },
+  target: { kind: 'local' } as { kind: 'local' } | { kind: 'output'; id: string; name: string },
   repeat: 'off' as 'off' | 'all' | 'one',
   shuffle: false,
   revision: 0,
@@ -435,6 +435,25 @@ const RADIOS: Radio[] = [
     homepageUrl: null, imageUrl: null, genre: '', country: '', bitrate: 0, codec: '', favorite: 0 },
 ]
 
+/**
+ * Speakers, as a network would answer.
+ *
+ * One of each kind the server knows how to drive, because the picker's whole
+ * job is telling them apart — and one satellite gone quiet, which is the state
+ * that has to be shown rather than hidden: somebody's Pi, unplugged, still
+ * worth listing.
+ */
+const OUTPUTS: Output[] = [
+  { id: 'ap-living', name: 'Living Room', kind: 'airplay', manufacturer: 'Apple', model: 'HomePod',
+    address: '192.168.1.24:7000', formats: [], stale: false, volume: false },
+  { id: 'upnp-kitchen', name: 'Kitchen', kind: 'upnp', manufacturer: 'Sonos', model: 'Play:1',
+    address: 'http://192.168.1.31:1400', formats: [], stale: false, volume: true },
+  { id: 'cast-desk', name: 'Desk', kind: 'cast', manufacturer: 'Google', model: 'Chromecast Audio',
+    address: '192.168.1.44:8009', formats: [], stale: false, volume: true },
+  { id: 'sat-attic', name: 'Attic Pi', kind: 'satellite', manufacturer: '', model: '',
+    address: 'http://192.168.1.57:8788', formats: ['flac', 'mp3'], stale: true },
+]
+
 const SOURCES: Source[] = [
   // With its mount, as the real route reports it: a UI that can say "this share
   // is not mounted" instead of showing an empty library needs the answer to
@@ -585,6 +604,16 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     if (path === '/player' && method === 'PATCH') {
       if (b.repeat !== undefined) player.repeat = b.repeat
       if (b.shuffle !== undefined) player.shuffle = b.shuffle
+      // Where the music comes out. The real server refuses an id it cannot
+      // find on the network, which is the case a picker has to survive.
+      if (b.target !== undefined) {
+        if (b.target.kind === 'output' && !OUTPUTS.some((o) => o.id === b.target.id)) {
+          throw new DemoError(404, 'not_found', 'unknown output; try GET /outputs?refresh=true')
+        }
+        player.target = b.target.kind === 'output'
+          ? { kind: 'output', id: b.target.id, name: b.target.name }
+          : { kind: 'local' }
+      }
     }
     if (path === '/player/queue' && method === 'PUT') {
       player.queue = [...(b.trackIds ?? [])]
@@ -673,6 +702,20 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     return { counted: true, playCount: t.playCount }
   }
   // Before the single-track lookup below, which would otherwise swallow it.
+  if (path.startsWith('/outputs') && method === 'GET') {
+    return { items: OUTPUTS, advertising: 'http://192.168.1.10:8787' }
+  }
+  const outVolume = path.match(/^\/outputs\/([^/]+)\/volume$/)
+  if (outVolume && method === 'POST') {
+    const out = OUTPUTS.find((o) => o.id === outVolume[1])
+    // The real refusal, kept: AirPlay's volume lives in RTSP, which the server
+    // deliberately does not speak, and a demo that quietly accepted it would
+    // teach the interface a lie.
+    if (out && out.volume === false) {
+      throw new DemoError(501, 'not_supported', 'AirPlay volume is not available over its HTTP interface')
+    }
+    return null
+  }
   if (path === '/tracks/missing') return { items: MISSING }
   if (path === '/tracks/missing/substitute' && method === 'POST') {
     // The same rules as the server's: the keeper must still have a file, the

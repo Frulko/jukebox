@@ -264,10 +264,33 @@ export function usePlayerActions() {
       previous: () => land(api.player.previous()),
       clear: () => land(api.player.clear()),
       pause: () => land(api.player.pause()),
+      play: () => land(api.player.play()),
       set: (patch: { repeat?: PlayerState['repeat']; shuffle?: boolean }) => land(api.player.set(patch)),
+      /**
+       * Where the music comes out.
+       *
+       * The server does the driving once the target is a speaker — it starts
+       * the renderer on the current track and keeps it in step — so this is one
+       * call and not a protocol.
+       */
+      setTarget: (target: PlayerState['target']) => land(api.player.set({ target })),
     }
   }, [qc])
 }
+
+/**
+ * The speakers on the network.
+ *
+ * Only asked for while the picker is open: discovery is a live SSDP search that
+ * costs seconds, and a list nobody is reading is not worth a search.
+ */
+export const useOutputs = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['outputs'],
+    queryFn: () => api.outputs.list(),
+    enabled,
+    staleTime: 30_000,
+  })
 
 /** The feeds. One key, so the view and the status line ask once between them. */
 export const usePodcasts = (enabled = true) =>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { summarize, type Track } from './data'
-import type { Episode, Podcast } from '@jukebox/client-sdk'
+import type { Episode, PlayerState, Podcast } from '@jukebox/client-sdk'
 import {
   api, useDevices, useFacets, usePlaylists, usePlaylistTracks, useServerEvents, useServerHealth, useSources, useStats,
   usePlayer, usePlayerActions, usePodcasts, useTagTracks, useTrackCount, useTrackQuery, useTracks,
@@ -32,6 +32,7 @@ import { SharingView } from './SharingView'
 import { DuplicatesView } from './DuplicatesView'
 import { HomeView, useRecentPlaylists } from './HomeView'
 import { usePluginMenu } from './pluginMenu'
+import { setOutputVolume } from './Outputs'
 import { FilterBar, type FilterChip } from './FilterBar'
 import { NowPlayingPanel } from './NowPlayingPanel'
 import './itunes.css'
@@ -425,6 +426,17 @@ export default function App() {
   )
 
   /* ---- playback ---- */
+  /**
+   * Where the music comes out, and what that changes here.
+   *
+   * With a speaker chosen the server does the playing: it starts the renderer,
+   * keeps it on the queue's current track, and pauses it. So this tab must go
+   * **quiet** — two copies of the same song, one a second behind the other, is
+   * a failure everyone has heard — and its transport buttons have to stop
+   * driving the audio element and start driving the server.
+   */
+  const remote = player?.target.kind === 'output'
+
   // `step` is defined below and closes over the queue; the ref lets the audio
   // element call whatever the current one is without re-attaching its listeners.
   const stepRef = useRef<(dir: 1 | -1) => void>(() => {})
@@ -463,8 +475,10 @@ export default function App() {
       setPlayingEpisode(null)
       // Started before the round trip, and deliberately: the element must be
       // told inside the click's own call stack or the browser stops counting it
-      // as the gesture that authorises playback.
-      audio.play(id)
+      // as the gesture that authorises playback. Unless the sound is coming out
+      // of a speaker, in which case this tab has no part in it — the server
+      // moves the renderer to whatever the queue lands on.
+      if (!remote) audio.play(id)
       // A view that knows what it is playing out of says so; the queue only
       // changes when playback starts somewhere new.
       if (from) void control.setQueue(from, Math.max(0, from.indexOf(id)))
@@ -580,13 +594,15 @@ export default function App() {
     (dir: 1 | -1) => {
       if (!queue.length) return
       void (dir === 1 ? control.next() : control.previous()).then((state) => {
+        // The server has already moved the speaker on; the element stays out of it.
+        if (remote) return
         if (!state.playing || !state.trackId) return audio.pause()
         if (state.trackId !== nowPlaying) playTrack(state.trackId)
         // Same track, moved to its start: going back from the first one.
         else audio.seek(0)
       })
     },
-    [queue.length, nowPlaying, playTrack, audio, control],
+    [queue.length, nowPlaying, playTrack, audio, control, remote],
   )
 
   /**
@@ -626,6 +642,22 @@ export default function App() {
     retry: 1,
   })
   const current = tracks.find((t) => t.id === nowPlaying) ?? playingEpisode ?? fetched.data ?? null
+  const setTarget = useCallback(
+    async (next: PlayerState['target']) => {
+      // Silence first, in the click's own call stack: the server is about to
+      // start the room, and the gap where both are playing is the one thing
+      // there is no excuse for.
+      if (next.kind === 'output') audio.pause()
+      const state = await control.setTarget(next)
+      // Coming back to the browser, the music does not simply reappear: the
+      // element has to be started, and this click is the gesture that permits
+      // it. Only if it was actually playing — a page that starts making noise
+      // because a picker closed is a page nobody asked to hear.
+      if (next.kind === 'local' && state.playing && state.trackId) audio.play(state.trackId)
+    },
+    [audio, control],
+  )
+
   const toggleShuffle = () => void control.set({ shuffle: !shuffle })
   const cycleRepeat = () => void control.set({ repeat: repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off' })
 
@@ -637,8 +669,11 @@ export default function App() {
   // authorises playback.
   const toggle = useCallback(() => {
     if (!current) return tracks[0] && playTrack(tracks[0].id, tracks.map((t) => t.id))
+    // On a speaker there is no element to toggle: the server holds whether it
+    // should be playing, and the renderer follows that.
+    if (remote) return void (player?.playing ? control.pause() : control.play())
     audio.playing ? audio.pause() : audio.resume()
-  }, [current, tracks, playTrack, audio])
+  }, [current, tracks, playTrack, audio, remote, player?.playing, control])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -804,6 +839,8 @@ export default function App() {
         shuffle={shuffle}
         repeat={repeat}
         volume={volume}
+        target={player?.target ?? { kind: 'local' }}
+        onTarget={setTarget}
         search={search}
         // The scope is not a fourth piece of state: it *is* the source being
         // browsed. Picking one in the search box goes there and keeps what was
@@ -822,7 +859,13 @@ export default function App() {
         onPrev={() => (audio.time.get().position > 3 ? audio.seek(0) : step(-1))}
         onNext={() => step(1)}
         onSeek={audio.seek}
-        onVolume={setVolume}
+        onVolume={(v) => {
+          setVolume(v)
+          // The slider belongs to whatever is making the sound. On a speaker
+          // that is the renderer, and moving the tab's element instead is a
+          // control that visibly does nothing.
+          if (remote && player) setOutputVolume(player.target, v, setNotice)
+        }}
         onShuffle={toggleShuffle}
         onRepeat={cycleRepeat}
         onSearch={setSearch}

@@ -1,7 +1,7 @@
 import type {
   Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Output, Podcast, Radio,
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
@@ -287,6 +287,22 @@ export function createClient(opts: ClientOptions = {}) {
       /** For a renderer: where it actually got to. It may not reorder anything. */
       report: (position: number, playing?: boolean) =>
         request<PlayerState>('/player/report', { method: 'POST', body: JSON.stringify({ position, playing }) }),
+    },
+
+    outputs: {
+      /**
+       * Where the music could come out, right now.
+       *
+       * Discovery is a live search, so this is a question about this moment
+       * rather than a stored list — `refresh` forces a new one instead of the
+       * server's 30-second cache. `advertising` is the address a renderer will
+       * be told to fetch from, and it is here because when it is wrong every
+       * play fails silently and that number is the explanation.
+       */
+      list: (refresh = false) =>
+        request<{ items: Output[]; advertising: string }>(`/outputs${refresh ? '?refresh=true' : ''}`),
+      volume: (id: string, volume: number) =>
+        request<unknown>(`/outputs/${id}/volume`, { method: 'POST', body: JSON.stringify({ volume }) }),
     },
 
     organize: {
@@ -591,7 +607,7 @@ export type Client = ReturnType<typeof createClient>
 export type {
   Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
-  Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Podcast, Radio,
+  Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Output, Podcast, Radio,
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,

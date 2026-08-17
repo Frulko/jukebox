@@ -1881,8 +1881,71 @@ export const SCHEMAS: Record<string, any> = {
       "deletedAt"
     ]
   },
-  "PlayerTarget": {
+  "Output": {
     "description": "Where the music comes out. `local` means the client that is asking.",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "kind": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "upnp"
+          },
+          {
+            "type": "string",
+            "const": "airplay"
+          },
+          {
+            "type": "string",
+            "const": "cast"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "manufacturer": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "address": {
+        "type": "string"
+      },
+      "formats": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "stale": {
+        "type": "boolean",
+        "description": "Registered but silent for five minutes: probably unplugged, not gone."
+      },
+      "volume": {
+        "type": "boolean",
+        "description": "Whether a volume slider would do anything. AirPlay's volume is elsewhere."
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "kind",
+      "manufacturer",
+      "model",
+      "address",
+      "formats",
+      "stale"
+    ]
+  },
+  "PlayerTarget": {
     "oneOf": [
       {
         "type": "object",

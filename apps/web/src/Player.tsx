@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Job } from '@jukebox/client-sdk'
+import type { Job, PlayerState } from '@jukebox/client-sdk'
 import { useAudioTime, type Audio } from './audio'
 import { useJobs } from './api'
 import { num, t, useLocale } from './i18n'
+import { OutputPicker } from './Outputs'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
 import { albumSeed, Cover } from './Artwork'
@@ -83,6 +84,8 @@ export function Player({
   shuffle,
   repeat,
   volume,
+  target,
+  onTarget,
   search,
   scope,
   browserOpen,
@@ -114,6 +117,9 @@ export function Player({
   shuffle: boolean
   repeat: Repeat
   volume: number
+  /** Where the music comes out. `local` is this tab. */
+  target: PlayerState['target']
+  onTarget: (target: PlayerState['target']) => void
   search: string
   /** The source the search applies to — one of the library's five. */
   scope: string
@@ -186,9 +192,22 @@ export function Player({
         </button>
         <div className="volume">
           <Icon name="volumeLow" size={10} className="spk" />
-          <input type="range" min={0} max={100} value={volume} onChange={(e) => onVolume(Number(e.target.value))} />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={volume}
+            // AirPlay's volume is not on the interface this server speaks, so
+            // the control says so instead of moving to no effect.
+            // A speaker whose volume this server cannot reach — AirPlay keeps
+            // it in RTSP — is told about by the picker, which knows the
+            // capability; here the slider simply drives whatever is playing.
+            title={target.kind === 'output' ? `${t('Volume on')} ${target.name}` : undefined}
+            onChange={(e) => onVolume(Number(e.target.value))}
+          />
           <Icon name="volumeHigh" size={13} className="spk" />
         </div>
+        <OutputPicker target={target} onChoose={onTarget} />
       </div>
 
       <div className={`lcd ${job ? 'job' : track ? '' : 'idle'}`}>
@@ -220,6 +239,17 @@ export function Player({
               <div className="lcd-sub">
                 {track.artist} — {track.album}
               </div>
+              {/* On a speaker there is no position to show. A UPnP renderer or
+                  an AirPlay receiver is not asked where it got to — only a
+                  satellite reports back — so a scrubber here would sit frozen
+                  at 0:00 while the music plays perfectly well in the next room.
+                  It says where instead, which is the true answer. */}
+              {target.kind === 'output' ? (
+                <div className="lcd-scrub remote">
+                  <Icon name="radio" size={10} />
+                  <span>{t('Playing on')} <b>{target.name}</b></span>
+                </div>
+              ) : (
               <div className="lcd-scrub">
                 <span className="t">{fmtTime(position)}</span>
                 <div
@@ -237,6 +267,7 @@ export function Player({
                     the honest answer to "how long is left" is silence. */}
                 <span className="t r">{total ? `-${fmtTime(Math.max(0, total - position))}` : t('live')}</span>
               </div>
+              )}
             </div>
             <button
               className={`lcd-eye ${artOpen ? 'on' : ''}`}
