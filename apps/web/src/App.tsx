@@ -101,7 +101,20 @@ export default function App() {
   const [selectIds, setSelectIds] = useState<string[] | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
+  const [theme, chooseTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
+  /**
+   * The attribute goes on before the state does.
+   *
+   * Icons now read their glyph from the theme on the document, so the effect
+   * below is one render too late: it runs *after* the tree has re-rendered, and
+   * every icon in it would draw the previous skin's shape until something else
+   * moved. Setting it here — in the handler, before React re-renders — costs a
+   * line and removes the whole class of stale-frame bug.
+   */
+  const setTheme = useCallback((next: Theme) => {
+    document.documentElement.dataset.theme = next
+    chooseTheme(next)
+  }, [])
   /** "What is left to put on the iPod" — computed server-side, never on a page. */
   const [deviceFilter, setDeviceFilter] = useState<{ deviceId: string; mode: 'on' | 'not' } | null>(null)
   // A drop on a device moves nothing yet, so it has to say what it did. The

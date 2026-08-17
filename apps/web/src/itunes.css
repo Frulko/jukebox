@@ -5,6 +5,9 @@
 :root,
 [data-theme="classic"] {
   --font: "Lucida Grande", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* The second typeface: paths, URLs and anything the reader may have to type
+     back character for character. A theme changes both or neither. */
+  --font-mono: Monaco, "Courier New", monospace;
   --fs: 11px;
 
   --chrome: linear-gradient(#f6f6f6, #d2d2d2);
@@ -768,6 +771,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 [data-theme="itunes12"] {
   --font: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   --fs: 12px;
 
   --chrome: #f6f6f6;
@@ -848,6 +852,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 [data-theme="music"] {
   --font: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   --fs: 12px;
 
   --chrome: #2b2b2d;
@@ -1250,6 +1255,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 [data-theme="studio"] {
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   --fs: 12.5px;
 
   /* the elevation ladder: a surface is higher because it is lighter */
@@ -2178,6 +2184,7 @@ input[type="range"]::-webkit-slider-thumb {
 .share-empty { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 6px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--dim); }
 .share-empty p { margin: 0; }
 .share-endpoint { margin: 8px 0 0; color: var(--dim); line-height: 1.55; }
+code { font-family: var(--font-mono); font-size: .95em; }
 .share-endpoint code { padding: 1px 5px; border-radius: 3px; background: var(--stripe); color: var(--text); }
 /* Marked as a plan, not as a panel of things that work. */
 .share-plan { padding: 11px 13px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--dim); }
