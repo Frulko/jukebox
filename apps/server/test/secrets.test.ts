@@ -177,3 +177,59 @@ test('an issued token is shown once and never again', async () => {
     assert.ok(!listed.text.includes(created.token), 'the token came back in a listing')
   } finally { await h.cleanup() }
 })
+
+test('an unclaimed server withholds secrets from everyone, including nobody', async () => {
+  /*
+   * The configuration this sweep had never asked about, and the most exposed
+   * one there is: a fresh install with no accounts answers *everything*
+   * without a token. If a secret leaks here it leaks to whoever reaches the
+   * port, with no credential involved at all.
+   *
+   * The distinction the other session drew when scoping `root` is what makes
+   * this worth its own case. `root` is deliberately shown on an open server —
+   * withholding a path from the one person using their own machine, to protect
+   * it from them, is the wrong trade. Secrets are not exempted that way,
+   * because the thing to protect against is a client reading the response, not
+   * the person at the keyboard.
+   */
+  const dir = await mkdtemp(join(tmpdir(), 'jukebox-open-'))
+  const app = createApp(join(dir, 'db.sqlite'))
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await app.app.fetch(new Request(`http://x/api/v1${path}`, {
+      method,
+      headers: body ? { 'content-type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    }))
+    return { status: res.status, text: await res.text() }
+  }
+
+  try {
+    // No /auth/setup: the server stays open, which is what a first boot is.
+    await call('POST', '/sources', {
+      id: 'jf', name: 'Attic', root: 'http://jf:8096', kind: 'jellyfin',
+      config: { token: SENTINELS.sourceToken, parentId: 'lib-7' },
+    })
+
+    const stored = (app.db.prepare(`SELECT config FROM sources WHERE id = 'jf'`)
+      .get() as { config: string })
+    assert.ok(stored.config.includes(SENTINELS.sourceToken), 'the secret really was stored')
+
+    const leaks: string[] = []
+    for (const route of routeTable(app.app)) {
+      if (route.method !== 'GET' || UNSWEEPABLE.has(route.path)) continue
+      const res = await call('GET', fill(route.path))
+      if (res.text.includes(SENTINELS.sourceToken)) leaks.push(`GET ${fill(route.path)}`)
+    }
+    assert.deepEqual(leaks, [], 'an unclaimed server handed out a stored credential')
+
+    // And the deliberate exception is really an exception: the root *is* shown,
+    // so this test would notice if secrets were ever swept under the same rule.
+    const sources = JSON.parse((await call('GET', '/sources')).text)
+    assert.equal(sources.items[0].root, 'http://jf:8096', 'the owner still sees their own path')
+    assert.deepEqual(sources.items[0].secrets, ['token'])
+  } finally {
+    app.closeOutputs()
+    app.jobs.stop()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
