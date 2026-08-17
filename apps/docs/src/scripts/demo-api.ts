@@ -1003,6 +1003,22 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     }
     if (command === 'playlist') return { kind: 'playlist', id: 'p-top', name: 'Built from your listening' }
     if (command === 'flush') return { kind: 'done', message: '3 listens sent.' }
+    if (command === 'trending') {
+      // What the real plugin returns from the public sitewide endpoint: names of
+      // artists, some of which this library holds and some of which it does not
+      // — which is the whole point of the page saying which.
+      return {
+        kind: 'suggestions',
+        title: 'Most listened to this week, everywhere',
+        items: [
+          { name: 'A Tribe Called Quest', artist: 'A Tribe Called Quest', why: '18,204 listens this week' },
+          { name: 'Aphex Twin', artist: 'Aphex Twin', why: '15,880 listens this week' },
+          { name: 'Sufjan Stevens', artist: 'Sufjan Stevens', why: '12,003 listens this week' },
+          { name: 'Charli XCX', artist: 'Charli XCX', why: '11,455 listens this week' },
+          { name: 'Fleetwood Mac', artist: 'Fleetwood Mac', why: '9,712 listens this week' },
+        ],
+      }
+    }
     if (command === 'words') {
       // The words are invented, like everything else in this library: the real
       // plugin fetches them from LRCLIB, which has nothing to say about songs
@@ -1032,8 +1048,11 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
           contributes: { settings: [], 'track.contextMenu': [
             { id: 'lb.similar', label: 'Find similar tracks', command: 'similar' },
             { id: 'lb.playlist', label: 'Build a playlist from this', command: 'playlist' },
+          ], recommendations: [
+            { id: 'trending', label: 'Trending on ListenBrainz', command: 'trending',
+              description: 'Public figures — no token needed, and nothing about you is sent.' },
           ] },
-          commands: ['similar', 'playlist', 'flush'],
+          commands: ['similar', 'playlist', 'flush', 'trending'],
           enabled: 1, state: 'active', error: null, config: {} },
         // Contributes a *place* rather than an action: the information window
         // grows a tab, and the host draws whatever the command answers.

@@ -7,8 +7,6 @@ import {
   fmtMin,
   PODCAST_LIST,
   RADIO_GENRES,
-  STORE_CHARTS,
-  STORE_FEATURED,
   type Show,
 } from './media'
 import { getLocale } from './i18n'
@@ -164,62 +162,6 @@ export function RadioView({ search }: { search: string }) {
                   <span className="c-date num">{s.listeners.toLocaleString(getLocale())}</span>
                 </div>
               ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/* ---------------- iTunes Store: fake storefront ---------------- */
-
-export function StoreView({ purchased }: { purchased: boolean }) {
-  const pane = useScrollMemory<HTMLDivElement>(purchased ? 'purchased' : 'store')
-  if (purchased) {
-    return (
-      <div className="media store" ref={pane.ref} onScroll={pane.onScroll}>
-        <h2>Purchased</h2>
-        <div className="charts">
-          {STORE_CHARTS.slice(0, 2).map((c) => (
-            <div key={c.title} className="chart">
-              <h3>{c.title.replace('Top', 'Recently Purchased')}</h3>
-              <ol>
-                {c.rows.slice(0, 6).map((row) => (
-                  <li key={row}>
-                    <span>{row}</span>
-                    <Icon name="cloud" size={11} className="dim" />
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-  return (
-    <div className="media store" ref={pane.ref} onScroll={pane.onScroll}>
-      <div className="banners">
-        {STORE_FEATURED.map((f) => (
-          <button key={f.id} className="banner" style={art(f.hue)}>
-            <b>{f.title}</b>
-            <span>{f.subtitle}</span>
-          </button>
-        ))}
-      </div>
-      <div className="charts">
-        {STORE_CHARTS.map((c) => (
-          <div key={c.title} className="chart">
-            <h3>{c.title}</h3>
-            <ol>
-              {c.rows.map((row, i) => (
-                <li key={row}>
-                  <em>{i + 1}</em>
-                  <span>{row}</span>
-                  <button className="buy">BUY</button>
-                </li>
-              ))}
-            </ol>
           </div>
         ))}
       </div>

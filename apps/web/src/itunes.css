@@ -2058,6 +2058,35 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .np-album:hover { color: var(--accent); text-decoration: underline; }
 
+/* ---------------- Discover: whatever is plugged in ----------------
+   The host draws nothing of its own here, so every rule below is about
+   presenting somebody else's answer honestly: who said it, and whether the
+   library already holds it. */
+.discover-lead { margin: 0 0 14px; max-width: 76ch; line-height: 1.55; color: var(--dim); }
+.discover-empty { max-width: 76ch; padding: 14px 16px; border-radius: var(--radius); background: var(--stripe); }
+.discover-empty h3 { margin: 0 0 8px; font-size: 13px; }
+.discover-empty p { margin: 0 0 10px; line-height: 1.55; }
+.discover-empty p:last-child { margin-bottom: 0; }
+.discover-source { margin-bottom: 16px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel); }
+.ds-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--line-soft); }
+.ds-head .icon { color: var(--accent); align-self: center; }
+.ds-head em { font-style: normal; font-size: 10px; }
+.ds-head .ds-what { font-size: 11px; }
+.ds-head .spacer { flex: 1; }
+.ds-head button { padding: 2px 9px; border: 1px solid var(--btn-line); border-radius: var(--radius); background: var(--btn); color: var(--btn-text); }
+.ds-head button:disabled { opacity: .5; }
+.sug-list { margin: 0; padding: 4px 0; list-style: none; }
+.sug { display: flex; align-items: baseline; gap: 8px; padding: 3px 11px; min-width: 0; }
+.sug:hover { background: var(--stripe); }
+.sug .n { font-weight: 600; }
+.sug .a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sug .why { font-style: normal; font-size: 10px; }
+.sug .spacer { flex: 1; }
+.sug button { padding: 1px 8px; border: 1px solid var(--btn-line); border-radius: var(--radius); background: var(--btn); color: var(--btn-text); font-size: 10px; }
+/* Already yours: the row stops being a suggestion and becomes a shortcut. */
+.sug.have .n { color: var(--accent); }
+.discover .plugin-text { margin: 0; padding: 9px 11px; }
+
 /* ---------------- a tab a plugin contributed ----------------
    Text the host draws: the plugin returns a string, so what it can do to this
    window ends at line breaks. Wrapped rather than clipped, and in the reading

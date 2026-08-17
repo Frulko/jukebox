@@ -16,7 +16,8 @@ import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
-import { AppsView, mediaSummary, StoreView } from './MediaViews'
+import { AppsView, mediaSummary } from './MediaViews'
+import { DiscoverView } from './DiscoverView'
 import { RadioView } from './RadioView'
 import { AudiobooksView } from './AudiobooksView'
 import { episodeAsTrack, hostOf, PodcastsView } from './PodcastsView'
@@ -829,7 +830,18 @@ export default function App() {
   }
   const media =
     view.kind === 'store'
-      ? <StoreView purchased={view.id === 'purchased'} />
+      ? (
+        <DiscoverView
+          onPlay={(id) => playTrack(id)}
+          // An artist you already have is a place in the library rather than a
+          // suggestion, so the row leads there: the artists view, narrowed to
+          // them, exactly as clicking them in the column browser would.
+          onOpenArtist={(artist) => {
+            setView({ kind: 'library', id: 'artists' })
+            setBrowse({ genre: null, artist, album: null })
+          }}
+        />
+      )
       : view.kind === 'library' && view.id !== 'music'
         ? MEDIA[view.id]
         : null

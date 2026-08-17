@@ -31,6 +31,14 @@
         "label": "Send queued listens now",
         "command": "flush"
       }
+    ],
+    "recommendations": [
+      {
+        "id": "trending",
+        "label": "Trending on ListenBrainz",
+        "command": "trending",
+        "description": "Public figures — no token needed, and nothing about you is sent."
+      }
     ]
   }
 }

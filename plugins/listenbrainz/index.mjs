@@ -107,6 +107,51 @@ export function activate(host) {
     }
   })
 
+  /**
+   * What the rest of ListenBrainz is listening to.
+   *
+   * The one recommender this plugin can honestly offer: sitewide statistics are
+   * public, so it works before anybody has set a token, and it asks nothing
+   * about the person reading. Personal recommendations need a user name and a
+   * different set of endpoints; when this plugin knows one it can add a second
+   * source rather than making this one quietly personal.
+   *
+   * Artists rather than tracks, because that is what the sitewide endpoint
+   * ranks — and naming an artist you might not have is exactly what a
+   * suggestion is for.
+   */
+  host.registerCommand('trending', async () => {
+    const { url } = cfg()
+    const res = await host.net.fetch(`${url}/1/stats/sitewide/artists?count=20&range=week`)
+    if (res.status === 204) {
+      // A real answer, not an error: the range has not been computed yet.
+      return { kind: 'done', message: 'ListenBrainz has not published this week’s figures yet.' }
+    }
+    if (!res.ok) throw new Error(`ListenBrainz answered ${res.status}`)
+
+    const body = await res.json()
+    const rows = body?.payload?.artists ?? []
+
+    // The same artist appears twice when MusicBrainz holds two ids for them —
+    // the real answer this morning had BTS at both first and third place. The
+    // list is a ranking, so the first entry is the one that means something and
+    // the rest are the same name saying it again; the counts are not added,
+    // because a number nobody published is not a number.
+    const seen = new Set()
+    const items = []
+    for (const a of rows) {
+      const name = a.artist_name
+      if (!name || seen.has(name.toLowerCase())) continue
+      seen.add(name.toLowerCase())
+      items.push({
+        name,
+        artist: name,
+        why: a.listen_count ? `${a.listen_count.toLocaleString('en-US')} listens this week` : undefined,
+      })
+    }
+    return { kind: 'suggestions', title: 'Most listened to this week, everywhere', items }
+  })
+
   host.log(cfg().token ? 'ready' : 'waiting for a user token')
 }
 

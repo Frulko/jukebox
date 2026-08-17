@@ -1599,6 +1599,43 @@ export const SCHEMAS: Record<string, any> = {
           "kind",
           "body"
         ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "suggestions"
+          },
+          "title": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "artist": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "artist"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "items"
+        ]
       }
     ]
   },

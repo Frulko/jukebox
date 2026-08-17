@@ -425,6 +425,20 @@ export type CommandResult =
    * `contributes` exists to prevent.
    */
   | { kind: 'text'; title?: string; body: string }
+  /**
+   * Music worth hearing that the library may not hold.
+   *
+   * Deliberately not `tracks`: a suggestion is a name and an artist, not an id.
+   * A recommender that could only return ids could only ever recommend what you
+   * already own, which is the opposite of the point — and forcing it to invent
+   * an id for something absent is how a page ends up with rows that lead
+   * nowhere. The host looks each one up and says whether you have it.
+   */
+  | {
+      kind: 'suggestions'
+      title?: string
+      items: Array<{ name: string; artist: string; why?: string }>
+    }
 
 export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
 

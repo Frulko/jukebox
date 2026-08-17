@@ -135,23 +135,6 @@ export const RADIO_GENRES: RadioGenre[] = RADIO.map(([name, stations]) => ({
   })),
 }))
 
-export const STORE_FEATURED = [
-  { id: 'f1', title: 'New Music Tuesday', subtitle: '25 albums just added', hue: 210 },
-  { id: 'f2', title: 'Essentials: Trip Hop', subtitle: 'Curated by iTunes', hue: 320 },
-  { id: 'f3', title: 'Live from Montreux', subtitle: 'Exclusive session', hue: 40 },
-]
-
-export const STORE_CHARTS = [
-  {
-    title: 'Top Songs',
-    rows: ['Blue Highway — Daft Punk', 'Cold Season — Portishead', 'Neon Garden — Air', 'Wild Parade — Björk', 'Paper Heart — J Dilla', 'Silent Letter — Burial', 'Glass Radio — Kraftwerk', 'Slow Motion — Massive Attack'],
-  },
-  {
-    title: 'Top Albums',
-    rows: ['Discovery — Daft Punk', 'Dummy — Portishead', 'Moon Safari — Air', 'Homogenic — Björk', 'Donuts — J Dilla', 'Untrue — Burial', 'Mezzanine — Massive Attack', 'Kid A — Radiohead'],
-  },
-]
-
 export const fmtMin = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}min`
 export const fmtBytes = (b: number) =>
   b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${(b / 1e6).toFixed(1)} MB`
