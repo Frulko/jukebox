@@ -495,6 +495,18 @@ export const SCHEMAS: Record<string, any> = {
       },
       "rev": {
         "type": "number"
+      },
+      "config": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "What the source needs beyond its root — a daemon URL, a library id. Credentials are **not** here; see `secrets`."
+      },
+      "secrets": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "The names of the settings that are set and withheld: a token, a password. Enough for an interface to offer to replace one without ever reading it."
       }
     },
     "required": [

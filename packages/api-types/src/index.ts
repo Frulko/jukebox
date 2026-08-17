@@ -146,6 +146,16 @@ export type Source = {
   writable: 0 | 1
   lastScanAt: number | null
   rev: number
+  /**
+   * What the source needs beyond its root — a daemon URL, a library id.
+   * Credentials are **not** here; see `secrets`.
+   */
+  config?: Record<string, unknown>
+  /**
+   * The names of the settings that are set and withheld: a token, a password.
+   * Enough for an interface to offer to replace one without ever reading it.
+   */
+  secrets?: string[]
 }
 
 export type JobKind =

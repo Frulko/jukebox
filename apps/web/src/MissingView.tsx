@@ -350,7 +350,7 @@ export function MissingView() {
                 {list[0].sourceName || source?.name || sourceId}
                 <em>
                   {list.length} missing
-                  {source ? ` · ${source.root}` : ''}
+                  {source?.root ? ` · ${source.root}` : ''}
                 </em>
               </h3>
               {failed && <span className="missing-error">{failed}</span>}

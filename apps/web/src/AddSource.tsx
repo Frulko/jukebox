@@ -17,7 +17,7 @@ import { t } from './i18n'
  * makes: `root` is *where this source lives* — a path, a remote, a server URL —
  * and everything else a kind needs to open it travels in `config`.
  */
-type Field = {
+export type Field = {
   key: string
   label: string
   placeholder: string
@@ -250,6 +250,10 @@ export function AddSource({
     </div>
   )
 }
+
+/** What a kind of source asks for, shared with the editor on each card. */
+export const fieldsOf = (kind: string) => KINDS.find((k) => k.id === kind)?.fields ?? []
+export const canWrite = (kind: string) => !!KINDS.find((k) => k.id === kind)?.canWrite
 
 /** The icon each kind is drawn with, shared with the cards on the page. */
 export const kindIcon = (kind: string) => KINDS.find((k) => k.id === kind)?.icon ?? 'cloud'

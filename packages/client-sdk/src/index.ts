@@ -382,6 +382,18 @@ export function createClient(opts: ClientOptions = {}) {
         writable?: boolean; config?: Record<string, unknown>
       }) =>
         request<Source>('/sources', { method: 'POST', body: JSON.stringify(s) }),
+      /**
+       * Rename it, let it be written to, or fix the settings it opens with.
+       *
+       * `config` merges key by key, so a client that was shown `secrets:
+       * ['token']` rather than the token itself can change the port beside it
+       * without echoing a credential it never had. An empty string clears a key.
+       */
+      update: (id: string, patch: {
+        name?: string; writable?: boolean; config?: Record<string, unknown>
+      }) => request<Source>(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+      /** Refused while the source still holds tracks: that is a different request. */
+      remove: (id: string) => request<void>(`/sources/${id}`, { method: 'DELETE' }),
       /** `full` re-reads every file instead of trusting mtime and size. */
       scan: (id: string, full = false) =>
         request<Job>(`/sources/${id}/scan${full ? '?full=true' : ''}`, { method: 'POST' }),

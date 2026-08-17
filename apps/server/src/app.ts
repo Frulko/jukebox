@@ -1486,13 +1486,64 @@ export function createApp(dbFile: string) {
    * that came back since the last scan should stop being reported as missing
    * without anyone having to press anything.
    */
+  /**
+   * Which keys of a source's config are a credential.
+   *
+   * A Jellyfin API key, a Plex token, an rclone password. The rest of a config
+   * — a daemon URL, a library id — is not secret and the interface has to show
+   * it to be able to edit it, so this is a list of keys rather than a rule
+   * about the whole column.
+   */
+  const SECRET_KEYS = new Set(['token', 'pass', 'password', 'apiKey', 'secret'])
+
+  /**
+   * A config anyone may read, and the names of what was withheld.
+   *
+   * `GET /sources` used to spread the whole row, so the token of every remote
+   * library reached every account that may list sources — while `/backup`, the
+   * file most likely to be emailed, was carefully redacting the same string.
+   * The keys are still named: "set, not shown" is what lets an interface offer
+   * to replace one without ever having been told it.
+   */
+  const publicConfig = (raw: string) => {
+    let parsed: Record<string, unknown> = {}
+    try {
+      parsed = JSON.parse(raw || '{}')
+    } catch {
+      // A config that will not parse is a config nobody can act on; saying it
+      // is empty beats a 500 on the page that would let you fix it.
+      return { config: {}, secrets: [] as string[] }
+    }
+    const config: Record<string, unknown> = {}
+    const secrets: string[] = []
+    for (const [k, v] of Object.entries(parsed)) {
+      if (SECRET_KEYS.has(k)) {
+        if (v !== '' && v !== null && v !== undefined) secrets.push(k)
+      } else {
+        config[k] = v
+      }
+    }
+    return { config, secrets }
+  }
+
   api.get('/sources', async (c) => {
     // Narrowed accounts see the sources they may use and no others: listing the
     // name of a library somebody cannot open tells them it exists, which is
     // most of what hiding it was for.
     const allowed = sourcesFor(db, userOf(c))
+    // A root is a fact about the machine — `/srv/media/nas-2/music` says what
+    // is mounted where — and every route that manages a source is admin-gated
+    // already, so nobody else can act on it. The name, the id and the kind stay
+    // for everyone: the rest of the app names sources beside tracks.
+    // `isOpen` is the single-user case the whole server is built around: no
+    // accounts configured means nobody has asked for any of this, and the one
+    // person using it is the owner. Withholding the root from them would break
+    // the Sources page for the commonest install in the name of protecting it
+    // from itself.
+    const admin = isOpen(db) || can(userOf(c), 'admin')
     const items = (db.prepare(`SELECT * FROM sources`).all() as any[])
       .filter((s) => !allowed || allowed.includes(s.id))
+      .map((s) => ({ ...s, root: admin ? s.root : '', ...publicConfig(s.config) }))
     const mounts = await readMounts()
 
     const described = await Promise.all(items.map(async (s) => {
@@ -1528,6 +1579,83 @@ export function createApp(dbFile: string) {
       .run(id, b.kind ?? 'local', b.name, b.root, b.writable ? 1 : 0,
         JSON.stringify(b.config ?? {}), nextRev(db))
     return c.json(db.prepare(`SELECT * FROM sources WHERE id = ?`).get(id), 201)
+  })
+
+  /**
+   * Change what can be changed about a source.
+   *
+   * Its **name**, its **write capability**, and the settings it needs to be
+   * opened — a rotated API key, a daemon that moved. Config merges key by key
+   * rather than replacing the object, so a client that was never shown the
+   * token does not have to send it back to change the port next to it; an
+   * empty string clears a key.
+   *
+   * `root` and `kind` are not among them, and that is a decision rather than an
+   * omission. A track's `path` is stored relative to the root, so moving the
+   * root would silently reinterpret every row in the library — the same music
+   * pointing somewhere else without a single file being touched. Making a new
+   * source and rescanning says what is happening; editing one letter does not.
+   */
+  api.patch('/sources/:id', async (c) => {
+    const src = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(c.req.param('id')) as any
+    if (!src) return fail(c, 404, 'not_found', 'unknown source')
+    const b = await c.req.json().catch(() => null)
+    if (!b) return fail(c, 400, 'bad_body', 'expected { name?, writable?, config? }')
+    if (b.root !== undefined && b.root !== src.root) {
+      return fail(c, 409, 'root_immutable',
+        'a track path is relative to the root; add a source and rescan instead')
+    }
+    if (b.kind !== undefined && b.kind !== src.kind) {
+      return fail(c, 409, 'kind_immutable', 'a source cannot change what kind of thing it is')
+    }
+
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : src.name
+    const writable = b.writable === undefined ? src.writable : b.writable ? 1 : 0
+    let config = src.config
+    if (b.config && typeof b.config === 'object') {
+      const merged: Record<string, unknown> = JSON.parse(src.config || '{}')
+      for (const [k, v] of Object.entries(b.config as Record<string, unknown>)) {
+        if (v === '' || v === null) delete merged[k]
+        else merged[k] = v
+      }
+      config = JSON.stringify(merged)
+    }
+
+    db.prepare(`UPDATE sources SET name = ?, writable = ?, config = ?, rev = ? WHERE id = ?`)
+      .run(name, writable, config, nextRev(db), src.id)
+    const after = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(src.id) as any
+    return c.json({ ...after, ...publicConfig(after.config) })
+  })
+
+  /**
+   * Forget a source — but never quietly decide what happens to its music.
+   *
+   * The tracks of a source carry ratings, play counts, tags and places in
+   * playlists. "Forget where this came from" and "delete this music" are two
+   * different requests, so a source that still holds tracks is refused with the
+   * count rather than taking the destructive reading of an ambiguous one.
+   */
+  api.delete('/sources/:id', (c) => {
+    const id = c.req.param('id')
+    const src = db.prepare(`SELECT id FROM sources WHERE id = ?`).get(id) as any
+    if (!src) return fail(c, 404, 'not_found', 'unknown source')
+    // Every row, **including the soft-deleted ones**. `tracks.sourceId` is
+    // `ON DELETE CASCADE`, so forgetting a source takes its tracks with it, and
+    // a soft-deleted track is precisely the one still holding a rating and a
+    // place in three playlists while its disk is unplugged. Counting only the
+    // live ones would make a dead drive's source deletable and wipe exactly
+    // what the Missing page exists to protect.
+    const held = (db.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE sourceId = ?`).get(id) as any).n
+    const missing = (db.prepare(
+      `SELECT COUNT(*) AS n FROM tracks WHERE sourceId = ? AND deletedAt IS NOT NULL`).get(id) as any).n
+    if (held > 0) {
+      return fail(c, 409, 'source_in_use',
+        `${held} track${held === 1 ? '' : 's'} still come from this source` +
+        `${missing ? ` (${missing} of them missing, with their ratings and playlist places)` : ''}` +
+        ` — deleting the source would delete them too`)
+    }
+    db.prepare(`DELETE FROM sources WHERE id = ?`).run(id)
+    return c.body(null, 204)
   })
 
   /**

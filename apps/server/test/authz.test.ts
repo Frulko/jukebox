@@ -30,6 +30,9 @@ const EXPECTED: Record<string, 'admin' | 'user' | 'guest'> = {
 
   'POST /sources': 'admin',
   'POST /sources/:id/scan': 'admin', 'POST /sources/:id/test': 'admin',
+  // Same as creating one: a source is where the library comes from, and its
+  // config holds the credentials for it.
+  'PATCH /sources/:id': 'admin', 'DELETE /sources/:id': 'admin',
 
   'POST /restore': 'admin',
   'POST /schedules': 'admin', 'PATCH /schedules/:id': 'admin', 'DELETE /schedules/:id': 'admin',

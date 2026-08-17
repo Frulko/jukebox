@@ -67,6 +67,11 @@ const player = {
 const norm = (s: string) => s.toLowerCase()
 
 function match(t: Track, q: TrackQuery) {
+  // Scoping by source was simply not implemented, so every count "per source"
+  // was the whole library: the Sources page credited a Jellyfin library that
+  // holds nothing with 528 tracks, and the folder picker offered one source's
+  // folders under another's name.
+  if (q.sourceId && t.sourceId !== q.sourceId) return false
   if (q.kind && t.kind !== q.kind) return false
   if (q.genre && t.genre !== q.genre) return false
   if (q.artist && t.albumArtist !== q.artist && t.artist !== q.artist) return false
@@ -454,6 +459,27 @@ const OUTPUTS: Output[] = [
     address: 'http://192.168.1.57:8788', formats: ['flac', 'mp3'], stale: true },
 ]
 
+/**
+ * The settings each source opens with, kept beside them as the server keeps
+ * them in a column — and, like the server, never handed back in full: a
+ * credential is named as set rather than printed.
+ */
+const CONFIGS: Record<string, Record<string, string>> = {
+  friend: { url: 'https://jelly.camille.invalid', token: 'a-real-looking-key', parentId: 'lib-4' },
+}
+
+const SECRET_KEYS = new Set(['token', 'pass', 'password', 'apiKey', 'secret'])
+
+const publicSource = (s: Source) => {
+  const raw = CONFIGS[s.id] ?? {}
+  const config: Record<string, string> = {}
+  const secrets: string[] = []
+  for (const [k, v] of Object.entries(raw)) {
+    if (SECRET_KEYS.has(k)) { if (v) secrets.push(k) } else config[k] = v
+  }
+  return { ...s, config, secrets }
+}
+
 const SOURCES: Source[] = [
   // With its mount, as the real route reports it: a UI that can say "this share
   // is not mounted" instead of showing an empty library needs the answer to
@@ -464,8 +490,7 @@ const SOURCES: Source[] = [
   // Somebody else's server, which is what "a library shared with you" is until
   // the peer-to-peer version exists.
   { id: 'friend', kind: 'jellyfin', name: "Camille's Jellyfin", root: 'https://jelly.camille.invalid',
-    writable: 0, lastScanAt: Date.UTC(2026, 7, 15), rev: 1,
-    config: { url: 'https://jelly.camille.invalid' } } as Source,
+    writable: 0, lastScanAt: Date.UTC(2026, 7, 15), rev: 1 } as Source,
   { id: 'demo', kind: 'local', name: 'Demo library', root: '/music', writable: 1,
     lastScanAt: Date.UTC(2026, 7, 16), rev: 1,
     mount: { device: '/dev/disk3s5', type: 'apfs', network: false, readOnly: false, point: '/' } } as Source,
@@ -841,6 +866,36 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
     if (b.cron !== undefined) f.cron = b.cron as string | null
     return f
   }
+  const srcPatch = path.match(/^\/sources\/([^/]+)$/)
+  if (srcPatch && method === 'PATCH') {
+    const src = SOURCES.find((x) => x.id === srcPatch[1])
+    if (!src) throw new DemoError(404, 'not_found', 'unknown source')
+    const b = JSON.parse(body ?? '{}') as { name?: string; writable?: boolean; config?: Record<string, string> }
+    if (b.name) src.name = b.name
+    if (b.writable !== undefined) src.writable = b.writable ? 1 : 0
+    // Merged key by key, like the server: a page that was never shown the token
+    // must be able to change the port beside it.
+    if (b.config) {
+      const c = { ...(CONFIGS[src.id] ?? {}) }
+      for (const [k, v] of Object.entries(b.config)) {
+        if (v === '') delete c[k]
+        else c[k] = v
+      }
+      CONFIGS[src.id] = c
+    }
+    return publicSource(src)
+  }
+  if (srcPatch && method === 'DELETE') {
+    const src = SOURCES.find((x) => x.id === srcPatch[1])
+    if (!src) throw new DemoError(404, 'not_found', 'unknown source')
+    const held = tracks.filter((t) => t.sourceId === src.id).length
+    if (held > 0) {
+      throw new DemoError(409, 'source_in_use',
+        `${held} tracks still come from this source — deleting the source would delete them too`)
+    }
+    SOURCES.splice(SOURCES.indexOf(src), 1)
+    return null
+  }
   const srcTest = path.match(/^\/sources\/([^/]+)\/test$/)
   if (srcTest && method === 'POST') {
     const src = SOURCES.find((x) => x.id === srcTest[1])
@@ -1014,7 +1069,7 @@ function route(path: string, params: URLSearchParams, method: string, body: stri
       ],
     }
   }
-  if (path === '/sources') return { items: SOURCES }
+  if (path === '/sources') return { items: SOURCES.map(publicSource) }
   // A rescan in the demo has nothing to walk, so it answers with the job it
   // would have started and the scan job already on display keeps running.
   if (path.startsWith('/sources/') && path.endsWith('/scan') && method === 'POST') return scanning()

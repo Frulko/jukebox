@@ -2203,7 +2203,26 @@ input[type="range"]::-webkit-slider-thumb {
 .sc-facts dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-facts dd.path { direction: rtl; text-align: left; unicode-bidi: plaintext; }
 .sc-gone { color: var(--danger, #d4342c); }
+/* Two contexts had no skin at all and fell back to the browser's own button:
+   light grey, which passes unnoticed in the three pale themes and turns
+   near-white text invisible in Studio. Every other group of buttons in this
+   file paints itself; these two had been forgotten. */
+.sc-actions button, .seg button {
+  padding: 2px 9px;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius);
+  background: var(--btn);
+  color: var(--btn-text);
+}
+.sc-actions button.prim { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }
+.sc-actions button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
+.sc-actions button:disabled { opacity: .5; }
 .sc-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.sc-actions .spacer { flex: 1; }
+.sc-edit { margin: 4px 0 10px; padding: 10px 12px; border-radius: var(--radius); background: var(--stripe); }
+.sc-edit .as-row > span:first-child { width: 78px; }
+.sc-edit code { font-family: var(--font-mono); }
+.sc-error { margin: 6px 0 0; }
 .sc-probe { display: flex; align-items: center; gap: 5px; font-size: 11px; }
 .sc-probe.ok { color: var(--accent); }
 .sc-probe.bad { color: var(--danger, #d4342c); }

@@ -112,6 +112,13 @@ const DOCS: Record<string, Doc> = {
 
   'GET /sources': { summary: 'Where the music lives.', returns: 'Source[]', tag: 'sources' },
   'POST /sources': { summary: 'Adds a source. `rclone` sources carry `config: { url, fs }`.', tag: 'sources' },
+  'PATCH /sources/:id': {
+    summary: 'Rename a source, change its write capability, or fix its settings.',
+    body: '{ name?, writable?, config? }', tag: 'sources',
+  },
+  'DELETE /sources/:id': {
+    summary: 'Forgets a source. Refused while it still holds tracks.', tag: 'sources',
+  },
   'POST /sources/:id/test': { summary: 'Does this source answer? Better asked before a scan than read from its error afterwards.', tag: 'sources' },
   'POST /sources/:id/scan': { summary: 'Indexes a source. `full` re-reads every file; `prune` confirms deleting every track when the source turns up empty, which an unmounted share also does.', tag: 'sources', query: ['full', 'prune'] },
   'GET /duplicates': { summary: 'Rows that look like one song. Proposes; never merges.', returns: 'DuplicateGroup[]', tag: 'sources' },

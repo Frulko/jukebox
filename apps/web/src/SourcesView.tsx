@@ -4,7 +4,7 @@ import type { Source } from '@jukebox/client-sdk'
 import { api, useSources, useTrackCount } from './api'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
-import { AddSource, kindIcon, kindLabel } from './AddSource'
+import { AddSource, canWrite, fieldsOf, kindIcon, kindLabel } from './AddSource'
 import { getLocale } from './i18n'
 
 /** The mount the sources route adds for a local source; api-types does not name it yet. */
@@ -25,9 +25,79 @@ const when = (ms: number | null) =>
  * share that is down takes seconds to say so, and doing that to five sources on
  * every render would make opening this page feel like the outage.
  */
-function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolean) => void }) {
+function SourceCard({
+  source,
+  onScan,
+  onChanged,
+  onNotice,
+}: {
+  source: Mounted
+  onScan: (full: boolean) => void
+  onChanged: () => void
+  onNotice: (message: string) => void
+}) {
   const [probe, setProbe] = useState<'asking' | { ok: boolean; text: string } | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<{ name: string; writable: boolean; config: Record<string, string> }>({
+    name: source.name, writable: !!source.writable, config: {},
+  })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const tracks = useTrackCount({ sourceId: source.id, limit: 1 })
+
+  // Everything except `root`, which the server refuses to change: a track's
+  // path is stored relative to it, so editing it would point the whole library
+  // somewhere else without a file moving.
+  const fields = fieldsOf(source.kind).filter((f) => f.config)
+  const secrets = new Set(source.secrets ?? [])
+
+  const open = () => {
+    setDraft({ name: source.name, writable: !!source.writable, config: {} })
+    setError(null)
+    setEditing(true)
+  }
+
+  const save = async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const patch = await api.sources.update(source.id, {
+        name: draft.name.trim() || source.name,
+        writable: draft.writable,
+        // Only what was typed. A field left blank keeps whatever the server
+        // holds — which is the only way to edit a port next to a token the
+        // page was never shown.
+        config: Object.fromEntries(Object.entries(draft.config).filter(([, v]) => v !== '')),
+      })
+      onChanged()
+      setEditing(false)
+      onNotice(`Saved ${patch.name}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'the server refused it')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const forget = async () => {
+    if (!confirming) return setConfirming(true)
+    setBusy(true)
+    setError(null)
+    try {
+      await api.sources.remove(source.id)
+      onChanged()
+      onNotice(`Forgot ${source.name}`)
+    } catch (err) {
+      // Almost always the refusal, and it is the useful sentence: how many
+      // tracks would go with it.
+      setError(err instanceof Error ? err.message : 'the server refused it')
+      setConfirming(false)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const test = async () => {
     setProbe('asking')
@@ -61,7 +131,11 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
       <dl className="sc-facts">
         <div>
           <dt>Root</dt>
-          <dd className="path" title={source.root}>{source.root}</dd>
+          {/* Empty for a non-admin, who is told sources exist but not where the
+              machine keeps them. */}
+          <dd className="path" title={source.root}>
+            {source.root || <span className="dim">not shown</span>}
+          </dd>
         </div>
         <div>
           <dt>Tracks</dt>
@@ -71,6 +145,23 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
           <dt>Last scan</dt>
           <dd>{when(source.lastScanAt)}</dd>
         </div>
+        {/* What the source needs beyond its root. Shown because a wrong port
+            or a stale library id is exactly what a "test" failure means, and
+            hiding it left nowhere to look. A credential is named and never
+            printed: the server withholds the value and says the key is set. */}
+        {fields.map((f) => {
+          const value = (source.config ?? {})[f.config!]
+          const isSecret = secrets.has(f.config!)
+          if (value === undefined && !isSecret) return null
+          return (
+            <div key={f.key}>
+              <dt>{f.label}</dt>
+              <dd className={isSecret ? 'dim' : 'path'}>
+                {isSecret ? 'set — not shown' : String(value)}
+              </dd>
+            </div>
+          )
+        })}
         {source.kind === 'local' && (
           <div>
             <dt>Filesystem</dt>
@@ -92,7 +183,72 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
         )}
       </dl>
 
+      {editing && (
+        <div className="sc-edit">
+          <label className="as-row">
+            <span>Name</span>
+            <input
+              autoFocus
+              value={draft.name}
+              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            />
+          </label>
+
+          {fields.map((f) => (
+            <label key={f.key} className="as-row">
+              <span>{f.label}</span>
+              <span className="as-input">
+                <input
+                  type={f.secret ? 'password' : 'text'}
+                  value={draft.config[f.config!] ?? ''}
+                  // A secret is not filled in, because the page was never told
+                  // it. Blank means "keep it", which is the only honest default
+                  // for a field whose current value nobody here can read.
+                  placeholder={
+                    f.secret
+                      ? secrets.has(f.config!) ? 'set — leave blank to keep' : f.placeholder
+                      : String((source.config ?? {})[f.config!] ?? f.placeholder)
+                  }
+                  onChange={(e) => setDraft((d) => ({ ...d, config: { ...d.config, [f.config!]: e.target.value } }))}
+                />
+              </span>
+            </label>
+          ))}
+
+          {canWrite(source.kind) ? (
+            <label className="as-check">
+              <input
+                type="checkbox"
+                checked={draft.writable}
+                onChange={(e) => setDraft((d) => ({ ...d, writable: e.target.checked }))}
+              />
+              <span>
+                <b>Writable</b> — the server may put files here and write tags back into them.
+              </span>
+            </label>
+          ) : null}
+
+          {/* The one thing that cannot be edited, said where someone would go
+              looking for it rather than left as a missing field. */}
+          <p className="dim as-note">
+            The root stays <code>{source.root}</code>. Every track’s path is stored relative to it, so
+            changing it would point the whole library somewhere else without a file moving — add a
+            source and rescan instead.
+          </p>
+        </div>
+      )}
+
       <div className="sc-actions">
+        {editing ? (
+          <>
+            <button className="prim" disabled={busy} onClick={() => void save()}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+          </>
+        ) : (
+          <button onClick={open}>Edit</button>
+        )}
         <button onClick={test} disabled={probe === 'asking'}>
           {probe === 'asking' ? 'Asking…' : 'Test'}
         </button>
@@ -103,6 +259,18 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
         <button onClick={() => onScan(true)} title="Re-reads every file instead of trusting mtime and size">
           Full rescan
         </button>
+        <span className="spacer" />
+        {/* Two clicks, and the second one is answered by the server rather than
+            by a dialog: it refuses while the source still holds tracks and says
+            how many would go with it. */}
+        <button
+          className={confirming ? 'danger' : ''}
+          disabled={busy}
+          onClick={() => void forget()}
+          onBlur={() => setConfirming(false)}
+        >
+          {confirming ? 'Really forget?' : 'Forget'}
+        </button>
         {probe && probe !== 'asking' && (
           <span className={`sc-probe ${probe.ok ? 'ok' : 'bad'}`}>
             <Icon name={probe.ok ? 'music' : 'alert'} size={10} />
@@ -110,6 +278,7 @@ function SourceCard({ source, onScan }: { source: Mounted; onScan: (full: boolea
           </span>
         )}
       </div>
+      {error && <p className="sc-probe bad sc-error">{error}</p>}
     </div>
   )
 }
@@ -166,16 +335,23 @@ export function SourcesView({ onNotice }: { onNotice: (message: string) => void 
       )}
 
       {sources.map((s) => (
-        <SourceCard key={s.id} source={s} onScan={(full) => scan(s.id, full)} />
+        <SourceCard
+          key={s.id}
+          source={s}
+          onScan={(full) => scan(s.id, full)}
+          onChanged={() => qc.invalidateQueries({ queryKey: ['sources'] })}
+          onNotice={onNotice}
+        />
       ))}
 
       <p className="sources-note">
-        <b>Renaming or removing a source is not offered.</b> The API has no route for either, and that
-        is deliberate rather than missing: the tracks of a source carry ratings, play counts, tags and
-        places in playlists, so “forget where this came from” and “delete this music” are two different
-        requests and the server should not quietly pick one. Remote kinds — rclone, Plex, Emby,
-        Jellyfin — are added here with the settings each of them needs, and are read-only: everything
-        write capability gates acts on files on a disk.
+        <b>Forgetting a source is refused while it still holds tracks</b>, and the refusal says how
+        many. The tracks of a source carry ratings, play counts, tags and places in playlists — and
+        a missing track carries them while its disk is unplugged — so “forget where this came from”
+        and “delete this music” stay two different requests rather than one destructive reading of
+        an ambiguous one. The <b>root</b> cannot be edited either: every path is stored relative to
+        it. Everything else — the name, the write capability, a rotated token — is editable here,
+        and a credential is never printed back: the server says a key is set without saying what it is.
       </p>
     </div>
   )
