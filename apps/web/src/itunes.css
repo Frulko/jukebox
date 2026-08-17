@@ -201,6 +201,15 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid var(--chrome-line);
 }
 
+/* ---------------- composing the chrome ----------------
+   Moving the player to the bottom is not what a 2024 music app did. It **split
+   the chrome in two**: what you use to *go somewhere* stayed at the top — a
+   search field, the way back — and what you use to *listen* went to the bottom,
+   full width. The two halves live in one bar here, so the theme that wants them
+   apart takes the bar out of the layout (`display: contents`) and places its
+   three children in three different areas. No component is told about it, which
+   is the whole point of a slot. */
+
 /* ---------------- top bar ---------------- */
 
 .topbar {
@@ -356,7 +365,28 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* ---------------- layout ---------------- */
 
-.main { flex: 1; display: flex; min-height: 0; }
+/* ---------------- the slots ----------------
+   The shell is five regions and nothing else: `chrome` (the player), `nav`
+   (the library), `main` (whatever is open), `aside` (the queue) and `status`.
+   They are grid areas, so a theme decides where each one goes — and the last
+   theme in this file proves it by putting the chrome underneath and docking the
+   aside as a column, which no component knows about.
+
+   The body row is its own grid rather than a flex line, because "a pane on the
+   right" and "a panel floating over the right" are the same component in two
+   compositions, and only a grid can be told which. */
+.main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "nav main";
+}
+.main > .sidebar { grid-area: nav; }
+.main > .content { grid-area: main; }
+/* Floating by default: an area it is not placed in leaves it out of the flow,
+   which is exactly what `position: fixed` wants. */
+.main > .queue-panel { grid-area: main; }
 
 .sidebar {
   width: 172px;
@@ -1362,10 +1392,50 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* --- the shell: library and content on a canvas, player underneath --- */
 [data-theme="studio"] body { background: var(--canvas); }
-[data-theme="studio"] .itunes { background: var(--canvas); border: 0; padding: 8px 8px 0; gap: 8px; }
-[data-theme="studio"] .main { order: 1; gap: 8px; }
-[data-theme="studio"] .statusbar { order: 2; }
-[data-theme="studio"] .topbar { order: 3; }
+[data-theme="studio"] .itunes {
+  background: var(--canvas);
+  border: 0;
+  padding: 8px 8px 0;
+  gap: 8px;
+  display: grid;
+  /* Four rows: what you search with, what you are reading, the line at the
+     foot, and what plays. */
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  /* Three columns, so the bottom bar can hold what plays at the left and what
+     is playing in the middle — one row, three placeable pieces, no wrapper. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "find   find  find"
+    "body   body  body"
+    "status status status"
+    "pleft  pmid  pright";
+}
+/* Out of the layout so its three children can be placed apart. */
+[data-theme="studio"] .topbar { display: contents; }
+[data-theme="studio"] .transport { grid-area: pleft; }
+[data-theme="studio"] .lcd { grid-area: pmid; }
+/* Centred, the way a search field is in every app built since: it is the thing
+   you reach for, not a tool parked in a corner. */
+/* The `margin-left: auto` that pushes this to the right of a flex bar is what
+   kept it right in a grid too — an auto margin wins over `justify-self`. */
+[data-theme="studio"] .right-tools { grid-area: find; justify-self: center; margin-left: 0; }
+[data-theme="studio"] .main { grid-area: body; }
+[data-theme="studio"] .statusbar { grid-area: status; }
+[data-theme="studio"] .main {
+  gap: 8px;
+  /* The composition from the screenshot: library, content, and a right-hand
+     column that is there when the queue is open and gone when it is not. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "nav main aside";
+}
+[data-theme="studio"] .main > .queue-panel {
+  grid-area: aside;
+  position: static;
+  width: 300px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
 
 [data-theme="studio"] .sidebar,
 [data-theme="studio"] .content {

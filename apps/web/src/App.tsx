@@ -848,6 +848,13 @@ export default function App() {
 
   return (
     <div className="itunes">
+      {/* The shell publishes **slots**, and a theme composes them.
+          `chrome` (the player), `nav` (the library), `main` (whatever is open),
+          `aside` (the queue), `status` (the line at the foot). Every one is a
+          named grid area, so a skin decides where each goes — and whether it
+          exists at all — without a component knowing anything about it. Studio
+          puts the chrome under and docks the aside on the right, the way an app
+          built in 2024 does; the iTunes skins keep the 2008 stack. */}
       <Player
         track={current}
         playing={audio.playing}
@@ -890,30 +897,6 @@ export default function App() {
 
       {artOpen && current && (
         <NowPlayingPanel track={current} onClose={() => setArtOpen(false)} onOpenAlbum={openAlbum} />
-      )}
-
-      {queueOpen && (
-        <QueueView
-          queue={queue}
-          nowPlaying={nowPlaying}
-          known={known.current}
-          onPlay={(id) => playTrack(id)}
-          // No "remove one" route, and it does not need one: a queue minus a
-          // row is a queue, sent whole with the current track kept where it is
-          // so taking something out from under the player does not restart it.
-          onRemove={(index) => {
-            // By position: the queue can hold the same track twice, and taking
-            // out "the second one" must not take out the first as well.
-            const next = queue.filter((_, i) => i !== index)
-            const keep = nowPlaying ? next.indexOf(nowPlaying) : -1
-            void control.setQueue(next, Math.max(0, keep))
-          }}
-          onClear={() => {
-            const keep = nowPlaying ? [nowPlaying] : []
-            void control.setQueue(keep, 0)
-          }}
-          onClose={() => setQueueOpen(false)}
-        />
       )}
 
       <div className="main">
@@ -1066,6 +1049,33 @@ export default function App() {
             </>
           )}
         </div>
+
+        {/* The `aside` slot. Floating over everything in the iTunes skins, a
+            docked column in Studio — same component, same state, one grid area
+            that a theme places differently. */}
+        {queueOpen && (
+          <QueueView
+            queue={queue}
+            nowPlaying={nowPlaying}
+            known={known.current}
+            onPlay={(id) => playTrack(id)}
+            // No "remove one" route, and it does not need one: a queue minus a
+            // row is a queue, sent whole with the current track kept where it is
+            // so taking something out from under the player does not restart it.
+            onRemove={(index) => {
+              // By position: the queue can hold the same track twice, and taking
+              // out "the second one" must not take out the first as well.
+              const next = queue.filter((_, i) => i !== index)
+              const keep = nowPlaying ? next.indexOf(nowPlaying) : -1
+              void control.setQueue(next, Math.max(0, keep))
+            }}
+            onClear={() => {
+              const keep = nowPlaying ? [nowPlaying] : []
+              void control.setQueue(keep, 0)
+            }}
+            onClose={() => setQueueOpen(false)}
+          />
+        )}
       </div>
 
       <div className="statusbar">
