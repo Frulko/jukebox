@@ -798,7 +798,9 @@ export function createApp(dbFile: string) {
               COALESCE(SUM(size), 0) AS bytes,
               COALESCE(SUM(duration), 0) AS seconds
        FROM tracks WHERE deletedAt IS NULL AND kind = 'music'`).get() as any),
-    missing: (db.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE deletedAt IS NOT NULL`).get() as any).n,
+    // Mirrors /tracks/missing: a substituted row was answered, and a badge
+    // that counts it keeps saying (1) after the page itself has gone quiet.
+    missing: (db.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE deletedAt IS NOT NULL AND mergedInto IS NULL`).get() as any).n,
     playlists: (db.prepare(`SELECT COUNT(*) AS n FROM playlists WHERE deletedAt IS NULL`).get() as any).n,
     podcasts: (db.prepare(`SELECT COUNT(*) AS n FROM podcasts WHERE deletedAt IS NULL`).get() as any).n,
     radios: (db.prepare(`SELECT COUNT(*) AS n FROM radios WHERE deletedAt IS NULL`).get() as any).n,

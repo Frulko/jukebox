@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, useFacets, useSources } from './api'
-import { Icon } from './Icon'
-import { getLocale } from './i18n'
+import { api, useSources } from './api'
+import { FolderBrowser } from './FolderBrowser'
 
 /**
  * Two ways a podcast gets into a library, and they are not the same operation.
@@ -37,11 +36,6 @@ export function AddPodcast({
   const source = sourceId ?? sources[0]?.id ?? null
   const [folder, setFolder] = useState<string | null>(null)
 
-  // Every folder the library holds under that source, counted in SQL. A picker
-  // built from the loaded page would offer three folders for a library with two
-  // hundred, and the count beside each would be the page's rather than the
-  // library's.
-  const folders = useFacets({ sourceId: source ?? undefined }).data?.folders ?? []
   const chosen = useQuery({
     queryKey: ['tracks', 'folder', source, folder],
     queryFn: () => api.tracks.list({ sourceId: source!, folder: folder!, limit: 500 }),
@@ -126,31 +120,12 @@ export function AddPodcast({
                 so nothing new will ever appear by itself.
               </p>
 
-              <label className="ap-row">
-                <span>Source</span>
-                <select value={source ?? ''} onChange={(e) => (setSourceId(e.target.value), setFolder(null))}>
-                  {sources.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="ap-folders">
-                {folders.length === 0 && <p className="dim">Nothing scanned under that source yet.</p>}
-                {folders.map((f) => (
-                  <button
-                    key={f.value}
-                    className={folder === f.value ? 'on' : ''}
-                    onClick={() => setFolder(f.value)}
-                  >
-                    <Icon name="music" size={9} />
-                    <span className="p">{f.value}</span>
-                    <em className="dim">{f.count.toLocaleString(getLocale())}</em>
-                  </button>
-                ))}
-              </div>
+              <FolderBrowser
+                sourceId={source}
+                onSource={setSourceId}
+                folder={folder}
+                onFolder={setFolder}
+              />
 
               {folder && (
                 <p className="ap-preview">

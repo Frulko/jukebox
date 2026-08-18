@@ -98,8 +98,38 @@ body {
   cursor: default;
 }
 
-button { font: inherit; cursor: default; color: inherit; }
+/* Skinned by default, so a button nobody wrote a rule for is a plain kit
+   button rather than the browser's grey capsule — that fallback is how two
+   pages a month ended up with native controls in the middle of a theme.
+   Contexts that want less (a menu row, a tile, a bare icon) already reset
+   background and border; they keep doing so on top of this. */
+button {
+  font: inherit;
+  cursor: default;
+  /* Inherited, not --btn-text: the rows and tiles that reset the skin to
+     nothing (.show, .artist, .poster…) read their colour from their pane, and
+     a kit button sitting on chrome gets its colour from the context rule. */
+  color: inherit;
+  padding: 2px 9px;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius);
+  background: var(--btn);
+  /* Flex, so an icon sits beside its label instead of wrapping over it, and a
+     min-width button still centres. Rows that read left (.genre, menus) say so. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
 input, textarea { font: inherit; }
+select {
+  font: inherit;
+  color: var(--text);
+  padding: 2px 5px;
+  border: 1px solid var(--field-line);
+  border-radius: 3px;
+  background: var(--field);
+}
 .icon { fill: currentColor; display: block; flex: none; }
 
 /* ---------------- form controls ----------------
@@ -147,6 +177,25 @@ input[type="checkbox"]:disabled { opacity: .45; }
 .tr.sel input[type="checkbox"] { border-color: rgba(255, 255, 255, .8); background: rgba(255, 255, 255, .22); }
 .tr.sel input[type="checkbox"]:checked { background: #fff; border-color: #fff; }
 .tr.sel input[type="checkbox"]:checked::after { border-color: var(--accent); }
+
+/* Same reason as the checkbox: the OS circle belongs to no theme. Checked is a
+   dot of the field colour left between two rings of accent. */
+input[type="radio"] {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin: 0;
+  border: 1px solid var(--field-line);
+  border-radius: 50%;
+  background: var(--field);
+}
+input[type="radio"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--field);
+}
+input[type="radio"]:disabled { opacity: .45; }
 
 input[type="text"], input[type="number"], textarea {
   border: 1px solid var(--field-line);
@@ -380,6 +429,12 @@ input[type="range"]::-webkit-slider-thumb {
   min-height: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  /* One row, clamped. Without this the implicit row is `auto`, which sizes to
+     its tallest child's *content* — so a long sidebar or page grew the row past
+     the pane, painted over the status bar, and its own `overflow-y: auto` never
+     engaged because the element was never smaller than what it holds. Every
+     scroll container below this line depends on the row being definite. */
+  grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "nav main";
 }
 .main > .sidebar { grid-area: nav; }
@@ -1063,7 +1118,7 @@ input[type="range"]::-webkit-slider-thumb {
 .ep .c-name.indent { display: flex; align-items: center; gap: 6px; padding-left: 18px; color: var(--text); }
 .ep .c-name.indent .icon { opacity: .55; }
 
-.genre { display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 10px; border: 0; background: none; text-align: left; font-weight: 600; }
+.genre { display: flex; align-items: center; justify-content: flex-start; gap: 6px; width: 100%; padding: 3px 10px; border: 0; background: none; text-align: left; font-weight: 600; }
 .genre em { font-style: normal; font-weight: 400; }
 .tri { width: 0; height: 0; border: 4px solid transparent; border-left-color: currentColor; transition: transform .12s; }
 .tri.open { transform: rotate(90deg) translateX(1px); }
@@ -2243,7 +2298,7 @@ input[type="range"]::-webkit-slider-thumb {
 .sh-meta .dim { font-size: 10px; }
 .sh-actions { display: flex; align-items: center; gap: 7px; flex: none; }
 .sh-toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; }
-.sh-actions button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
+.sh-actions button { display: inline-flex; align-items: center; gap: 5px; }
 /* Six columns rather than five: the sixth is where the episode actually is.
    Scoped to podcasts, because audiobooks share `.ep` and have five. */
 .media.podcasts .ep-head, .media.podcasts .ep { grid-template-columns: 18px 1fr 84px 116px 124px 78px; }
@@ -2252,8 +2307,8 @@ input[type="range"]::-webkit-slider-thumb {
    A missing file is a rating, a play count and a place in three playlists
    waiting for a disk, so the panel says what it was and what it carries, and
    offers only what a web page can actually do about it. */
-.where-modal { width: 520px; max-width: 92vw; }
-.where-modal .modal-body { max-height: 52vh; overflow-y: auto; }
+.where-modal { width: 580px; max-width: 92vw; }
+.where-modal .modal-body { max-height: 58vh; overflow-y: auto; }
 .where-modal h4 { margin: 0 0 6px; font-size: 11px; }
 .where-modal .gone { color: var(--danger, #d4342c); }
 .where-found { display: flex; align-items: center; gap: 8px; padding: 3px 0; min-width: 0; }
@@ -2315,20 +2370,9 @@ input[type="range"]::-webkit-slider-thumb {
 .sc-facts dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-facts dd.path { direction: rtl; text-align: left; unicode-bidi: plaintext; }
 .sc-gone { color: var(--danger, #d4342c); }
-/* Two contexts had no skin at all and fell back to the browser's own button:
-   light grey, which passes unnoticed in the three pale themes and turns
-   near-white text invisible in Studio. Every other group of buttons in this
-   file paints itself; these two had been forgotten. */
-.sc-actions button, .seg button {
-  padding: 2px 9px;
-  border: 1px solid var(--btn-line);
-  border-radius: var(--radius);
-  background: var(--btn);
-  color: var(--btn-text);
-}
+/* The box now comes from the base `button` rule; only the colour is said here. */
+.sc-actions button, .seg button { color: var(--btn-text); }
 .sc-actions button.prim { background: var(--btn-on); border-color: var(--btn-on-line); color: var(--btn-on-text); }
-.sc-actions button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
-.sc-actions button:disabled { opacity: .5; }
 .sc-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .sc-actions .spacer { flex: 1; }
 .sc-edit { margin: 4px 0 10px; padding: 10px 12px; border-radius: var(--radius); background: var(--stripe); }
@@ -2399,7 +2443,6 @@ code { font-family: var(--font-mono); font-size: .95em; }
 .station .st-home { font-size: 11px; color: var(--dim); text-decoration: none; }
 .station .st-home:hover { color: var(--accent); text-decoration: underline; }
 .station .st-rename { flex: 1; max-width: 220px; font: inherit; padding: 1px 4px; }
-.station button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
 .radio-note { margin: 6px 0 18px; padding: 9px 11px; border-radius: var(--radius); background: var(--stripe); color: var(--dim); line-height: 1.55; }
 .radio-note b { color: var(--text); }
 
@@ -2479,13 +2522,6 @@ code { font-family: var(--font-mono); font-size: .95em; }
 .add-podcast .modal-body { max-height: 46vh; overflow-y: auto; }
 .add-podcast p.dim { margin: 0 0 10px; line-height: 1.55; }
 .ap-url { width: 100%; font: inherit; padding: 4px 7px; }
-.ap-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.ap-row span { width: 60px; color: var(--dim); }
-.ap-folders { display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 4px; }
-.ap-folders button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 3px 6px; border-radius: 4px; text-align: left; }
-.ap-folders button.on { background: var(--sel); color: var(--sel-text); }
-.ap-folders .p { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; unicode-bidi: plaintext; }
-.ap-folders button.on em { color: var(--sel-text); }
 .ap-preview { margin: 10px 0 0; }
 .pod-section { padding: 10px 10px 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
 
@@ -2500,3 +2536,93 @@ code { font-family: var(--font-mono); font-size: .95em; }
 .admin-table td button + button { margin-left: 5px; }
 .admin-newuser { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 12px 0 0; }
 .admin-newuser input { font: inherit; font-size: 11px; padding: 3px 6px; min-width: 170px; }
+
+/* ---------------- the kit's shared states ----------------
+   At the end of the file on purpose: `button.danger` and a context's own
+   `.xx button` rule weigh the same, and the one written later wins — which is
+   what lets one rule replace the three copies that used to sit in podcasts,
+   sources and radio. */
+button.danger { border-color: var(--danger, #d4342c); color: var(--danger, #d4342c); }
+button:disabled { opacity: .5; }
+
+/* ---------------- folder browser ----------------
+   One way to point at a folder, wherever the question comes up: filing a
+   folder as a podcast, hunting for where a missing file went. Two drawings of
+   the same list — a tree to walk down, a flat list to scan — and a filter,
+   because a library's folder list is hundreds long. */
+.folder-browser { display: flex; flex-direction: column; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--content); }
+.fb-head { display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line-soft); background: var(--panel); border-radius: var(--radius) var(--radius) 0 0; }
+.fb-head select { max-width: 45%; }
+.fb-head .view-search { flex: 1; width: auto; margin-left: 0; }
+.fb-body { min-height: 56px; max-height: 220px; overflow-y: auto; padding: 3px; }
+.fb-empty { padding: 16px 10px; text-align: center; color: var(--dim); }
+.fb-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+}
+.fb-row:hover { background: var(--stripe); }
+.fb-row.on { background: var(--sel); color: var(--sel-text); }
+.fb-row .icon { flex: none; opacity: .7; }
+.fb-row.on .icon { opacity: 1; }
+/* The chevron is its own hit target inside the row: clicking the name selects,
+   clicking the triangle only opens. A 16px square so it can actually be hit. */
+.fb-tri { display: grid; place-items: center; width: 14px; height: 14px; flex: none; }
+.fb-tri .tri { border-width: 3.5px; }
+.fb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Flat mode shows the whole path: the parent half dimmed, the folder itself
+   full strength — the eye scans the ends, the prefix stays legible. */
+.fb-name .crumb { color: var(--dim); }
+.fb-row.on .fb-name .crumb { color: var(--sel-text); opacity: .75; }
+.fb-count { flex: none; font-style: normal; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+.fb-row.on .fb-count { color: var(--sel-text); opacity: .85; }
+
+/* ---------------- design system ----------------
+   The kit, laid out to be looked at. Everything on this page is the real
+   component with its real classes, so the page cannot drift from the app —
+   and switching the theme in the status bar reskins it live. */
+.design h2 { margin: 0 0 6px; font-size: 17px; }
+.design > p.dim { max-width: 76ch; margin: 0 0 8px; line-height: 1.55; }
+.design section { margin-top: 26px; }
+.design h3 { margin: 0 0 4px; font-size: 13px; }
+.design .spec { margin: 0 0 10px; color: var(--dim); font-size: 11px; line-height: 1.5; max-width: 76ch; }
+.design .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
+/* In a sample row the search is one control among the others, not a corner tool. */
+.design .row .view-search { margin-left: 0; }
+.design .row > label { display: flex; align-items: center; gap: 5px; }
+.design h4 { margin: 14px 0 6px; font-size: 11px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel);
+  min-width: 0;
+}
+.token i { width: 24px; height: 24px; flex: none; border-radius: 4px; border: 1px solid var(--line-soft); }
+.token > div { min-width: 0; }
+.token b { display: block; font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.token em { display: block; font-style: normal; font-family: var(--font-mono); font-size: 9px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 4px; }
+.icon-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.icon-cell span { font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.design .fb-demo { max-width: 460px; }
+.design .type-sample { margin: 0 0 8px; }
+.design .type-sample code { font-family: var(--font-mono); }

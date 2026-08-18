@@ -328,8 +328,16 @@ function filters(qs: TrackQuery): { sql: string[]; params: unknown[] } {
 
   if (qs.q?.trim()) {
     // FTS5 over an external content table: fetch the rowids, join on them.
-    sql.push(`t.rowid IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?)`)
-    params.push(qs.q.trim().split(/\s+/).map((w) => `"${w.replace(/"/g, '')}"*`).join(' '))
+    // OR the file path, which FTS does not index: the case this serves is a
+    // file whose tags say one thing and whose name on disk says another — a
+    // re-rip, a download — and what the person types is what they saw in the
+    // path. A LIKE scan only runs when a search is typed, and every word must
+    // appear in the path for it to count, mirroring the FTS AND.
+    const words = qs.q.trim().split(/\s+/)
+    sql.push(`(t.rowid IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?)
+               OR (${words.map(() => `t.path LIKE ? ESCAPE '\\'`).join(' AND ')}))`)
+    params.push(words.map((w) => `"${w.replace(/"/g, '')}"*`).join(' '))
+    params.push(...words.map((w) => `%${w.replace(/([%_\\])/g, '\\$1')}%`))
   }
 
   if (qs.onDevice) {
