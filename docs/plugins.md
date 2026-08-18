@@ -131,6 +131,35 @@ tab is worse than a window with one tab fewer.
 A strip on the home page. The host renders it as data — a title and rows — never
 as markup.
 
+### `contributes.theme`
+
+A whole skin for the app, declared as data:
+
+```jsonc
+"theme": {
+  "label": "Hot Dog",              // what the picker shows
+  "rowHeight": 21,                 // must match --row-h; the virtualiser needs it
+  "playlistArt": false,            // generated art next to sidebar playlists
+  "tokens": { "--accent": "#c40000", "--content": "#fffef0" /* … */ },
+  "css": ""                        // optional, for rules beyond tokens
+}
+```
+
+`tokens` is the whole story for most skins — the app's components read CSS
+custom properties and nothing else, so a theme *is* a block of token
+redefinitions, and the host writes that block itself. Only keys starting with
+`--` are kept: the tokens door does not accept arbitrary declarations.
+
+`css` exists for skins that also move furniture. It is injected as-is, so it
+must scope every rule under `[data-theme="plugin-<id>"]` — the theme registers
+under that prefixed id precisely so a plugin can never shadow a built-in skin
+or another plugin's.
+
+A theme is styling, not script: everything lands in a `<style>` element and
+none of it runs. It follows the plugin's switch — disable the plugin and the
+skin leaves the picker; whoever was wearing it falls back to the base skin.
+The `hotdog` plugin in this repository is a complete working example.
+
 ## What a command may answer
 
 `host.registerCommand` handlers return one of four shapes, and the interface does

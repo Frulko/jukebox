@@ -4,7 +4,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "node --experimental-strip-types --no-warnings=ExperimentalWarning --watch src/serve.ts",
+    "dev": "JUKEBOX_PLUGINS=\"${JUKEBOX_PLUGINS:-../../plugins}\" node --experimental-strip-types --no-warnings=ExperimentalWarning --watch src/serve.ts",
     "start": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/serve.ts"
   },
   "dependencies": {

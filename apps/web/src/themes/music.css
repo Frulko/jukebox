@@ -1,0 +1,122 @@
+/* ================================================================
+   THEME · Music — the Apple Music app on macOS, today.
+
+   Light, not dark: the dark skin this replaces was Apple archaeology
+   of its own — Music has shipped light-first for years. What carries
+   the look is restraint: a white toolbar with one hairline, a warm
+   grey sidebar whose icons are the only red in it, black-on-white
+   lists with the faintest stripe, and the accent (#fa233b) reserved
+   for what is playing, what is chosen, and the primary action.
+   ================================================================ */
+
+[data-theme="music"] {
+  --font: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --fs: 13px;
+
+  --chrome: #fff;
+  --chrome-line: #e5e5e5;
+  --chrome-text: #4a4a4c;
+  --chrome-inset: none;
+
+  --btn: transparent;
+  --btn-line: transparent;
+  --btn-text: #6e6e73;
+  --btn-shadow: none;
+  --btn-on: #fa233b;
+  --btn-on-line: transparent;
+  --btn-on-text: #fff;
+
+  /* The warm grey of the real sidebar, one hairline away from white. */
+  --sidebar: #f4f0f1;
+  --sidebar-line: #ddd9da;
+  --sidebar-text: #3a3a3c;
+  --sidebar-section: #98989d;
+  --sidebar-sel: #dcd8d9;
+  --sidebar-sel-text: #1d1d1f;
+  --sidebar-sel-icon: #fa233b;
+  --sidebar-sel-shadow: none;
+  --sidebar-shadow: none;
+
+  --content: #fff;
+  --text: #1d1d1f;
+  --dim: #86868b;
+  --line: #ececec;
+  --line-soft: #f0f0f0;
+
+  --head: #fff;
+  --head-line: #e5e5e5;
+  --head-text: #6e6e73;
+  --head-sorted: #f5f5f7;
+
+  --stripe: #fafafa;
+  --sel: #d8d8dc;
+  --sel-text: #1d1d1f;
+  --sel-blur: #ececee;
+  --row-h: 30px;
+  --row-radius: 5px;
+
+  --lcd: #f9f9f9;
+  --lcd-line: #dcdcdc;
+  --lcd-shadow: none;
+  --track-bg: #e3e3e6;
+
+  --status: #fff;
+  --panel: #f5f5f7;
+  --field: #fff;
+  --field-line: #d2d2d7;
+  --accent: #fa233b;
+  --focus: rgba(250, 35, 59, .25);
+  --menu: #fff;
+  --menu-text: #1d1d1f;
+  --menu-line: #d8d8dc;
+  --star: #8e8e93;
+  --star-off: #d9d9de;
+  --scroll-thumb: #c8c8cc;
+  --scroll-thumb-hover: #a8a8ad;
+  --scroll-track: transparent;
+  --radius: 6px;
+  --page-x: 30px;
+  --page-top: 20px;
+}
+
+/* Every navigation icon is red — it is the sidebar's whole colour budget,
+   exactly as the app does it. Selection stays a quiet grey pill. */
+[data-theme="music"] .sidebar .src { height: 26px; margin: 1px 10px; padding: 0 8px; border-radius: 6px; }
+[data-theme="music"] .sidebar .src .icon { color: var(--accent); opacity: 1; }
+[data-theme="music"] .sidebar .section { padding: 12px 18px 3px; font-size: 11px; letter-spacing: 0; text-transform: none; font-weight: 600; }
+[data-theme="music"] .sidebar { width: 200px; padding-top: 6px; }
+[data-theme="music"] .sidebar .new-pl { border: 0; background: none; color: var(--sidebar-section); }
+
+/* One hairline under a white toolbar; the LCD is a rounded well, no gloss. */
+[data-theme="music"] .lcd { border-radius: 8px; }
+[data-theme="music"] .transport button:hover,
+[data-theme="music"] .right-tools > button:hover { background: #f0f0f2; color: var(--text); }
+[data-theme="music"] .right-tools > button.on { background: rgba(250, 35, 59, .1); color: var(--accent); }
+[data-theme="music"] .lcd-scrub .knob,
+[data-theme="music"] input[type="range"]::-webkit-slider-thumb { border-color: #c6c6c9; background: #fff; }
+
+/* The list: black on white, the faintest stripe, a grey pill for selection. */
+[data-theme="music"] .thead { height: 24px; }
+[data-theme="music"] .th { border-right: 0; font-size: 11px; }
+[data-theme="music"] .tbody { padding: 0 10px; }
+[data-theme="music"] .tr { width: calc(100% - 20px); }
+[data-theme="music"] .tr:not(.sel):hover { background: #f5f5f7; }
+[data-theme="music"] .tr.sel input[type="checkbox"] { border-color: var(--field-line); background: var(--field); }
+[data-theme="music"] .tr.sel input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+[data-theme="music"] .tr.sel input[type="checkbox"]:checked::after { border-color: #fff; }
+[data-theme="music"] .tr.sel .stars i.on { color: var(--accent); }
+
+/* Songs · Albums · Artists: red text when chosen, never a filled pill. */
+[data-theme="music"] .modebar { justify-content: center; border-bottom: 1px solid var(--line-soft); }
+[data-theme="music"] .modebar button.on { background: rgba(250, 35, 59, .1); color: var(--accent); }
+
+/* Artwork leans big and soft, like the app's shelves. */
+[data-theme="music"] .tile-art .cover, [data-theme="music"] .album-detail > .cover { border-radius: 7px; }
+[data-theme="music"] .grid { gap: 24px 18px; padding: 20px; }
+[data-theme="music"] .media:not(.split) > .grid { padding: 0; }
+[data-theme="music"] .cb-pane li:nth-child(even) { background: transparent; }
+[data-theme="music"] .cb-pane li:hover { background: #f5f5f7; }
+
+[data-theme="music"] .modal-titlebar .close { border-color: #e0605b; background: #fc625d; }
+[data-theme="music"] .statusbar { font-size: 11px; }

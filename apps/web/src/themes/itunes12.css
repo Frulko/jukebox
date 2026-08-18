@@ -1,0 +1,91 @@
+/* ================================================================
+   THEME · iTunes 12 — the 2014 flattening. No gradients, red accent,
+   hairline separators, roomier rows.
+   ================================================================ */
+
+[data-theme="itunes12"] {
+  --font: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --fs: 12px;
+
+  --chrome: #f6f6f6;
+  --chrome-line: #d3d3d3;
+  --chrome-text: #4a4a4a;
+  --chrome-inset: none;
+
+  --btn: #fdfdfd;
+  --btn-line: #cfcfcf;
+  --btn-text: #555;
+  --btn-shadow: none;
+  --btn-on: #fa5b62;
+  --btn-on-line: #e2454c;
+  --btn-on-text: #fff;
+
+  --sidebar: #f2f2f2;
+  --sidebar-line: #dcdcdc;
+  --sidebar-text: #3b3b3b;
+  --sidebar-section: #9b9b9b;
+  --sidebar-sel: #dedede;
+  --sidebar-sel-text: #1a1a1a;
+  --sidebar-sel-icon: #fa5b62;
+  --sidebar-sel-shadow: none;
+  --sidebar-shadow: none;
+
+  --content: #fff;
+  --text: #1d1d1d;
+  --dim: #909090;
+  --line: #ececec;
+  --line-soft: #e6e6e6;
+
+  --head: #fbfbfb;
+  --head-line: #dcdcdc;
+  --head-text: #8a8a8a;
+  --head-sorted: #efefef;
+
+  --stripe: #fafafa;
+  --sel: #e2e2e2;
+  --sel-text: #1d1d1d;
+  --sel-blur: #eee;
+  --row-h: 21px;
+  --row-radius: 0;
+
+  --lcd: #fbfbfb;
+  --lcd-line: #d8d8d8;
+  --lcd-shadow: none;
+  --track-bg: #dcdcdc;
+
+  --status: #f6f6f6;
+  --panel: #f7f7f7;
+  --field: #fff;
+  --field-line: #cfcfcf;
+  --accent: #fa5b62;
+  --focus: rgba(250, 91, 98, .3);
+  --menu: #fff;
+  --menu-text: #1d1d1d;
+  --menu-line: #d0d0d0;
+  --star: #fa5b62;
+  --star-off: #dcdcdc;
+  --scroll-thumb: #c6c6c6;
+  --scroll-thumb-hover: #a8a8a8;
+  --scroll-track: #fff;
+  --radius: 4px;
+}
+
+[data-theme="itunes12"] .tr.sel .stars i.on { color: var(--accent); }
+
+[data-theme="itunes12"] .tr.sel .stars i.off { color: #c9c9c9; }
+
+[data-theme="itunes12"] .tr.sel input[type="checkbox"] { border-color: var(--field-line); background: var(--field); }
+
+[data-theme="itunes12"] .tr.sel input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+
+[data-theme="itunes12"] .tr.sel input[type="checkbox"]:checked::after { border-color: #fff; }
+
+[data-theme="itunes12"] .tr:not(.sel):hover { background: #f5f5f5; }
+
+[data-theme="itunes12"] .lcd-scrub .knob,
+[data-theme="itunes12"] input[type="range"]::-webkit-slider-thumb { border-color: #c2c2c2; background: #fff; }
+
+[data-theme="itunes12"] .modal-titlebar .close { border-color: #e0605b; background: #fc625d; }
+
+[data-theme="itunes12"] .modebar { border-bottom: 1px solid var(--line-soft); }

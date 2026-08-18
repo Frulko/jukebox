@@ -41,6 +41,13 @@ import { setOutputVolume } from './api'
 import { FilterBar, type FilterChip } from './FilterBar'
 import { NowPlayingPanel } from './NowPlayingPanel'
 import './itunes.css'
+// After the base sheet: a skin overrides it, never the other way round. Each
+// import is a whole theme — CSS, icons, numbers — and deleting one line
+// removes the skin from the bundle. THEMES and THEME_ROW_H used to live here
+// as two more copies of the same list; the registry is the only one now.
+import './themes'
+import { themeById, useThemes } from './themes/registry'
+import { usePluginThemes } from './themes/plugins'
 import { getLocale, LOCALES, setLocale, t, useLocale, type Locale } from './i18n'
 
 export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: string; smart?: string }
@@ -52,16 +59,6 @@ export type View = { kind: 'library' | 'store' | 'playlist' | 'device'; id: stri
  * navigated.
  */
 export type Play = (id: string, queue?: string[]) => void
-
-export type Theme = 'classic' | 'itunes12' | 'music' | 'studio'
-const THEMES: Array<[Theme, string]> = [
-  ['classic', 'iTunes 8'],
-  ['itunes12', 'iTunes 12'],
-  ['music', 'Music'],
-  ['studio', 'Studio'],
-]
-/** Must track --row-h in each theme block; the virtualiser needs the number. */
-const THEME_ROW_H = { classic: 17, itunes12: 21, music: 26, studio: 30 } satisfies Record<Theme, number>
 
 const NO_TRACKS: Track[] = []
 const NO_QUEUE: string[] = []
@@ -114,11 +111,14 @@ export default function App() {
   const [selectIds, setSelectIds] = useState<string[] | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
-  // Looked up in the theme list rather than trusted: localStorage outlives
-  // releases, and a skin we no longer ship falls back instead of being worn.
-  const [theme, chooseTheme] = useState<Theme>(
-    () => THEMES.find(([id]) => id === localStorage.getItem('itunes.theme'))?.[0] ?? 'classic',
-  )
+  // Deliberately not validated against the list here: a plugin's skin only
+  // registers once its manifest arrives, and resetting first would throw the
+  // stored choice away. An id nothing ever registers wears the base tokens,
+  // which reads as classic — the right face for a skin that no longer exists.
+  const [theme, chooseTheme] = useState(() => localStorage.getItem('itunes.theme') ?? 'classic')
+  usePluginThemes()
+  const themes = useThemes()
+  const themeDef = themeById(theme)
   /**
    * The attribute goes on before the state does.
    *
@@ -128,7 +128,7 @@ export default function App() {
    * moved. Setting it here — in the handler, before React re-renders — costs a
    * line and removes the whole class of stale-frame bug.
    */
-  const setTheme = useCallback((next: Theme) => {
+  const setTheme = useCallback((next: string) => {
     document.documentElement.dataset.theme = next
     chooseTheme(next)
   }, [])
@@ -933,7 +933,7 @@ export default function App() {
           missing={missing}
           incomplete={incomplete}
           playlists={playlists}
-          playlistArt={theme === 'music'}
+          playlistArt={themeDef?.playlistArt ?? false}
           devices={devices}
           onSelect={(v) => {
             setView(v)
@@ -1050,7 +1050,7 @@ export default function App() {
                 format={format}
                 formats={formats}
                 onFormat={setFormat}
-                rowHeight={THEME_ROW_H[theme]}
+                rowHeight={themeDef?.rowHeight ?? 17}
                 showArtwork={theme !== 'classic'}
                 devices={devices}
                 tracks={tracks}
@@ -1153,9 +1153,9 @@ export default function App() {
           ))}
         </select>
         <div className="theme-picker">
-          {THEMES.map(([id, label]) => (
-            <button key={id} className={theme === id ? 'on' : ''} onClick={() => setTheme(id)}>
-              {label}
+          {themes.map((t) => (
+            <button key={t.id} className={theme === t.id ? 'on' : ''} onClick={() => setTheme(t.id)}>
+              {t.label}
             </button>
           ))}
         </div>

@@ -1,0 +1,343 @@
+/* ================================================================
+   THEME · Studio — the streaming-client layout.
+
+   The other three skins are Apple archaeology. This one follows the
+   shape every streaming client converged on, Spotify first: the
+   transport leaves the top of the window and becomes a bar across the
+   bottom, the library sits in a panel on the left, and the content is
+   a card floating on a dark canvas.
+
+   The reordering is done with flex `order` on the three children of
+   `.itunes` — the player is still rendered first in the DOM, which is
+   where it belongs for a screen reader and for the keyboard.
+
+   Green is used four times: the playing row, the scrubber, the active
+   mode and focus. Everywhere else is grey. A dark interface that tints
+   everything with its accent has no accent left.
+   ================================================================ */
+
+[data-theme="studio"] {
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --fs: 12.5px;
+
+  /* the elevation ladder: a surface is higher because it is lighter */
+  --canvas: #0a0b0e;
+  --raised: #171a21;
+
+  --chrome: #12141a;
+  --chrome-line: #1e222b;
+  --chrome-text: #e7eaf0;
+  --chrome-inset: none;
+
+  --btn: transparent;
+  --btn-line: transparent;
+  --btn-text: #9aa3b2;
+  --btn-shadow: none;
+  --btn-on: rgba(47, 224, 138, .14);
+  --btn-on-line: transparent;
+  --btn-on-text: #2fe08a;
+
+  --sidebar: #101217;
+  --sidebar-line: transparent;
+  --sidebar-text: #a7afbd;
+  --sidebar-section: #5c6577;
+  --sidebar-sel: #1c2029;
+  --sidebar-sel-text: #f2f5f9;
+  --sidebar-sel-icon: #2fe08a;
+  --sidebar-sel-shadow: none;
+  --sidebar-shadow: none;
+
+  --content: #0d0f13;
+  --text: #e7eaf0;
+  --dim: #798199;
+  --line: #1b1f27;
+  --line-soft: #161a21;
+
+  --head: transparent;
+  --head-line: #1b1f27;
+  --head-text: #6a7386;
+  --head-sorted: rgba(255, 255, 255, .04);
+
+  --stripe: transparent;
+  --sel: #1c2029;
+  --sel-text: #f2f5f9;
+  --sel-blur: #16191f;
+  --row-h: 30px;
+  --row-radius: 6px;
+
+  --lcd: transparent;
+  --lcd-line: transparent;
+  --lcd-shadow: none;
+  --track-bg: #2a303b;
+
+  --status: transparent;
+  --panel: #171a21;
+  --field: #12151b;
+  --field-line: #242a34;
+  --accent: #2fe08a;
+  --focus: rgba(47, 224, 138, .28);
+  --menu: #171a21;
+  --menu-text: #e7eaf0;
+  --menu-line: #242a34;
+  --star: #b9c1d0;
+  --star-off: #2a303b;
+  --scroll-thumb: #262c36;
+  --scroll-thumb-hover: #39414f;
+  --scroll-track: transparent;
+  --radius: 8px;
+  --page-x: 22px;
+  --page-top: 18px;
+}
+
+/* --- the shell: library and content on a canvas, player underneath --- */
+
+[data-theme="studio"] body { background: var(--canvas); }
+
+[data-theme="studio"] .itunes {
+  background: var(--canvas);
+  border: 0;
+  padding: 8px 8px 0;
+  gap: 8px;
+  display: grid;
+  /* Four rows: what you search with, what you are reading, the line at the
+     foot, and what plays. */
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  /* Three columns, so the bottom bar can hold what plays at the left and what
+     is playing in the middle — one row, three placeable pieces, no wrapper. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "find   find  find"
+    "body   body  body"
+    "status status status"
+    "pleft  pmid  pright";
+}
+
+/* Out of the layout so its three children can be placed apart. */
+
+[data-theme="studio"] .topbar { display: contents; }
+
+[data-theme="studio"] .transport { grid-area: pleft; }
+
+[data-theme="studio"] .lcd { grid-area: pmid; }
+
+/* The `margin-left: auto` that pushes this to the right of a flex bar is what
+   kept it right in a grid too — an auto margin wins over `justify-self`. */
+
+[data-theme="studio"] .right-tools { grid-area: find; justify-self: center; margin-left: 0; }
+
+[data-theme="studio"] .main { grid-area: body; }
+
+[data-theme="studio"] .statusbar { grid-area: status; }
+
+[data-theme="studio"] .main {
+  gap: 8px;
+  /* The composition from the screenshot: library, content, and a right-hand
+     column that is there when the queue is open and gone when it is not. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "nav main aside";
+}
+
+[data-theme="studio"] .main > .queue-panel {
+  grid-area: aside;
+  position: static;
+  width: 300px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+[data-theme="studio"] .sidebar,
+[data-theme="studio"] .content {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  /* Horizontal only. `overflow: hidden` was here for the rounded corners, and
+     it took the sidebar's scroll with it: the list is twice the height of the
+     panel in this theme, so everything from the playlists down was in the
+     document and unreachable. A scroll container clips to its own radius, so
+     the corners survive `overflow-y: auto` — which is what should have been
+     written in the first place. */
+  overflow-x: hidden;
+}
+
+[data-theme="studio"] .content { overflow-y: hidden; }
+
+[data-theme="studio"] .sidebar {
+  width: 208px;
+  border-right: 1px solid var(--line-soft);
+  padding-top: 6px;
+  overflow-y: auto;
+}
+
+/* --- the bottom bar: transport, what is playing, tools --- */
+
+[data-theme="studio"] .topbar {
+  height: 72px;
+  padding: 0 6px;
+  border-top: 1px solid var(--chrome-line);
+  border-bottom: 0;
+  background: transparent;
+}
+
+[data-theme="studio"] .transport { gap: 6px; }
+
+[data-theme="studio"] .transport button,
+[data-theme="studio"] .right-tools > button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--btn-text);
+}
+
+[data-theme="studio"] .transport button:hover,
+[data-theme="studio"] .right-tools > button:hover { background: #1a1e26; color: var(--text); }
+
+/* the one filled control in the interface — you always know where play is */
+
+[data-theme="studio"] .transport .play {
+  width: 36px;
+  height: 36px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: #f2f5f9;
+  color: #0a0b0e;
+}
+
+[data-theme="studio"] .transport .play:hover { background: #fff; filter: none; transform: scale(1.05); }
+
+[data-theme="studio"] .volume { margin-left: 12px; }
+
+[data-theme="studio"] .lcd {
+  height: 56px;
+  max-width: 520px;
+  padding: 0 8px;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-theme="studio"] .lcd-art { border-radius: 6px; }
+
+[data-theme="studio"] .lcd-title { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+
+[data-theme="studio"] .lcd-sub { font-size: 11.5px; }
+
+[data-theme="studio"] .lcd-main { gap: 3px; }
+
+[data-theme="studio"] .lcd-scrub { width: 100%; }
+
+/* grey until you reach for it — the scrubber is not a decoration */
+
+[data-theme="studio"] .lcd-scrub .fill { background: #9aa3b2; }
+
+[data-theme="studio"] .lcd-scrub:hover .fill { background: var(--accent); }
+
+[data-theme="studio"] .lcd-scrub .knob { opacity: 0; border: 0; background: #fff; box-shadow: none; }
+
+[data-theme="studio"] .lcd-scrub:hover .knob { opacity: 1; }
+
+[data-theme="studio"] input[type="range"]::-webkit-slider-thumb { border: 0; background: #cfd6e2; }
+
+[data-theme="studio"] .lcd-idle-label { font-size: 12px; letter-spacing: .1em; text-transform: lowercase; }
+
+/* the bar is 56 px tall here, not 44: pinned to the top the button floated
+   above the scrubber with nothing under it */
+
+[data-theme="studio"] .lcd-eye { align-self: center; margin-top: 0; border-radius: 6px; padding: 5px; }
+
+/* the column browser does not exist in this skin, so its toggle should not sit
+   there lit up */
+
+[data-theme="studio"] .right-tools > button:nth-of-type(3) { display: none; }
+
+[data-theme="studio"] .statusbar { height: 26px; border-top: 0; padding: 0 12px; color: var(--dim); }
+
+[data-theme="studio"] .sb-btn { color: var(--dim); }
+
+/* --- the list --- */
+
+[data-theme="studio"] .tbody { padding: 6px 8px; }
+
+[data-theme="studio"] .tr { width: calc(100% - 16px); }
+
+[data-theme="studio"] .tr:not(.sel):hover { background: #151920; }
+
+[data-theme="studio"] .thead { padding: 0 8px; height: 32px; }
+
+[data-theme="studio"] .th {
+  border-right: 0;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* the margin marker, on top of the shared playing tint at the end of the file */
+
+[data-theme="studio"] .tr.playing .td.name { color: var(--accent); }
+
+[data-theme="studio"] .tr.playing::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+[data-theme="studio"] .thumb { border-radius: 4px; }
+
+[data-theme="studio"] .tr.sel .stars i.on { color: var(--star); }
+
+/* checkboxes: a column of filled accent squares was the loudest thing on
+   screen, and it was decoration — the state it shows is "enabled", not the
+   selection. Outline when off, a tick in the accent when on. */
+
+[data-theme="studio"] input[type="checkbox"] { border-radius: 4px; border-color: #2a303b; background: transparent; }
+
+[data-theme="studio"] input[type="checkbox"]:checked { background: #232935; border-color: #323a48; }
+
+[data-theme="studio"] input[type="checkbox"]:checked::after { border-color: var(--accent); }
+
+[data-theme="studio"] .tr.sel input[type="checkbox"] { border-color: #39414f; background: transparent; }
+
+[data-theme="studio"] .tr.sel input[type="checkbox"]:checked { background: #2b323f; border-color: #3d4657; }
+
+/* --- sidebar --- */
+
+[data-theme="studio"] .sidebar .src { height: 32px; padding: 0 12px; border-radius: 8px; margin: 1px 8px; }
+
+[data-theme="studio"] .sidebar .src.on { font-weight: 600; }
+
+[data-theme="studio"] .sidebar .section { padding: 16px 20px 4px; letter-spacing: .11em; }
+
+/* --- grids, popovers --- */
+
+[data-theme="studio"] .modebar { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+
+[data-theme="studio"] .modebar button { padding: 4px 14px; border-radius: 99px; }
+
+[data-theme="studio"] .modebar button.on { background: var(--accent); color: #06120c; }
+
+[data-theme="studio"] .tile-art .cover,
+[data-theme="studio"] .album-detail > .cover { border-radius: 10px; }
+
+[data-theme="studio"] .grid { gap: 24px 20px; padding: 20px; }
+
+[data-theme="studio"] .media:not(.split) > .grid { padding: 0; }
+
+[data-theme="studio"] .cb-pane li:nth-child(even) { background: transparent; }
+
+[data-theme="studio"] .cb-pane li:hover { background: #151920; }
+
+[data-theme="studio"] .modal { border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .55); }
+
+[data-theme="studio"] .modal-titlebar .close { border-color: transparent; background: #2a303b; }
+
+[data-theme="studio"] .modal-backdrop { background: rgba(0, 0, 0, .55); }
+
+[data-theme="studio"] .cap-bar { background: #2a303b; }
+
+[data-theme="studio"] .lcd-next { border-radius: 6px; }

@@ -1,0 +1,165 @@
+/* Google's own faces when the network is there; the stack below carries the
+   look when it is not. A jukebox on a shelf must not need fonts.googleapis
+   to draw itself. */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap');
+
+/* ================================================================
+   THEME · Material — Material 3, the baseline light scheme.
+
+   Google's system as Google publishes it: the M3 tonal palette
+   (primary #6750A4 on surface #FEF7FF), Roboto with the M3 type
+   scale's weights, state layers instead of borders for hover, pills
+   for everything you press — buttons, the nav drawer's active row —
+   and the glyphs are Material Symbols themselves, registered as this
+   theme's icon set. One block plus one icon table: nothing here
+   knows a component by name that it does not restyle.
+   ================================================================ */
+
+[data-theme="material"] {
+  --font: Roboto, "Google Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, Menlo, monospace;
+  --fs: 13px;
+
+  /* top app bar: surface-container */
+  --chrome: #f3edf7;
+  --chrome-line: transparent;
+  --chrome-text: #1d1b20;
+  --chrome-inset: none;
+
+  /* filled tonal button: secondary-container / on-secondary-container */
+  --btn: #e8def8;
+  --btn-line: transparent;
+  --btn-text: #1d192b;
+  --btn-shadow: none;
+  --btn-on: #6750a4;
+  --btn-on-line: transparent;
+  --btn-on-text: #fff;
+
+  /* navigation drawer */
+  --sidebar: #f3edf7;
+  --sidebar-line: transparent;
+  --sidebar-text: #49454f;
+  --sidebar-section: #79747e;
+  --sidebar-sel: #e8def8;
+  --sidebar-sel-text: #1d192b;
+  --sidebar-sel-icon: #6750a4;
+  --sidebar-sel-shadow: none;
+  --sidebar-shadow: none;
+
+  --content: #fef7ff;
+  --text: #1d1b20;
+  --dim: #79747e;
+  --line: #e7e0ec;
+  --line-soft: #ece6f0;
+
+  --head: #fef7ff;
+  --head-line: #cac4d0;
+  --head-text: #49454f;
+  --head-sorted: #ece6f0;
+
+  --stripe: transparent;
+  --sel: #e8def8;
+  --sel-text: #1d192b;
+  --sel-blur: #ece6f0;
+  --row-h: 36px;
+  --row-radius: 8px;
+
+  --lcd: #ece6f0;
+  --lcd-line: transparent;
+  --lcd-shadow: none;
+  --track-bg: #e6e0e9;
+
+  --status: #f3edf7;
+  --panel: #f3edf7;
+  --field: #fef7ff;
+  --field-line: #79747e;
+  --accent: #6750a4;
+  --focus: rgba(103, 80, 164, .3);
+  --menu: #ece6f0;
+  --menu-text: #1d1b20;
+  --menu-line: transparent;
+  --star: #6750a4;
+  --star-off: #cac4d0;
+  --scroll-thumb: #cac4d0;
+  --scroll-thumb-hover: #aea9b4;
+  --scroll-track: transparent;
+  --radius: 12px;
+  --page-x: 24px;
+  --page-top: 20px;
+}
+
+/* M3 presses pills; only the segmented pair keeps its joined corners. */
+[data-theme="material"] button { border-radius: 999px; }
+[data-theme="material"] .seg button { border-radius: 0; }
+[data-theme="material"] .seg button:first-child { border-radius: 999px 0 0 999px; }
+[data-theme="material"] .seg button:last-child { border-radius: 0 999px 999px 0; }
+[data-theme="material"] .modal-foot button,
+[data-theme="material"] .sc-actions button,
+[data-theme="material"] .dev-actions button { padding: 5px 16px; }
+[data-theme="material"] button:hover:not(:disabled) { filter: brightness(.97); }
+
+/* the drawer: active row is a full secondary-container pill */
+[data-theme="material"] .sidebar { width: 220px; padding-top: 8px; }
+[data-theme="material"] .sidebar .src {
+  height: 34px;
+  margin: 1px 10px;
+  padding: 0 14px;
+  gap: 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+[data-theme="material"] .sidebar .src:hover:not(.on) { background: rgba(29, 27, 32, .06); }
+[data-theme="material"] .sidebar .section {
+  padding: 14px 24px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  text-transform: none;
+}
+[data-theme="material"] .sidebar .new-pl { border: 0; background: none; }
+
+/* the list: state layers, no zebra, no vertical rules */
+[data-theme="material"] .thead { height: 34px; }
+[data-theme="material"] .th { border-right: 0; font-size: 11px; font-weight: 500; }
+[data-theme="material"] .tbody { padding: 0 8px; }
+[data-theme="material"] .tr { width: calc(100% - 16px); }
+[data-theme="material"] .tr:not(.sel):hover { background: rgba(29, 27, 32, .06); }
+[data-theme="material"] .tr.sel .stars i.on { color: var(--accent); }
+[data-theme="material"] .tr.sel input[type="checkbox"] { border-color: var(--field-line); background: var(--field); }
+[data-theme="material"] .tr.sel input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+[data-theme="material"] .tr.sel input[type="checkbox"]:checked::after { border-color: #fff; }
+
+/* chrome details */
+[data-theme="material"] .topbar { height: 64px; }
+[data-theme="material"] .lcd { border-radius: 16px; }
+[data-theme="material"] .search { height: 32px; border-radius: 16px; background: #ece6f0; border-color: transparent; width: 200px; }
+[data-theme="material"] .search:focus-within { border-color: var(--accent); box-shadow: none; }
+[data-theme="material"] .transport button:hover,
+[data-theme="material"] .right-tools > button:hover { background: rgba(29, 27, 32, .08); }
+[data-theme="material"] .lcd-scrub .knob,
+[data-theme="material"] input[type="range"]::-webkit-slider-thumb { border: 0; background: var(--accent); }
+[data-theme="material"] .lcd-scrub .fill { background: var(--accent); }
+
+/* the mode row as M3 chips */
+[data-theme="material"] .modebar { gap: 8px; padding: 10px 14px; border-bottom: 0; }
+[data-theme="material"] .modebar button { padding: 5px 16px; border: 1px solid #cac4d0; border-radius: 8px; color: var(--text); font-weight: 500; }
+[data-theme="material"] .modebar button.on { background: #e8def8; border-color: transparent; color: #1d192b; }
+
+/* elevation where M3 uses it: menus and dialogs, soft and round */
+[data-theme="material"] .ctx { border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, .18); border: 0; padding: 6px 0; }
+[data-theme="material"] .modal { border-radius: 28px; border: 0; box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+[data-theme="material"] .modal-titlebar { background: var(--panel); border-bottom: 0; }
+[data-theme="material"] .modal-foot { background: var(--panel); border-top: 0; }
+[data-theme="material"] .modal-titlebar .close { border-color: transparent; background: #cac4d0; }
+[data-theme="material"] .tabs { background: transparent; border-bottom: 1px solid var(--line); }
+[data-theme="material"] .tabs button { border: 0; background: none; padding: 6px 16px; border-radius: 0; color: var(--dim); font-weight: 500; }
+[data-theme="material"] .tabs button.on { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); background: none; }
+
+/* cards */
+[data-theme="material"] .tile-art .cover,
+[data-theme="material"] .album-detail > .cover { border-radius: 12px; }
+[data-theme="material"] .grid { gap: 22px 18px; padding: 20px; }
+[data-theme="material"] .media:not(.split) > .grid { padding: 0; }
+[data-theme="material"] .cb-pane li:nth-child(even) { background: transparent; }
+[data-theme="material"] .cb-pane li:hover { background: rgba(29, 27, 32, .06); }
+[data-theme="material"] .statusbar { border-top: 0; }

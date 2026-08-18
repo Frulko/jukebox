@@ -1,0 +1,242 @@
+/* ================================================================
+   THEME · Spotify — the desktop client, composition included.
+
+   The same five slots as every skin, placed the way Spotify places
+   them: the search is a fat pill centred at the top, the library and
+   the content are rounded #121212 panels floating on pure black with
+   the queue docked as a third column, and the player runs across the
+   bottom — what is playing at the left, the transport in the middle
+   with the one filled control, a white circle for play. Green is
+   spent like Spotify spends it: the playing row, the active toggle,
+   and nothing else.
+   ================================================================ */
+
+[data-theme="spotify"] {
+  --font: "CircularSp", "Circular Std", "Circular", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --fs: 13px;
+
+  --canvas: #000;
+
+  --chrome: #000;
+  --chrome-line: #000;
+  --chrome-text: #fff;
+  --chrome-inset: none;
+
+  --btn: transparent;
+  --btn-line: transparent;
+  --btn-text: #b3b3b3;
+  --btn-shadow: none;
+  --btn-on: rgba(30, 215, 96, .16);
+  --btn-on-line: transparent;
+  --btn-on-text: #1ed760;
+
+  --sidebar: #121212;
+  --sidebar-line: transparent;
+  --sidebar-text: #b3b3b3;
+  --sidebar-section: #7a7a7a;
+  --sidebar-sel: #2a2a2a;
+  --sidebar-sel-text: #fff;
+  --sidebar-sel-icon: #1ed760;
+  --sidebar-sel-shadow: none;
+  --sidebar-shadow: none;
+
+  --content: #121212;
+  --text: #fff;
+  --dim: #b3b3b3;
+  --line: #2a2a2a;
+  --line-soft: #1f1f1f;
+
+  --head: transparent;
+  --head-line: #2a2a2a;
+  --head-text: #b3b3b3;
+  --head-sorted: rgba(255, 255, 255, .06);
+
+  --stripe: transparent;
+  --sel: #2a2a2a;
+  --sel-text: #fff;
+  --sel-blur: #1c1c1c;
+  --row-h: 40px;
+  --row-radius: 4px;
+
+  --lcd: transparent;
+  --lcd-line: transparent;
+  --lcd-shadow: none;
+  --track-bg: #4d4d4d;
+
+  --status: transparent;
+  --panel: #1f1f1f;
+  --field: #1f1f1f;
+  --field-line: #3e3e3e;
+  --accent: #1ed760;
+  --focus: rgba(30, 215, 96, .35);
+  --menu: #282828;
+  --menu-text: #fff;
+  --menu-line: #3e3e3e;
+  --star: #b3b3b3;
+  --star-off: #3e3e3e;
+  --scroll-thumb: #4d4d4d;
+  --scroll-thumb-hover: #6a6a6a;
+  --scroll-track: transparent;
+  --radius: 8px;
+  --page-x: 22px;
+  --page-top: 18px;
+}
+
+/* --- the shell: panels on black, the player as a full-width bottom bar --- */
+[data-theme="spotify"] body { background: var(--canvas); }
+[data-theme="spotify"] .itunes {
+  background: var(--canvas);
+  border: 0;
+  padding: 8px 8px 0;
+  gap: 8px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "find   find  find"
+    "body   body  body"
+    "status status status"
+    "pleft  pmid  pright";
+}
+[data-theme="spotify"] .topbar { display: contents; }
+/* What plays sits at the LEFT of the bar, the transport in the middle —
+   the one placement everybody recognises as this client. */
+[data-theme="spotify"] .lcd { grid-area: pleft; }
+[data-theme="spotify"] .transport { grid-area: pmid; justify-self: center; }
+[data-theme="spotify"] .right-tools { grid-area: find; justify-self: center; margin-left: 0; }
+[data-theme="spotify"] .main { grid-area: body; }
+[data-theme="spotify"] .statusbar { grid-area: status; height: 24px; border-top: 0; padding: 0 12px; color: var(--dim); }
+[data-theme="spotify"] .main {
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "nav main aside";
+}
+[data-theme="spotify"] .main > .queue-panel {
+  grid-area: aside;
+  position: static;
+  width: 300px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  background: #121212;
+}
+[data-theme="spotify"] .sidebar,
+[data-theme="spotify"] .content {
+  border: 0;
+  border-radius: 8px;
+  overflow-x: hidden;
+}
+[data-theme="spotify"] .content { overflow-y: hidden; }
+[data-theme="spotify"] .sidebar { width: 280px; padding-top: 8px; overflow-y: auto; }
+
+/* --- the search, a fat pill front and centre --- */
+[data-theme="spotify"] .search {
+  width: 400px;
+  height: 40px;
+  padding: 0 14px;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: #1f1f1f;
+  color: var(--text);
+  font-size: 13px;
+}
+[data-theme="spotify"] .search:hover { background: #2a2a2a; }
+[data-theme="spotify"] .search:focus-within { border-color: #fff; box-shadow: none; }
+[data-theme="spotify"] .search .icon { opacity: .7; }
+[data-theme="spotify"] .right-tools > button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--btn-text);
+}
+[data-theme="spotify"] .right-tools > button:hover { color: #fff; background: #1f1f1f; }
+
+/* --- the bottom bar --- */
+[data-theme="spotify"] .transport { gap: 10px; align-items: center; padding: 10px 0 12px; }
+[data-theme="spotify"] .transport button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--btn-text);
+}
+[data-theme="spotify"] .transport button:hover { color: #fff; }
+/* the one filled control on the page */
+[data-theme="spotify"] .transport .play {
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  color: #000;
+}
+[data-theme="spotify"] .transport .play:hover { background: #fff; filter: none; transform: scale(1.05); }
+[data-theme="spotify"] .volume { margin-left: 14px; }
+[data-theme="spotify"] .lcd {
+  height: 64px;
+  max-width: 380px;
+  margin: 0;
+  padding: 8px 6px;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+[data-theme="spotify"] .lcd-art { width: 46px; height: 46px; border-radius: 5px; }
+[data-theme="spotify"] .lcd-main { align-items: flex-start; }
+[data-theme="spotify"] .lcd-title { font-size: 13px; font-weight: 600; }
+[data-theme="spotify"] .lcd-sub { font-size: 11px; }
+[data-theme="spotify"] .lcd-scrub { width: 100%; }
+[data-theme="spotify"] .lcd-scrub .fill { background: #fff; }
+[data-theme="spotify"] .lcd-scrub:hover .fill { background: var(--accent); }
+[data-theme="spotify"] .lcd-scrub .knob { opacity: 0; border: 0; background: #fff; box-shadow: none; }
+[data-theme="spotify"] .lcd-scrub:hover .knob { opacity: 1; }
+[data-theme="spotify"] input[type="range"]::-webkit-slider-thumb { border: 0; background: #fff; }
+/* no column browser in this skin, so its toggle stays out of the bar */
+[data-theme="spotify"] .right-tools > button:nth-of-type(3) { display: none; }
+
+/* --- the library panel --- */
+[data-theme="spotify"] .sidebar .src {
+  height: 34px;
+  margin: 1px 8px;
+  padding: 0 10px;
+  gap: 10px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+[data-theme="spotify"] .sidebar .src:hover { color: #fff; }
+[data-theme="spotify"] .sidebar .section { padding: 14px 18px 4px; font-size: 11px; letter-spacing: .04em; }
+[data-theme="spotify"] .sidebar .new-pl { border: 0; background: #2a2a2a; color: #fff; border-radius: 50%; }
+
+/* --- the list --- */
+[data-theme="spotify"] .thead { height: 34px; padding: 0 10px; }
+[data-theme="spotify"] .th { border-right: 0; font-size: 12px; }
+[data-theme="spotify"] .tbody { padding: 4px 10px; }
+[data-theme="spotify"] .tr { width: calc(100% - 20px); }
+[data-theme="spotify"] .tr:not(.sel):hover { background: #1f1f1f; }
+[data-theme="spotify"] .tr.playing .td.name { color: var(--accent); }
+[data-theme="spotify"] .thumb { border-radius: 4px; }
+[data-theme="spotify"] .list-empty { color: var(--dim); }
+
+/* All · Music · Podcasts — the chip row. Chosen is white on white's terms:
+   the pill inverts instead of tinting. */
+[data-theme="spotify"] .modebar { padding: 12px 14px 4px; border-bottom: 0; gap: 8px; }
+[data-theme="spotify"] .modebar button { padding: 5px 14px; border-radius: 99px; background: #1f1f1f; color: #fff; font-weight: 400; }
+[data-theme="spotify"] .modebar button:hover { background: #2a2a2a; }
+[data-theme="spotify"] .modebar button.on { background: #fff; color: #000; }
+
+/* cards, grids, popovers */
+[data-theme="spotify"] .grid { gap: 22px 18px; padding: 20px; }
+[data-theme="spotify"] .media:not(.split) > .grid { padding: 0; }
+[data-theme="spotify"] .tile-art .cover,
+[data-theme="spotify"] .album-detail > .cover { border-radius: 8px; }
+[data-theme="spotify"] .cb-pane li:nth-child(even) { background: transparent; }
+[data-theme="spotify"] .cb-pane li:hover { background: #1f1f1f; }
+[data-theme="spotify"] .modal { border-radius: 8px; background: #282828; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+[data-theme="spotify"] .modal-titlebar { background: #282828; border-bottom-color: #3e3e3e; }
+[data-theme="spotify"] .modal-titlebar .close { border-color: transparent; background: #4d4d4d; }
+[data-theme="spotify"] .modal-foot { background: #282828; border-top-color: #3e3e3e; }
+[data-theme="spotify"] .modal-backdrop { background: rgba(0, 0, 0, .6); }
+[data-theme="spotify"] .tabs { background: transparent; }
+[data-theme="spotify"] .cap-bar { background: #3e3e3e; }
+[data-theme="spotify"] .chip { background: #1f1f1f; border-color: transparent; }
+[data-theme="spotify"] .chip.on { background: rgba(30, 215, 96, .16); border-color: var(--accent); }
