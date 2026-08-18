@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSources } from './api'
 import { Icon } from './Icon'
 import { ICON_NAMES } from './iconPaths'
+import { Tooltip } from './Tooltip'
 import { FolderBrowser, FolderRow } from './FolderBrowser'
 import { ViewSearch } from './ViewSearch'
 import { useScrollMemory } from './viewState'
@@ -214,15 +215,21 @@ export function DesignSystemView() {
         </p>
         <div className="row">
           <span className="badges">
-            <i className="badge info">
-              <Icon name="cloud" size={9} />
-            </i>
-            <i className="badge ok">
-              <Icon name="music" size={9} />
-            </i>
-            <i className="badge warn">
-              <Icon name="alert" size={9} />
-            </i>
+            <Tooltip label="An info badge — hover shows the sentence the icon cannot say">
+              <i className="badge info">
+                <Icon name="cloud" size={9} />
+              </i>
+            </Tooltip>
+            <Tooltip label="An ok badge — already on a connected device">
+              <i className="badge ok">
+                <Icon name="music" size={9} />
+              </i>
+            </Tooltip>
+            <Tooltip label="A warn badge — the only tone allowed to pull the eye">
+              <i className="badge warn">
+                <Icon name="alert" size={9} />
+              </i>
+            </Tooltip>
           </span>
           <span className="stars">
             {[1, 2, 3, 4, 5].map((n) => (

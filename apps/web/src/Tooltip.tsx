@@ -1,4 +1,4 @@
-import { cloneElement, useState, type HTMLAttributes, type ReactElement, type Ref } from 'react'
+import { cloneElement, useCallback, useState, type HTMLAttributes, type ReactElement, type Ref } from 'react'
 import {
   autoUpdate,
   flip,
@@ -11,7 +11,15 @@ import {
   useHover,
   useInteractions,
   useRole,
+  type OpenChangeReason,
 } from '@floating-ui/react'
+
+/**
+ * When the pointer last actually moved. One listener for every tooltip: the
+ * question "did the person move, or did the page move under them?" is global.
+ */
+let lastPointerMove = 0
+window.addEventListener('pointermove', () => { lastPointerMove = Date.now() }, { capture: true, passive: true })
 
 /**
  * A tooltip for things that cannot say what they are.
@@ -35,9 +43,23 @@ export function Tooltip({
   children: ReactElement<HTMLAttributes<HTMLElement> & { ref?: Ref<HTMLElement> }>
 }) {
   const [open, setOpen] = useState(false)
+  /**
+   * A tooltip must be *pointed at*. While a scan streams tracks in, the list
+   * slides under a parked cursor and every row that passes gets a mouseenter
+   * from the browser's re-hit-testing — nobody moved, but hover-opens arrive
+   * in a loop and the tip strobes open/closed for as long as the job runs. A
+   * real hover is always preceded by the pointer moving moments ago (the open
+   * delay is 350ms), so an open whose pointer has been still for over a
+   * second is the page moving, and is refused. Focus opens are exempt: a
+   * keyboard user's pointer is parked by definition.
+   */
+  const guardedSetOpen = useCallback((next: boolean, _event?: Event, reason?: OpenChangeReason) => {
+    if (next && reason === 'hover' && Date.now() - lastPointerMove > 1000) return
+    setOpen(next)
+  }, [])
   const { refs, floatingStyles, context } = useFloating({
     open,
-    onOpenChange: setOpen,
+    onOpenChange: guardedSetOpen,
     placement,
     middleware: [offset(6), flip(), shift({ padding: 6 })],
     whileElementsMounted: autoUpdate,
