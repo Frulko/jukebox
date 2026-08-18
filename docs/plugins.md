@@ -158,7 +158,8 @@ or another plugin's.
 A theme is styling, not script: everything lands in a `<style>` element and
 none of it runs. It follows the plugin's switch — disable the plugin and the
 skin leaves the picker; whoever was wearing it falls back to the base skin.
-The `hotdog` plugin in this repository is a complete working example.
+The block above is, in full, what a working theme plugin declares — a `label`
+and a handful of `tokens` are enough to put a new skin in the picker.
 
 ## What a command may answer
 
