@@ -41,6 +41,13 @@ export type Audio = {
   /** Non-null when the browser refused the file — a codec it cannot decode, usually. */
   error: string | null
   play: (id: string, src?: string) => void
+  /**
+   * Whether the element has anything to resume. False on a fresh page: the
+   * server remembers what is current across reloads, the element does not, and
+   * `resume()` on an element that was never given a source plays nothing while
+   * reporting `playing` — the button flips, the room stays silent.
+   */
+  loaded: () => boolean
   resume: () => void
   pause: () => void
   seek: (seconds: number) => void
@@ -186,6 +193,7 @@ export function useAudio({
     void a.play().catch(() => {})
   }, [base, report, setTime])
 
+  const loaded = useCallback(() => !!el.current?.currentSrc, [])
   const resume = useCallback(() => { void el.current?.play().catch(() => {}) }, [])
   const pause = useCallback(() => el.current?.pause(), [])
 
@@ -198,7 +206,7 @@ export function useAudio({
     setTime({ position: seconds })
   }, [setTime])
 
-  return { playing, time, error, play, resume, pause, seek }
+  return { playing, time, error, play, loaded, resume, pause, seek }
 }
 
 /**

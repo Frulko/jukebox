@@ -716,8 +716,12 @@ export default function App() {
     // should be playing, and the renderer follows that.
     if (remote) return void (player?.playing ? control.pause() : control.play())
     if (audio.playing) audio.pause()
-    else audio.resume()
-  }, [current, tracks, playTrack, audio, remote, player?.playing, control])
+    // A reloaded page: the server remembered what is current, but the element
+    // was never given it — there is nothing to resume, only something to start.
+    // A stream's source is not `/stream/:id`; the shared state carries it.
+    else if (audio.loaded()) audio.resume()
+    else audio.play(current.id, player?.stream?.id === current.id ? player.stream.src : undefined)
+  }, [current, tracks, playTrack, audio, remote, player?.playing, player?.stream, control])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
