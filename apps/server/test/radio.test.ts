@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createApp } from '../src/app.ts'
-import { discover, probeStream } from '../src/radio.ts'
+import { discover, probeStream, searchDirectory } from '../src/radio.ts'
 
 /**
  * The station is a real server, because the thing worth testing is that we read
@@ -166,4 +166,56 @@ test('a station whose stream is asleep is still added', async () => {
     assert.ok(res.body.probeError)
     assert.equal(res.body.name, '127.0.0.1', 'named from the URL rather than left blank')
   } finally { await h.cleanup() }
+})
+
+/* ---- the directory search ---- */
+
+test('a directory search maps its hits and drops the unplayable', async () => {
+  const dir = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify([
+      {
+        name: ' FIP ', url: 'http://x/fip.m3u', url_resolved: 'http://x/fip.aac',
+        favicon: 'http://x/logo.png', tags: 'jazz,public radio', country: 'France',
+        codec: 'AAC', bitrate: 192, votes: 43000, homepage: 'https://fip.fr',
+      },
+      // A directory row with no playable URL proposes nothing.
+      { name: 'ghost station', url: '', url_resolved: '', votes: 9 },
+    ]))
+  })
+  await new Promise<void>((r) => dir.listen(0, '127.0.0.1', r))
+  process.env.JUKEBOX_RADIO_DIRECTORY = `http://127.0.0.1:${(dir.address() as any).port}`
+  try {
+    const hits = await searchDirectory('fip')
+    assert.ok(hits, 'the directory answered')
+    assert.equal(hits.length, 1)
+    assert.deepEqual(hits[0], {
+      name: 'FIP', streamUrl: 'http://x/fip.aac', homepageUrl: 'https://fip.fr',
+      imageUrl: 'http://x/logo.png', genre: 'jazz,public radio', country: 'France',
+      bitrate: 192, codec: 'aac', votes: 43000,
+    })
+  } finally {
+    delete process.env.JUKEBOX_RADIO_DIRECTORY
+    dir.close()
+  }
+})
+
+test('a directory that does not answer is null, never an empty result', async () => {
+  process.env.JUKEBOX_RADIO_DIRECTORY = 'http://127.0.0.1:1'
+  try {
+    assert.equal(await searchDirectory('fip'), null)
+  } finally { delete process.env.JUKEBOX_RADIO_DIRECTORY }
+})
+
+test('the search route refuses a blank query and says when nobody answered', async () => {
+  const h = await harness()
+  process.env.JUKEBOX_RADIO_DIRECTORY = 'http://127.0.0.1:1'
+  try {
+    assert.equal((await h.call('GET', '/radios/search')).status, 400)
+    const down = await h.call('GET', '/radios/search?q=fip')
+    assert.equal(down.status, 502, '"could not ask" is not "no results"')
+  } finally {
+    delete process.env.JUKEBOX_RADIO_DIRECTORY
+    await h.cleanup()
+  }
 })

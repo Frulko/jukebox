@@ -1218,73 +1218,60 @@ export const SCHEMAS: Record<string, any> = {
       },
       "title": {
         "type": "string"
-      },
-      "description": {
-        "type": "string"
-      },
-      "pubDate": {
-        "type": "number",
-        "nullable": true
-      },
-      "duration": {
-        "type": "number"
-      },
-      "episodeNumber": {
-        "type": "number",
-        "nullable": true
-      },
-      "season": {
-        "type": "number",
-        "nullable": true
-      },
-      "enclosureUrl": {
-        "type": "string",
-        "nullable": true
-      },
-      "enclosureLength": {
-        "type": "number"
-      },
-      "enclosureType": {
-        "type": "string"
-      },
-      "imageUrl": {
-        "type": "string",
-        "nullable": true
-      },
-      "trackId": {
-        "type": "string",
-        "nullable": true,
-        "description": "Set once downloaded into the library."
-      },
-      "played": {
-        "type": "number",
-        "enum": [
-          0,
-          1
-        ]
-      },
-      "position": {
-        "type": "number",
-        "description": "Resume point in seconds."
       }
     },
     "required": [
       "id",
       "podcastId",
       "guid",
-      "title",
-      "description",
-      "pubDate",
-      "duration",
-      "episodeNumber",
-      "season",
-      "enclosureUrl",
-      "enclosureLength",
-      "enclosureType",
+      "title"
+    ]
+  },
+  "RadioHit": {
+    "description": "A station proposed by the community directory, not yet in the library. Everything needed to create a `Radio` from it without probing the stream.",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "streamUrl": {
+        "type": "string"
+      },
+      "homepageUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "imageUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "genre": {
+        "type": "string"
+      },
+      "country": {
+        "type": "string"
+      },
+      "bitrate": {
+        "type": "number"
+      },
+      "codec": {
+        "type": "string"
+      },
+      "votes": {
+        "type": "number",
+        "description": "Community votes — what proposals are ranked by."
+      }
+    },
+    "required": [
+      "name",
+      "streamUrl",
+      "homepageUrl",
       "imageUrl",
-      "trackId",
-      "played",
-      "position"
+      "genre",
+      "country",
+      "bitrate",
+      "codec",
+      "votes"
     ]
   },
   "OrganizePlan": {

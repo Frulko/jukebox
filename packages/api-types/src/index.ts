@@ -323,6 +323,23 @@ export type Episode = {
   /** The feed's identity for this episode. Never the URL — those get rewritten. */
   guid: string
   title: string
+/**
+ * A station proposed by the community directory, not yet in the library.
+ * Everything needed to create a `Radio` from it without probing the stream.
+ */
+export type RadioHit = {
+  name: string
+  streamUrl: string
+  homepageUrl: string | null
+  imageUrl: string | null
+  genre: string
+  country: string
+  bitrate: number
+  codec: string
+  /** Community votes — what proposals are ranked by. */
+  votes: number
+}
+
   description: string
   pubDate: number | null
   duration: number

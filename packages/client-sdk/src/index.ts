@@ -2,6 +2,7 @@ import type {
   Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Output, Podcast, Radio,
+  RadioHit,
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
@@ -442,6 +443,8 @@ export function createClient(opts: ClientOptions = {}) {
         request<Radio & { probeError: string | null }>(`/radios/${id}/discover`, { method: 'POST' }),
     },
 
+      /** Stations the community directory proposes for a name, best-voted first. */
+      search: (q: string) => request<{ items: RadioHit[] }>(`/radios/search${qs({ q })}`),
     podcasts: {
       list: () => request<{ items: Podcast[] }>('/podcasts', {}, true),
       get: (id: string) => request<Podcast>(`/podcasts/${id}`),
@@ -631,3 +634,4 @@ export type {
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }
+  RadioHit,

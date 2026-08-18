@@ -14,7 +14,7 @@ import { makeAcquireHandler } from './acquire.ts'
 import { makeSyncHandler, planSync } from './sync.ts'
 import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
 import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandler } from './podcasts.ts'
-import { createRadio, deleteRadio, discover, getRadio, listRadios, updateRadio } from './radio.ts'
+import { createRadio, deleteRadio, discover, getRadio, listRadios, searchDirectory, updateRadio } from './radio.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, membershipsOf,
   pickRendition, playlistTracks, smartTracks, tagTracks, tracksDelta,
@@ -1894,6 +1894,19 @@ export function createApp(dbFile: string) {
   api.delete('/podcasts/:id', (c) => {
     const r = db.prepare(`UPDATE podcasts SET deletedAt = ?, rev = ? WHERE id = ? AND deletedAt IS NULL`)
       .run(Date.now(), nextRev(db), c.req.param('id'))
+  /**
+   * Stations proposed by the community directory, by name, best-voted first.
+   * A 502 rather than an empty list when the directory is unreachable: "no
+   * station is called that" and "nobody could be asked" are different answers.
+   */
+  api.get('/radios/search', async (c) => {
+    const q = (c.req.query('q') ?? '').trim()
+    if (!q) return fail(c, 400, 'bad_query', 'expected ?q=<name>')
+    const items = await searchDirectory(q)
+    if (items === null) return fail(c, 502, 'directory_unreachable', 'the radio directory did not answer')
+    return c.json({ items })
+  })
+
     return r.changes ? c.body(null, 204) : fail(c, 404, 'not_found', 'unknown podcast')
   })
 

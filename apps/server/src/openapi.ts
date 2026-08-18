@@ -181,6 +181,7 @@ const DOCS: Record<string, Doc> = {
 
   'GET /jobs': { summary: 'Background work.', returns: 'Job[]', tag: 'jobs' },
   'GET /jobs/:id': { summary: 'One job.', returns: 'Job', tag: 'jobs' },
+  'GET /radios/search': { summary: 'Stations the community directory proposes for a name, best-voted first.', returns: 'RadioHit[]', tag: 'radios', query: ['q'] },
   'GET /jobs/:id/items': { summary: 'What it did item by item, with counts over the whole job.', returns: 'JobItemsPage', tag: 'jobs' },
   'PATCH /jobs/:id': { summary: 'Pauses or resumes it.', tag: 'jobs' },
   'DELETE /jobs/:id': { summary: 'Cancels it.', tag: 'jobs' },

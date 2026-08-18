@@ -178,6 +178,13 @@ export async function findFavicon(homepage: string): Promise<string | null> {
 }
 
 /**
+ * Where the community directory lives. Read at call time so a test can point it
+ * at a local mock, and someone behind a firewall can point it at another
+ * Radio-Browser mirror.
+ */
+const directoryBase = () => process.env.JUKEBOX_RADIO_DIRECTORY ?? 'https://de1.api.radio-browser.info'
+
+/**
  * The community directory, asked by stream URL.
  *
  * Best-effort by design: it is someone else's server, and a directory being
@@ -186,7 +193,7 @@ export async function findFavicon(homepage: string): Promise<string | null> {
 export async function lookupDirectory(streamUrl: string): Promise<Partial<Radio> | null> {
   try {
     const res = await fetch(
-      `https://de1.api.radio-browser.info/json/stations/byurl?url=${encodeURIComponent(streamUrl)}`,
+      `${directoryBase()}/json/stations/byurl?url=${encodeURIComponent(streamUrl)}`,
       { headers: { 'user-agent': 'jukebox/1.0' }, signal: AbortSignal.timeout(TIMEOUT) })
     if (!res.ok) return null
     const list = (await res.json()) as any[]
@@ -201,6 +208,58 @@ export async function lookupDirectory(streamUrl: string): Promise<Partial<Radio>
       bitrate: Number(hit.bitrate) || undefined,
       codec: hit.codec?.toLowerCase() || undefined,
     }
+  } catch {
+    return null
+  }
+}
+
+export type RadioHit = {
+  name: string
+  streamUrl: string
+  homepageUrl: string | null
+  imageUrl: string | null
+  genre: string
+  country: string
+  bitrate: number
+  codec: string
+  votes: number
+}
+
+/**
+ * The directory asked by *name* — what "propose me stations" is made of.
+ *
+ * The by-URL lookup above is exact-match and misses every variant of a stream
+ * (FIP's `midfi.mp3` is unknown while its `hifi.aac` has forty thousand votes).
+ * Searching by name and ranking by votes is how every radio app fills its
+ * browse page, and it hands back the canonical URL along with the logo.
+ *
+ * `null` means the directory did not answer — which the UI must say, because
+ * "no results" and "could not ask" are different answers to the same question.
+ */
+export async function searchDirectory(q: string, limit = 20): Promise<RadioHit[] | null> {
+  try {
+    const res = await fetch(
+      `${directoryBase()}/json/stations/search?name=${encodeURIComponent(q)}&order=votes&reverse=true&hidebroken=true&limit=${limit}`,
+      { headers: { 'user-agent': 'jukebox/1.0' }, signal: AbortSignal.timeout(TIMEOUT) })
+    if (!res.ok) return null
+    const list = (await res.json()) as any[]
+    if (!Array.isArray(list)) return null
+    return list
+      .map((s): RadioHit => ({
+        name: (s.name ?? '').trim(),
+        // `url_resolved` is the directory having already followed the
+        // playlist/redirect chain; the raw `url` may be an .m3u the element
+        // cannot play.
+        streamUrl: s.url_resolved || s.url || '',
+        homepageUrl: s.homepage || null,
+        imageUrl: s.favicon || null,
+        genre: s.tags || '',
+        country: s.country || '',
+        bitrate: Number(s.bitrate) || 0,
+        codec: (s.codec ?? '').toLowerCase(),
+        votes: Number(s.votes) || 0,
+      }))
+      .filter((s) => s.name && /^https?:\/\//.test(s.streamUrl))
   } catch {
     return null
   }

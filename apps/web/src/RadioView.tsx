@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Radio } from '@jukebox/client-sdk'
+import type { Radio, RadioHit } from '@jukebox/client-sdk'
 import { api } from './api'
 import { Icon } from './Icon'
 import { Cover } from './Artwork'
@@ -17,7 +17,7 @@ import { t, useLocale } from './i18n'
  * falls through to the generated cover rather than leaving a broken frame,
  * which also covers every station the probe found nothing for.
  */
-function StationArt({ station, size }: { station: Radio; size: number }) {
+function StationArt({ station, size }: { station: Pick<Radio, 'name' | 'streamUrl' | 'imageUrl'>; size: number }) {
   const [broken, setBroken] = useState(false)
   if (station.imageUrl && !broken) {
     return (
@@ -71,6 +71,11 @@ export function RadioView({
   const [url, setUrl] = useState('')
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // What the directory proposed, and for what question — the heading has to say
+  // what was searched, or a stale panel reads as an answer to the new input.
+  const [proposals, setProposals] = useState<{ q: string; items: RadioHit[] } | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [addingHit, setAddingHit] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   // Two views because a station is two things at once. Browsing is visual —
@@ -122,6 +127,48 @@ export function RadioView({
 
   const patch = (id: string, p: Partial<Radio>) => api.radios.update(id, p).then(refresh)
 
+  /**
+   * One field, two questions. A URL is a stream to add; anything else is a name
+   * to look up in the community directory (Radio-Browser) — which is where the
+   * logo, the canonical stream and the right bitrate live when the stream's own
+   * headers say nothing. Typing "fip" beats hunting down an icecast URL.
+   */
+  const isUrl = /^https?:\/\//i.test(url.trim())
+
+  const searchStations = async () => {
+    const q = url.trim()
+    if (!q || searching) return
+    setSearching(true)
+    setError(null)
+    try {
+      const r = await api.radios.search(q)
+      setProposals({ q, items: r.items })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'the directory did not answer')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const owned = new Set(stations.map((s) => s.streamUrl))
+
+  const addHit = async (h: RadioHit) => {
+    if (addingHit) return
+    setAddingHit(h.streamUrl)
+    try {
+      // The directory already answered everything a probe would ask, with a
+      // better source for the logo — `discover: false` makes the add instant.
+      const { votes: _ranked, ...station } = h
+      const made = await api.radios.create({ ...station, discover: false })
+      refresh()
+      onNotice(`Added ${made.name}${made.codec ? ` · ${made.codec.toUpperCase()}` : ''}`)
+    } catch (err) {
+      onNotice(err instanceof Error ? err.message : `Could not add ${h.name}`)
+    } finally {
+      setAddingHit(null)
+    }
+  }
+
   return (
     <div className="media radio stations" ref={pane.ref} onScroll={pane.onScroll}>
       <div className="view-head">
@@ -138,26 +185,68 @@ export function RadioView({
           className="radio-add"
           onSubmit={(e) => {
             e.preventDefault()
-            void add()
+            void (isUrl ? add() : searchStations())
           }}
         >
           <input
             value={url}
-            placeholder="Stream URL — the server works out the rest"
+            placeholder="A station name to search, or a stream URL to add"
             onChange={(e) => (setUrl(e.target.value), setError(null))}
           />
-          <button type="submit" disabled={!url.trim() || adding}>
-            {adding ? 'Listening…' : 'Add station'}
+          <button type="submit" disabled={!url.trim() || adding || searching}>
+            {adding ? 'Listening…' : searching ? 'Asking…' : isUrl ? 'Add station' : 'Search'}
           </button>
         </form>
       </div>
       {error && <div className="pod-add-error">{error}</div>}
 
+      {proposals && (
+        <div className="radio-genre">
+          <h3>
+            Proposed for “{proposals.q}”
+            <em className="dim">
+              {proposals.items.length
+                ? `best-voted first, from the community directory`
+                : 'the community directory knows no station by that name'}
+            </em>
+            <span className="spacer" />
+            <button onClick={() => setProposals(null)}>Dismiss</button>
+          </h3>
+          {proposals.items.map((h) => {
+            const had = owned.has(h.streamUrl)
+            return (
+              <div key={h.streamUrl} className="station">
+                <StationArt station={h} size={18} />
+                <span className="st-name">{h.name}</span>
+                <span className="dim st-what">
+                  {[
+                    h.country,
+                    h.codec ? h.codec.toUpperCase() : null,
+                    h.bitrate ? `${h.bitrate} kbps` : null,
+                    h.votes ? `${h.votes.toLocaleString()} votes` : null,
+                  ].filter(Boolean).join(' · ')}
+                </span>
+                <span className="spacer" />
+                {h.homepageUrl && (
+                  <a className="st-home" href={h.homepageUrl} target="_blank" rel="noreferrer" title={h.homepageUrl}>
+                    Site
+                  </a>
+                )}
+                <button disabled={had || addingHit === h.streamUrl} onClick={() => void addHit(h)}>
+                  {had ? 'In your stations' : addingHit === h.streamUrl ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {isPending && <p className="dim">Asking the server…</p>}
-      {!isPending && stations.length === 0 && (
+      {!isPending && stations.length === 0 && !proposals && (
         <p className="dim">
-          No stations yet. Paste a stream URL above — the server listens to it once and fills in the
-          name, the genre and the logo, which you can then correct.
+          No stations yet. Type a name above to search the community directory, or paste a stream
+          URL — the server listens to it once and fills in the name, the genre and the logo, which
+          you can then correct.
         </p>
       )}
       {!isPending && stations.length > 0 && shown.length === 0 && (
