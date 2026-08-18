@@ -11,3 +11,11 @@ data/
 .fixtures/
 apps/docs/.astro/
 apps/docs/public/build/
+
+# Artefacts de séance — outillage local des sessions, jamais du code
+.claude/
+.agents/
+skills-lock.json
+
+# Bibliothèque runtime du satellite (SATELLITE_ROOT ?? './device')
+apps/satellite/device/
