@@ -11,7 +11,6 @@
 // below; the fifth rule is that none of it happens on a 24-pixel thumbnail,
 // where type is texture rather than words.
 
-import type { Track } from './data'
 
 /** Stable 32-bit hash so art survives reloads and never depends on array order. */
 function hash(s: string) {
@@ -25,7 +24,7 @@ function hash(s: string) {
 
 const PATTERNS = 6
 
-export function coverStyle(seed: string): React.CSSProperties {
+function coverStyle(seed: string): React.CSSProperties {
   const h = hash(seed)
   const hue = h % 360
   const hue2 = (hue + 25 + (h % 60)) % 360
@@ -79,13 +78,13 @@ function layout(text: string, { width, size, maxLines, weight }: {
   weight: number
 }) {
   const words = text.trim().split(/\s+/).filter(Boolean)
-  if (!words.length) return { lines: [] as string[], size }
+  const lines: string[] = []
+  if (!words.length) return { lines, size }
 
   // The longest single word sets the ceiling: nothing can be narrower than it.
   const longest = Math.max(...words.map((w) => widthOf(w, weight)))
   const fitted = Math.min(size, width / longest)
 
-  const lines: string[] = []
   let line = ''
   for (const word of words) {
     const next = line ? `${line} ${word}` : word
@@ -108,8 +107,8 @@ function layout(text: string, { width, size, maxLines, weight }: {
   return { lines, size: fitted }
 }
 
-/** The shape layer, drawn in the same 100×100 space as the type. */
-function shapes(h: number, ink: string) {
+/** The motif layer, drawn in the same 100×100 space as the type. */
+function motifs(h: number, ink: string) {
   // `>>>`, not `>>`: the hash is unsigned and half of all values have the top
   // bit set, so a signed shift turns them negative — and a negative remainder
   // indexes an array with `-2`, which is how a wall of covers becomes a blank
@@ -233,7 +232,7 @@ export function Cover({
           </linearGradient>
         </defs>
         <rect width="100" height="100" fill={`url(#${id})`} />
-        {shapes(h, '#fff')}
+        {motifs(h, '#fff')}
 
         {withText && (
           <>
@@ -347,4 +346,3 @@ export function PlaylistCover({
   )
 }
 
-export const albumSeed = (t: Track) => `${t.albumArtist} — ${t.album}`

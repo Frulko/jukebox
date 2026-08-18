@@ -1,18 +1,202 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useTable } from '@tanstack/react-table'
+import { createColumnHelper, useTable } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Icon } from './Icon'
-import { albumSeed, Cover } from './Artwork'
+import { Cover } from './Artwork'
+import { albumSeed } from './albumSeed'
 import { features } from './tableFeatures'
-import { COLUMN_LABELS, DEFAULT_VISIBLE, makeColumns, NUMERIC } from './columns'
-import type { Playlist, Track } from './data'
+import { DEFAULT_VISIBLE, NUMERIC, type CellActions } from './columns'
+import { COLUMN_LABELS, columnLabel } from './columnLabels'
+import { fmtDate, fmtSize, fmtTime, type Playlist, type Track } from './data'
 import type { View } from './App'
 import { isUnavailable } from './trackBadges'
 import { useMenuPosition } from './useMenuPosition'
-import { titleIfClipped } from './Tooltip'
+import { titleIfClipped } from './titleIfClipped'
 import { useTrackMenu, type TrackActions } from './TrackMenu'
-import { getLocale, t, useLocale } from './i18n'
+import { getLocale, num, t, useLocale } from './i18n'
+import { Presence, Status, Stars } from './columnCells'
 import { usePersisted, useScrollMemory } from './viewState'
+
+const h = createColumnHelper<typeof features, Track>()
+
+const makeColumns = (a: CellActions) =>
+  h.columns([
+    h.display({
+      id: 'checked',
+      /**
+       * The box that does the whole column.
+       *
+       * It reads as the state of what is in front of you — ticked when every
+       * row is, half-ticked when some are — and one click flips all of them.
+       * Acting on the rows *shown* rather than on the query behind them is the
+       * honest reading: the list holds a page, the server holds the library,
+       * and a box that quietly ticked forty thousand tracks because it looked
+       * like it meant "all" would be the worst kind of convenience. When the
+       * two numbers differ the title says both.
+       */
+      header: ({ table }) => {
+        const rows = table.getRowModel().rows
+        const ids = rows.map((r) => r.original.id)
+        const on = rows.filter((r) => r.original.enabled).length
+        const all = rows.length > 0 && on === rows.length
+        const some = on > 0 && !all
+        const shown = rows.length
+        const more = a.total !== undefined && a.total > shown ? a.total : 0
+        return (
+          <input
+            type="checkbox"
+            className="hdr-check"
+            checked={all}
+            ref={(el) => {
+              // Half-ticked is a third state the DOM only takes as a property,
+              // and it is the one that matters here: "some of these are on" is
+              // the state a list of a few hundred is usually in.
+              if (el) el.indeterminate = some
+            }}
+            disabled={shown === 0}
+            title={
+              (all ? t('Untick the {n} shown', { n: shown }) : t('Tick the {n} shown', { n: shown })) +
+              // Said in the same breath as the action, not afterwards: this is a
+              // list of a few hundred standing in for a library of thousands,
+              // and the box is about to look like it meant all of them.
+              (more ? ` — ${t('{total} in all, the rest are not touched', { total: num(more) })}` : '') +
+              `. ${t('Ticked tracks play when the list plays through; nothing to do with what is selected.')}`
+            }
+            onMouseDown={(e) => e.stopPropagation()}
+            onChange={() => a.setChecked(ids, !all)}
+          />
+        )
+      },
+      size: 24,
+      enableResizing: false,
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.original.enabled}
+          // The tick is a property of the track, stored on the server, and it
+          // survives you closing the app. Selection is what you are pointing at
+          // right now. Two different questions, so they say which they answer.
+          title={
+            row.original.enabled
+              ? 'Plays when this list plays through — untick to skip it'
+              : 'Skipped when this list plays through — tick to include it'
+          }
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={() => a.toggleChecked(row.original.id)}
+        />
+      ),
+    }),
+    h.display({
+      id: 'index',
+      header: '',
+      size: 34,
+      enableResizing: false,
+      cell: ({ row }) => <span className="num dim">{row.getDisplayIndex() + 1}</span>,
+    }),
+    h.display({
+      id: 'status',
+      header: '',
+      size: 46,
+      enableResizing: false,
+      cell: ({ row }) => <Status track={row.original} ctx={a.badgeContext} />,
+    }),
+    h.accessor('name', { header: 'Name', size: 230 }),
+    h.accessor('duration', {
+      id: 'time',
+      header: 'Time',
+      size: 52,
+      cell: (c) => <span className="num">{fmtTime(c.getValue())}</span>,
+    }),
+    h.accessor('artist', { header: 'Artist', size: 150 }),
+    h.accessor('album', { header: 'Album', size: 160 }),
+    h.accessor('genre', { header: 'Genre', size: 95 }),
+    h.accessor('rating', {
+      header: 'Rating',
+      size: 78,
+      cell: (c) => <Stars value={c.getValue()} onRate={(n) => a.rate(c.row.original.id, n)} />,
+    }),
+    h.accessor('playCount', {
+      header: 'Plays',
+      size: 46,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('year', {
+      header: 'Year',
+      size: 44,
+      cell: (c) => <span className="num">{c.getValue()}</span>,
+    }),
+    h.accessor('trackNumber', {
+      id: 'trackNumber',
+      header: 'Track #',
+      size: 56,
+      cell: (c) => <span className="num">{`${c.getValue()} of ${c.row.original.trackCount}`}</span>,
+    }),
+    h.accessor('discNumber', {
+      header: 'Disc #',
+      size: 50,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('albumArtist', { header: 'Album Artist', size: 150 }),
+    h.accessor('composer', { header: 'Composer', size: 150 }),
+    h.accessor('grouping', { header: 'Grouping', size: 110 }),
+    h.accessor('comments', { header: 'Comments', size: 160 }),
+    h.accessor('bpm', {
+      header: 'BPM',
+      size: 46,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('kind', { header: 'Kind', size: 150 }),
+    h.accessor('format', {
+      header: 'Format',
+      size: 64,
+      // Upper case because these are file formats, not words: FLAC and MP3 are
+      // read as tokens, and a column of them scans faster than "flac", "mp3".
+      cell: (c) => <span className="format">{c.getValue().toUpperCase()}</span>,
+    }),
+    h.accessor('size', {
+      header: 'Size',
+      size: 62,
+      cell: (c) => <span className="num">{fmtSize(c.getValue())}</span>,
+    }),
+    h.accessor('bitRate', {
+      header: 'Bit Rate',
+      size: 62,
+      cell: (c) => <span className="num">{c.getValue()} kbps</span>,
+    }),
+    h.accessor('sampleRate', {
+      header: 'Sample Rate',
+      size: 82,
+      cell: (c) => <span className="num">{(c.getValue() / 1000).toFixed(3)} kHz</span>,
+    }),
+    h.accessor('dateAdded', {
+      header: 'Date Added',
+      size: 100,
+      cell: (c) => fmtDate(c.getValue()),
+    }),
+    h.accessor('lastPlayed', {
+      header: 'Last Played',
+      size: 100,
+      cell: (c) => fmtDate(c.getValue()),
+    }),
+    h.accessor('devices', {
+      header: 'On device',
+      size: 74,
+      cell: (c) => <Presence ids={c.getValue()} devices={a.devices} />,
+    }),
+    h.accessor('skipCount', {
+      header: 'Skips',
+      size: 46,
+      cell: (c) => <span className="num">{c.getValue() || ''}</span>,
+    }),
+    h.accessor('tags', {
+      header: 'Tags',
+      size: 130,
+      // Joined rather than drawn as pills: this is a table cell that can be
+      // narrowed to nothing, and the tooltip that reveals a clipped cell works
+      // on text. Pills would clip to half a pill.
+      cell: (c) => c.getValue().join(', '),
+    }),
+  ])
 
 // ponytail: column layout is global, not per-playlist like real iTunes.
 const ALL_IDS = Object.keys(COLUMN_LABELS)
@@ -404,8 +588,8 @@ export function TrackList(p: Props) {
   const bodyDragOver = (e: React.DragEvent) => {
     if (!manualOrder || !e.dataTransfer.types.includes('application/x-tracks')) return
     e.preventDefault()
-    const tr = (e.target as HTMLElement).closest('[data-rowidx]') as HTMLElement | null
-    if (!tr) return
+    const tr = e.target instanceof Element ? e.target.closest('[data-rowidx]') : null
+    if (!(tr instanceof HTMLElement)) return
     const rect = tr.getBoundingClientRect()
     const idx = Number(tr.dataset.rowidx) + (e.clientY > rect.top + rect.height / 2 ? 1 : 0)
     setDropRow(idx)
@@ -415,7 +599,7 @@ export function TrackList(p: Props) {
     const raw = e.dataTransfer.getData('application/x-tracks')
     if (!manualOrder || !raw || dropRow == null) return
     e.preventDefault()
-    p.onReorder((p.view as { id: string }).id, JSON.parse(raw), dropRow)
+    p.onReorder(p.view.id, JSON.parse(raw), dropRow)
     setDropRow(null)
   }
 
@@ -478,9 +662,9 @@ export function TrackList(p: Props) {
                     Both branches, because translating the labels made this
                     render the map for *every* column, which silently threw the
                     tick column's own renderer away. */}
-                {typeof header.column.columnDef.header === 'function'
+                {header.column.columnDef.header instanceof Function
                   ? <table.FlexRender header={header} />
-                  : t(COLUMN_LABELS[header.column.id] ?? header.column.id)}
+                  : t(columnLabel(header.column.id))}
               </span>
               {header.column.id === 'format' && (
                 <button
@@ -519,7 +703,7 @@ export function TrackList(p: Props) {
         onDragLeave={() => setDropRow(null)}
         // Only where no row is: a press on a row bubbles up here too, and that
         // one belongs to the row's own handler.
-        onMouseDown={(e) => !(e.target as HTMLElement).closest('.tr') && startBand(e)}
+        onMouseDown={(e) => e.target instanceof Element && !e.target.closest('.tr') && startBand(e)}
       >
         <div
           className="tbody-sizer"
@@ -641,7 +825,7 @@ export function TrackList(p: Props) {
                       onClick={() => col.toggleVisibility()}
                       className={col.getIsVisible() ? 'on' : ''}
                     >
-                      {col.getIsVisible() ? '✓' : ' '}&nbsp;&nbsp;{COLUMN_LABELS[id]}
+                      {col.getIsVisible() ? '✓' : ' '}&nbsp;&nbsp;{columnLabel(id)}
                     </button>
                   )
                 })}

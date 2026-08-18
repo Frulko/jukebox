@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Job, PlayerState } from '@jukebox/client-sdk'
+import type { Job, JobKind, PlayerState } from '@jukebox/client-sdk'
 import { useAudioTime, type Audio } from './audio'
 import { useJobs } from './api'
 import { num, t, useLocale } from './i18n'
 import { OutputPicker } from './Outputs'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
-import { albumSeed, Cover } from './Artwork'
+import { Cover } from './Artwork'
+import { albumSeed } from './albumSeed'
 
 export type Repeat = 'off' | 'all' | 'one'
 
@@ -40,20 +41,25 @@ function Marquee({ text, className }: { text: string; className: string }) {
   }, [text])
 
   const scrolls = overflow > 2
+  // SAFETY: `--shift` and `--dur` are custom properties the marquee keyframes
+  // read. React.CSSProperties is closed over the standard names, but a `--*`
+  // declaration is valid CSS on any element.
+  const slide = scrolls
+    ? ({ '--shift': `${-overflow}px`, '--dur': `${Math.max(5, overflow / 18)}s` } as React.CSSProperties)
+    : undefined
   return (
     <div
       ref={ref}
       className={`${className} ${scrolls ? 'marquee' : ''}`}
       // Not a tooltip: the whole text is the point, and it is already here.
       title={scrolls ? text : undefined}
-      style={scrolls ? ({ '--shift': `${-overflow}px`, '--dur': `${Math.max(5, overflow / 18)}s` } as React.CSSProperties) : undefined}
+      style={slide}
     >
       <span>{text}</span>
     </div>
   )
 }
 
-/** What a job is called while it runs, in the display's own voice. */
 /** Where a search applies. Not a filter over one list — a different list. */
 const SCOPES: Array<[string, string]> = [
   ['music', 'Music'],
@@ -63,7 +69,8 @@ const SCOPES: Array<[string, string]> = [
   ['radio', 'Radio'],
 ]
 
-const JOB_LABEL: Record<string, string> = {
+/** What a job is called while it runs, in the display's own voice. */
+const JOB_LABEL = {
   scan: 'Scanning',
   transcode: 'Converting',
   fingerprint: 'Fingerprinting',
@@ -75,7 +82,7 @@ const JOB_LABEL: Record<string, string> = {
   relay: 'Relaying',
   move: 'Moving files',
   backup: 'Backing up',
-}
+} satisfies Record<JobKind, string>
 
 export function Player({
   track,
@@ -215,7 +222,7 @@ export function Player({
           <>
             <div className="lcd-main">
               <div className="lcd-title">
-                {t(JOB_LABEL[job.kind] ?? job.kind)}
+                {t(JOB_LABEL[job.kind])}
                 {job.state === 'paused' && ' — paused'}
               </div>
               <div className="lcd-sub">

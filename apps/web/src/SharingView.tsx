@@ -6,8 +6,8 @@ import { useScrollMemory } from './viewState'
 import { getLocale } from './i18n'
 
 /** Where a remote source actually lives, for a page about who is on the other end. */
-function hostOf(source: Source & { config?: Record<string, unknown> }) {
-  const url = String((source.config as { url?: string } | undefined)?.url ?? source.root ?? '')
+function hostOf(source: Source) {
+  const url = String(source.config?.url ?? source.root ?? '')
   try {
     return new URL(url).host
   } catch {
@@ -15,12 +15,15 @@ function hostOf(source: Source & { config?: Record<string, unknown> }) {
   }
 }
 
-const KIND_LABEL: Record<string, string> = {
+// `local` never renders here — this page filters it out — but a total record
+// over the source kinds keeps the lookup closed instead of stringly.
+const KIND_LABEL = {
   jellyfin: 'Jellyfin server',
   emby: 'Emby server',
   plex: 'Plex server',
   rclone: 'rclone remote',
-}
+  local: 'local folder',
+} satisfies Record<Source['kind'], string>
 
 /**
  * Sharing — who may read this library, and whose libraries this one can read.
@@ -35,7 +38,7 @@ const KIND_LABEL: Record<string, string> = {
  */
 export function SharingView({ onGoToSources }: { onGoToSources: () => void }) {
   const pane = useScrollMemory<HTMLDivElement>('sharing')
-  const sources = (useSources().data?.items ?? []) as Array<Source & { config?: Record<string, unknown> }>
+  const sources = useSources().data?.items ?? []
   const remote = sources.filter((s) => s.kind !== 'local')
 
   // Admin only, and the server answers 403 rather than an empty list — which is
@@ -84,7 +87,7 @@ export function SharingView({ onGoToSources }: { onGoToSources: () => void }) {
           <div key={s.id} className="share-row">
             <Icon name="cloud" size={12} />
             <span className="n">{s.name}</span>
-            <em className="dim">{KIND_LABEL[s.kind] ?? s.kind}</em>
+            <em className="dim">{KIND_LABEL[s.kind]}</em>
             <span className="dim host">{hostOf(s)}</span>
             <span className="spacer" />
             <span className="share-flag">{s.writable ? 'you may write to it' : 'read-only'}</span>

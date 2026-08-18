@@ -6,13 +6,13 @@ import type { Device, DeviceKind } from '@jukebox/api-types'
  */
 export type { Device, DeviceKind }
 
-export const DEVICE_ICON: Record<DeviceKind, string> = {
+export const DEVICE_ICON = {
   'ipod-classic': 'ipod',
   'ipod-nano': 'ipod',
   'ipod-shuffle': 'shuffle-device',
   iphone: 'iphone',
   ipad: 'iphone',
-}
+} satisfies Record<DeviceKind, string>
 
 export const CAPACITY_SEGMENTS = [
   ['audio', 'Audio', '#f0c419'],

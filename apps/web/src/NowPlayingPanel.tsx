@@ -1,6 +1,7 @@
 import type { Track } from './data'
 import { fmtSize, fmtTime } from './data'
-import { albumSeed, Cover } from './Artwork'
+import { Cover } from './Artwork'
+import { albumSeed } from './albumSeed'
 import { Icon } from './Icon'
 
 /**

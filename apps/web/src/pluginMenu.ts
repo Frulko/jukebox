@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiError, type Plugin } from '@jukebox/client-sdk'
+import { ApiError, type CommandResult, type Plugin } from '@jukebox/client-sdk'
 import { api } from './api'
 
 /** One entry a plugin asked to put in the track menu. */
@@ -31,8 +31,12 @@ export type PluginTab = PluginEntry
 type Contribution = { id?: string; label?: string; command?: string }
 
 function entriesOf(plugin: Plugin, zoneName = 'track.contextMenu'): PluginEntry[] {
-  const zone = (plugin.contributes as Record<string, unknown>)?.[zoneName]
+  const zone = plugin.contributes?.[zoneName]
   if (!Array.isArray(zone)) return []
+  // SAFETY: `contributes` is the plugin manifest's own JSON, and a zone, when
+  // present, is declared as a list of contributions. The filter below keeps
+  // only entries carrying the two fields the menu needs, so an entry of the
+  // wrong shape is dropped rather than drawn.
   return (zone as Contribution[])
     .filter((c) => c.label && c.command)
     .map((c) => ({
@@ -48,7 +52,7 @@ function entriesOf(plugin: Plugin, zoneName = 'track.contextMenu'): PluginEntry[
 }
 
 /** What went wrong, in words that name the right culprit. */
-function explain(err: unknown, entry: PluginEntry): string {
+function explain(err: Error, entry: PluginEntry): string {
   if (!(err instanceof ApiError)) return `${entry.pluginName} could not be reached`
   switch (err.status) {
     case 409:
@@ -67,16 +71,9 @@ function explain(err: unknown, entry: PluginEntry): string {
   }
 }
 
-export type CommandResult =
-  | { kind: 'done'; message?: string }
-  | { kind: 'job'; job: unknown }
-  | { kind: 'playlist'; id: string; name: string }
-  | { kind: 'tracks'; ids: string[] }
-  | { kind: 'text'; title?: string; body: string }
-
 /** Runs a tab's command and hands back the answer instead of acting on it. */
 export async function runPluginTab(tab: PluginTab, trackId: string): Promise<CommandResult> {
-  return (await api.plugins.command(tab.pluginId, tab.command, [trackId])) as CommandResult
+  return api.plugins.command(tab.pluginId, tab.command, [trackId])
 }
 
 /** The sentence to show when a tab's command fails, naming the right culprit. */
@@ -101,7 +98,7 @@ export function usePluginMenu(handlers: {
 
   const run = async (entry: PluginEntry, trackIds: string[]) => {
     try {
-      const r = (await api.plugins.command(entry.pluginId, entry.command, trackIds)) as CommandResult
+      const r = await api.plugins.command(entry.pluginId, entry.command, trackIds)
       switch (r.kind) {
         case 'done':
           handlers.notice(r.message ?? `${entry.label} — done`)
@@ -129,7 +126,9 @@ export function usePluginMenu(handlers: {
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) qc.invalidateQueries({ queryKey: ['plugins'] })
-      handlers.notice(explain(err, entry))
+      // The catch's `unknown` is normalised here, at the boundary: everything
+      // the SDK throws is an Error, and anything else becomes one.
+      handlers.notice(explain(err instanceof Error ? err : new Error(String(err)), entry))
     }
   }
 

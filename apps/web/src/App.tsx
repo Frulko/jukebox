@@ -16,12 +16,15 @@ import { ColumnBrowser, type Browse } from './ColumnBrowser'
 import { InfoModal } from './InfoModal'
 import { DeviceView } from './DeviceView'
 import { Icon } from './Icon'
-import { AppsView, mediaSummary } from './MediaViews'
+import { AppsView } from './MediaViews'
+import { mediaSummary } from './media'
 import { DiscoverView } from './DiscoverView'
 import { RadioView } from './RadioView'
 import { AudiobooksView } from './AudiobooksView'
-import { episodeAsTrack, hostOf, PodcastsView } from './PodcastsView'
+import { PodcastsView } from './PodcastsView'
+import { episodeAsTrack, hostOf } from './podcasts'
 import { MissingView } from './MissingView'
+import { DesignSystemView } from './DesignSystemView'
 import { QueueView } from './QueueView'
 import { AlbumsView, ArtistsView } from './LibraryViews'
 import { AlbumView, type AlbumRef } from './AlbumView'
@@ -31,9 +34,10 @@ import { AdminView } from './AdminView'
 import { SourcesView } from './SourcesView'
 import { SharingView } from './SharingView'
 import { DuplicatesView } from './DuplicatesView'
-import { HomeView, useRecentPlaylists } from './HomeView'
+import { HomeView } from './HomeView'
+import { useRecentPlaylists } from './viewState'
 import { usePluginMenu } from './pluginMenu'
-import { setOutputVolume } from './Outputs'
+import { setOutputVolume } from './api'
 import { FilterBar, type FilterChip } from './FilterBar'
 import { NowPlayingPanel } from './NowPlayingPanel'
 import './itunes.css'
@@ -57,13 +61,13 @@ const THEMES: Array<[Theme, string]> = [
   ['studio', 'Studio'],
 ]
 /** Must track --row-h in each theme block; the virtualiser needs the number. */
-export const THEME_ROW_H: Record<Theme, number> = { classic: 17, itunes12: 21, music: 26, studio: 30 }
+const THEME_ROW_H = { classic: 17, itunes12: 21, music: 26, studio: 30 } satisfies Record<Theme, number>
 
 const NO_TRACKS: Track[] = []
 const NO_QUEUE: string[] = []
 
 /** Reads after "N tracks have …" on the review page. */
-const GAP_PHRASE: Record<string, string> = {
+const GAP_PHRASE = {
   any: 'a field left empty',
   album: 'no album name',
   artist: 'no artist at all',
@@ -71,6 +75,13 @@ const GAP_PHRASE: Record<string, string> = {
   genre: 'no genre',
   year: 'no year',
   track: 'no track number',
+}
+/** The gap is plain string state a chip writes into, so the lookup re-checks it. */
+const gapPhrase = (gap: string) => {
+  if (!(gap in GAP_PHRASE)) return GAP_PHRASE.any
+  // SAFETY: the `in` check above just proved `gap` is one of GAP_PHRASE's own
+  // keys; TypeScript does not narrow a plain string by it.
+  return GAP_PHRASE[gap as keyof typeof GAP_PHRASE]
 }
 
 export default function App() {
@@ -103,7 +114,11 @@ export default function App() {
   const [selectIds, setSelectIds] = useState<string[] | null>(null)
   const [search, setSearch] = useState('')
   const [infoIds, setInfoIds] = useState<string[] | null>(null)
-  const [theme, chooseTheme] = useState<Theme>(() => (localStorage.getItem('itunes.theme') as Theme) || 'classic')
+  // Looked up in the theme list rather than trusted: localStorage outlives
+  // releases, and a skin we no longer ship falls back instead of being worn.
+  const [theme, chooseTheme] = useState<Theme>(
+    () => THEMES.find(([id]) => id === localStorage.getItem('itunes.theme'))?.[0] ?? 'classic',
+  )
   /**
    * The attribute goes on before the state does.
    *
@@ -230,7 +245,7 @@ export default function App() {
    */
   const [playingEpisode, setPlayingEpisode] = useState<Track | null>(null)
   const shuffle = player?.shuffle ?? false
-  const repeat = (player?.repeat ?? 'off') as Repeat
+  const repeat: Repeat = player?.repeat ?? 'off'
   const [volume, setVolume] = useState(75)
 
   useServerEvents(qc)
@@ -395,6 +410,9 @@ export default function App() {
       onChange: (v) => {
         if (!v) return setDeviceFilter(null)
         const [mode, deviceId] = v.split(':')
+        // SAFETY: the only values this chip is ever handed are built as
+        // `on:${id}` / `not:${id}` in the options just above, so the prefix
+        // can only be one of the two.
         setDeviceFilter({ deviceId, mode: mode as 'on' | 'not' })
       },
       emptyHint: 'No device connected',
@@ -422,7 +440,7 @@ export default function App() {
       const n = ids.length > 1 ? `${ids.length} tracks` : 'track'
       setNotice(add.length ? `Tagged ${n} “${what}”` : `Removed “${what}” from ${n}`)
     },
-    [tagTracks],
+    [tagTracks, setNotice],
   )
   const patchTracks = useUpdateTracks()
   const update = useCallback(
@@ -489,7 +507,7 @@ export default function App() {
       if (from) void control.setQueue(from, Math.max(0, from.indexOf(id)))
       else void control.goTo(id)
     },
-    [audio, control],
+    [audio, control, remote],
   )
 
   /**
@@ -513,7 +531,7 @@ export default function App() {
       setPlayingEpisode(episodeAsTrack(ep, show))
       setNotice(`Streaming “${ep.title}” from ${hostOf(ep.enclosureUrl)} — it is not in your library`)
     },
-    [audio, playTrack],
+    [audio, playTrack, setNotice],
   )
 
   /**
@@ -537,7 +555,10 @@ export default function App() {
             enclosureUrl: station.streamUrl, enclosureLength: 0, enclosureType: '',
             imageUrl: station.imageUrl, trackId: null, played: 0, position: 0,
           },
-          { title: station.genre || 'Radio', author: 'Live', imageUrl: station.imageUrl } as never,
+          // SAFETY: episodeAsTrack reads only `title`, `author` and `imageUrl`
+          // from the show; a station has no feed behind it, so these three are
+          // the whole of the Podcast it can have.
+          { title: station.genre || 'Radio', author: 'Live', imageUrl: station.imageUrl } as Podcast,
         ),
         id,
         kind: 'music',
@@ -545,7 +566,7 @@ export default function App() {
       })
       setNotice(`Tuned to ${station.name} — it plays until you stop it`)
     },
-    [audio],
+    [audio, setNotice],
   )
 
   /**
@@ -562,7 +583,7 @@ export default function App() {
       void control.enqueue(ids)
       setNotice(`${ids.length} track${ids.length > 1 ? 's' : ''} added to the queue`)
     },
-    [nowPlaying, playTrack, control],
+    [nowPlaying, playTrack, control, setNotice],
   )
 
   /**
@@ -582,7 +603,7 @@ export default function App() {
       void control.playNext(ids)
       setNotice(`${ids.length} track${ids.length > 1 ? 's' : ''} playing next`)
     },
-    [nowPlaying, playTrack, control],
+    [nowPlaying, playTrack, control, setNotice],
   )
 
   /**
@@ -677,13 +698,14 @@ export default function App() {
     // On a speaker there is no element to toggle: the server holds whether it
     // should be playing, and the renderer follows that.
     if (remote) return void (player?.playing ? control.pause() : control.play())
-    audio.playing ? audio.pause() : audio.resume()
+    if (audio.playing) audio.pause()
+    else audio.resume()
   }, [current, tracks, playTrack, audio, remote, player?.playing, control])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement
-      if (e.code === 'Space' && !/INPUT|TEXTAREA/.test(el.tagName)) {
+      const typing = e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)
+      if (e.code === 'Space' && !typing) {
         e.preventDefault()
         toggle()
       }
@@ -732,36 +754,16 @@ export default function App() {
       setView({ kind: 'playlist', id: pl.id })
     })
 
-  // An unreachable server says so, rather than letting the user believe the
-  // library is empty.
-  if (health.isError) {
-    return (
-      <div className="boot">
-        Server unreachable. Run <code>npm run dev:server</code>, then reload.
-      </div>
-    )
-  }
-  // No full-screen loading state. It used to replace the *entire app* — sidebar,
-  // player and all — whenever a track query was in flight with nothing yet in
-  // hand, which is exactly what going from Admin to a playlist is: the admin
-  // page holds no tracks, so the first click on a playlist blanked the window
-  // for one round trip and read as a full page refresh. A view that is waiting
-  // says so where that view is; the shell it sits in never goes away.
-
-  const infoTracks = infoIds ? tracks.filter((t) => infoIds.includes(t.id)) : []
-  const device = view.kind === 'device' ? devices.find((d) => d.id === view.id) : undefined
-  const viewKey = `${view.kind}:${view.id}`
-  // Albums and Artists are places in the sidebar now, not a mode inside Songs.
-  // One piece of state — the view — with the mode bar as a second control onto
-  // it, rather than two that can disagree about where you are.
-  const mode = view.kind === 'library' && (view.id === 'albums' || view.id === 'artists') ? view.id : 'songs'
-
   /**
    * What a track can be told to do, in one place.
    *
    * The library list, an album's track list and an artist's each right-click
    * into the same menu, and the only way to keep it the same menu is to hand
    * them the same handlers rather than eighteen props threaded four ways.
+   *
+   * Built *before* the unreachable-server return below: a hook after an early
+   * return runs on some renders and not others, which is the one thing React
+   * requires a hook never to do.
    */
   const trackActions: TrackActions = useMemo(
     () => ({
@@ -787,7 +789,31 @@ export default function App() {
     [playTrack, enqueue, playNext, update, applyTags, playlists, devices, tags, pluginMenu.entries],
   )
 
-  const MEDIA: Record<string, React.ReactNode> = {
+  // An unreachable server says so, rather than letting the user believe the
+  // library is empty.
+  if (health.isError) {
+    return (
+      <div className="boot">
+        Server unreachable. Run <code>npm run dev:server</code>, then reload.
+      </div>
+    )
+  }
+  // No full-screen loading state. It used to replace the *entire app* — sidebar,
+  // player and all — whenever a track query was in flight with nothing yet in
+  // hand, which is exactly what going from Admin to a playlist is: the admin
+  // page holds no tracks, so the first click on a playlist blanked the window
+  // for one round trip and read as a full page refresh. A view that is waiting
+  // says so where that view is; the shell it sits in never goes away.
+
+  const infoTracks = infoIds ? tracks.filter((t) => infoIds.includes(t.id)) : []
+  const device = view.kind === 'device' ? devices.find((d) => d.id === view.id) : undefined
+  const viewKey = `${view.kind}:${view.id}`
+  // Albums and Artists are places in the sidebar now, not a mode inside Songs.
+  // One piece of state — the view — with the mode bar as a second control onto
+  // it, rather than two that can disagree about where you are.
+  const mode = view.kind === 'library' && (view.id === 'albums' || view.id === 'artists') ? view.id : 'songs'
+
+  const MEDIA = {
     podcasts: <PodcastsView
         search={search}
         nowPlaying={nowPlaying}
@@ -809,6 +835,7 @@ export default function App() {
     ),
     missing: <MissingView />,
     admin: <AdminView />,
+    design: <DesignSystemView />,
     sources: <SourcesView onNotice={setNotice} />,
     sharing: <SharingView onGoToSources={() => setView({ kind: 'library', id: 'sources' })} />,
     duplicates: <DuplicatesView onNotice={setNotice} />,
@@ -828,6 +855,9 @@ export default function App() {
       />
     ),
   }
+  // SAFETY: the `in` check proves `view.id` is one of MEDIA's own keys before
+  // the cast reads it; TypeScript does not narrow a plain string by `in`.
+  const mediaView = view.kind === 'library' && view.id in MEDIA ? MEDIA[view.id as keyof typeof MEDIA] : null
   const media =
     view.kind === 'store'
       ? (
@@ -842,9 +872,7 @@ export default function App() {
           }}
         />
       )
-      : view.kind === 'library' && view.id !== 'music'
-        ? MEDIA[view.id]
-        : null
+      : mediaView
 
   return (
     <div className="itunes">
@@ -963,7 +991,7 @@ export default function App() {
                   {reviewCount === 1 ? 'has' : 'have'}{' '}
                   {/* The sentence follows the chip: with one chosen, "a field
                       left empty" is vaguer than what the page is showing. */}
-                  {GAP_PHRASE[gap] ?? 'a field left empty'}. Nothing is wrong with them — they play — but
+                  {gapPhrase(gap)}. Nothing is wrong with them — they play — but
                   an album with no album name cannot be browsed to, and a track with no year cannot be
                   found by one. Select several and press <b>Get Info</b> to fill the same field on all of
                   them at once.
@@ -1114,6 +1142,8 @@ export default function App() {
           className="lang-picker"
           value={locale}
           title={t('Language')}
+          // SAFETY: the options below are exactly LOCALES' own keys, so the
+          // select can only ever report one of them back.
           onChange={(e) => setLocale(e.target.value as Locale)}
         >
           {Object.entries(LOCALES).map(([id, label]) => (

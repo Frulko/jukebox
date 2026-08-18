@@ -19,8 +19,11 @@ type Source = {
 
 function sourcesOf(plugins: Plugin[]): Source[] {
   return plugins.flatMap((p) => {
-    const zone = (p.contributes as Record<string, unknown>)?.recommendations
+    const zone = p.contributes?.recommendations
     if (!Array.isArray(zone)) return []
+    // SAFETY: the zone is manifest data — an array of { id?, label, command,
+    // description? } strings the plugin declared; the filter right below drops
+    // any entry missing the two fields a recommender cannot run without.
     return (zone as Array<Record<string, string>>)
       .filter((c) => c.label && c.command)
       .map((c) => ({

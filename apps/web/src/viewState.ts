@@ -13,6 +13,14 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 const scroll = new Map<string, { top: number; left: number }>()
 const chosen = new Map<string, unknown>()
 
+/** Both setters below take a value or an updater, exactly as `setState` does. */
+function resolve<T>(next: T | ((old: T) => T), old: T): T {
+  // SAFETY: T is view state — a selection, a layout, an order — and is never
+  // itself a function for any caller of these hooks, so a function here can
+  // only be the updater.
+  return next instanceof Function ? (next as (o: T) => T)(old) : next
+}
+
 /** Remembers a scroll container's position. Attach both to the scrolling element. */
 export function useScrollMemory<T extends HTMLElement>(key: string) {
   const ref = useRef<T>(null)
@@ -42,6 +50,9 @@ export function useScrollMemory<T extends HTMLElement>(key: string) {
  * you want and otherwise a bug — key them by source.
  */
 export function useRemembered<T>(key: string, initial: T) {
+  // SAFETY: the map only ever holds what this hook's own setter wrote under
+  // this key, and callers that share a key share the type, so what comes back
+  // is the T that went in.
   const [value, setValue] = useState<T>(() => (chosen.has(key) ? (chosen.get(key) as T) : initial))
   // Written in the setter, not in an effect watching the value. The store is
   // the point of this hook, so writing it *is* the update — deferring it to
@@ -49,7 +60,7 @@ export function useRemembered<T>(key: string, initial: T) {
   // disagree, and unmounting inside that window loses the change entirely.
   const set = useCallback((next: T | ((old: T) => T)) => {
     setValue((old) => {
-      const v = typeof next === 'function' ? (next as (o: T) => T)(old) : next
+      const v = resolve(next, old)
       chosen.set(key, v)
       return v
     })
@@ -71,6 +82,9 @@ export function usePersisted<T>(key: string, initial: T, merge?: (stored: T, fre
     const raw = localStorage.getItem(key)
     if (!raw) return initial
     try {
+      // SAFETY: whatever sits under this key was written by the setter below as
+      // the JSON of a T; `merge` reconciles values saved by older versions, and
+      // the catch swallows hand-edited garbage.
       const stored = JSON.parse(raw) as T
       return merge ? merge(stored, initial) : stored
     } catch {
@@ -80,7 +94,7 @@ export function usePersisted<T>(key: string, initial: T, merge?: (stored: T, fre
   const set = useCallback(
     (next: T | ((old: T) => T)) =>
       setV((old) => {
-        const val = typeof next === 'function' ? (next as (o: T) => T)(old) : next
+        const val = resolve(next, old)
         localStorage.setItem(key, JSON.stringify(val))
         return val
       }),
@@ -121,4 +135,44 @@ export function useOrder(key: string, ids: string[]) {
   )
 
   return [order, move] as const
+}
+
+/**
+ * Which playlists were opened, most recent first.
+ *
+ * The server does not record this and should not have to: "what was I listening
+ * to" is a question about this browser, not about the library. Kept as ids so a
+ * renamed or deleted playlist resolves to what it is now, or to nothing.
+ */
+export function useRecentPlaylists() {
+  const [recent, setRecent] = usePersisted<string[]>('jukebox.recent.playlists', [])
+  // Stable, because navigation is built on top of it: an identity that changed
+  // every render would make every consumer of `setView` re-render with it.
+  const remember = useCallback(
+    (id: string) => setRecent((old) => [id, ...old.filter((x) => x !== id)].slice(0, 12)),
+    [setRecent],
+  )
+  return [recent, remember] as const
+}
+
+/**
+ * A search box that belongs to one view.
+ *
+ * The box in the player bar asks the server, across a whole source. This one
+ * filters what the page is already holding — the albums it drew, the missing
+ * files it listed, the playlists it has — which is honest precisely because
+ * those views hold all of their rows. It would be a lie in the track list,
+ * where the page is a window onto a hundred thousand rows, and that is the one
+ * place it is not offered.
+ *
+ * Deliberately not remembered between visits. A filter you forgot you set is
+ * indistinguishable from a view that has gone empty, and the whole point of
+ * these pages is to answer "what have I got".
+ */
+export function useViewSearch() {
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const matches = (...fields: Array<string | null | undefined>) =>
+    !needle || fields.some((f) => f?.toLowerCase().includes(needle))
+  return { query, setQuery, needle, matches }
 }

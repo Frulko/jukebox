@@ -64,7 +64,9 @@ function Accounts() {
     queryFn: () => api.users.list(),
     retry: false,
   })
-  const [form, setForm] = useState({ username: '', password: '', role: 'user' as Role })
+  const [form, setForm] = useState<{ username: string; password: string; role: Role }>({
+    username: '', password: '', role: 'user',
+  })
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const refresh = () => qc.invalidateQueries({ queryKey: ['users'] })
@@ -95,7 +97,11 @@ function Accounts() {
                   disabled={u.role === 'admin' && admins === 1}
                   onChange={(e) =>
                     api.users
-                      .update(u.id, { role: e.target.value as Role })
+                      .update(u.id, {
+                        // SAFETY: the only options this select renders are the
+                        // Role literals below, so the DOM can only report one.
+                        role: e.target.value as Role,
+                      })
                       .then(refresh)
                       .catch((err) => setError(err instanceof Error ? err.message : 'refused'))
                   }
@@ -153,7 +159,13 @@ function Accounts() {
           value={form.password}
           onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
         />
-        <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}>
+        <select
+          value={form.role}
+          onChange={(e) =>
+            // SAFETY: the only options this select renders are the Role
+            // literals below, so the DOM can only report one of them.
+            setForm((f) => ({ ...f, role: e.target.value as Role }))}
+        >
           {(['user', 'guest', 'admin'] as const).map((r) => (
             <option key={r} value={r}>{r}</option>
           ))}

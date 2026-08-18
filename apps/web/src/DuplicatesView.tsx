@@ -8,7 +8,8 @@ import { Icon } from './Icon'
 import { DataTable } from './DataTable'
 import type { features } from './tableFeatures'
 import { useScrollMemory } from './viewState'
-import { useViewSearch, ViewSearch } from './ViewSearch'
+import { ViewSearch } from './ViewSearch'
+import { useViewSearch } from './viewState'
 
 type Copy = DuplicateGroup['tracks'][number]
 const h = createColumnHelper<typeof features, Copy>()

@@ -74,7 +74,8 @@ export function DeviceView({
   const used = stats.data?.bytes ?? declared
   const free = Math.max(0, device.capacity - used)
 
-  const patch = (p: Partial<Device>) => api.devices.update(device.id, p as never).then(onDevices)
+  const patch = (p: Partial<Pick<Device, 'name' | 'autoSync' | 'syncMode' | 'syncPlaylistIds'>>) =>
+    api.devices.update(device.id, p).then(onDevices)
 
   /**
    * Syncing creates a job on the server; its progress arrives over the event
@@ -188,7 +189,7 @@ export function DeviceView({
       <div className="dev-panel">
         <h3>Options</h3>
         <label className="dev-check">
-          <input type="checkbox" checked={!!device.autoSync} onChange={(e) => patch({ autoSync: (e.target.checked ? 1 : 0) as 0 | 1 })} />
+          <input type="checkbox" checked={!!device.autoSync} onChange={(e) => patch({ autoSync: e.target.checked ? 1 : 0 })} />
           <span>Automatically sync when this device is connected</span>
         </label>
         <label className="dev-check">

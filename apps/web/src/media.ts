@@ -138,3 +138,20 @@ export const RADIO_GENRES: RadioGenre[] = RADIO.map(([name, stations]) => ({
 export const fmtMin = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}min`
 export const fmtBytes = (b: number) =>
   b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${(b / 1e6).toFixed(1)} MB`
+
+/** Status-bar summary per source, so the bottom line is never stale. */
+export function mediaSummary(id: string) {
+  const total = (xs: Show[]) => xs.reduce((a, s) => a + s.episodes.length, 0)
+  switch (id) {
+    case 'podcasts':
+      return `${PODCAST_LIST.length} podcasts, ${total(PODCAST_LIST)} episodes`
+    case 'audiobooks':
+      return `${AUDIOBOOKS.length} audiobooks, ${total(AUDIOBOOKS)} chapters`
+    case 'apps':
+      return `${APP_LIST.length} apps, ${fmtBytes(APP_LIST.reduce((a, x) => a + x.size, 0))}`
+    case 'radio':
+      return `${RADIO_GENRES.reduce((a, g) => a + g.stations.length, 0)} streams in ${RADIO_GENRES.length} genres`
+    default:
+      return ''
+  }
+}

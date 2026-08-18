@@ -2,7 +2,8 @@ import type { Playlist } from './data'
 import { Icon } from './Icon'
 import { PlaylistCover } from './Artwork'
 import { useScrollMemory } from './viewState'
-import { useViewSearch, ViewSearch } from './ViewSearch'
+import { ViewSearch } from './ViewSearch'
+import { useViewSearch } from './viewState'
 import { getLocale, t } from './i18n'
 
 /**

@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from './api'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
-import { albumSeed, Cover } from './Artwork'
+import { Cover } from './Artwork'
+import { albumSeed } from './albumSeed'
 import { getLocale } from './i18n'
 
 /**

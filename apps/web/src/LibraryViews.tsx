@@ -7,8 +7,10 @@ import type { Play } from './App'
 import { useRemembered, useScrollMemory } from './viewState'
 import { useMenuPosition } from './useMenuPosition'
 import { useTrackMenu, type TrackActions } from './TrackMenu'
-import { useViewSearch, ViewSearch } from './ViewSearch'
-import { albumSeed, Cover } from './Artwork'
+import { ViewSearch } from './ViewSearch'
+import { useViewSearch } from './viewState'
+import { Cover } from './Artwork'
+import { albumSeed } from './albumSeed'
 import { Icon } from './Icon'
 import { fmtTime, type Track } from './data'
 
@@ -22,7 +24,7 @@ export type Album = {
   tracks: Track[]
 }
 
-export function groupAlbums(tracks: Track[]): Album[] {
+function groupAlbums(tracks: Track[]): Album[] {
   const by = new Map<string, Album>()
   for (const t of tracks) {
     const key = albumSeed(t)
@@ -123,7 +125,8 @@ export function AlbumTracks({
     anchor.current = id
     if (e.metaKey || e.ctrlKey) {
       const next = new Set(selected)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return setSelected(next)
     }
     setSelected(new Set([id]))

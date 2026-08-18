@@ -507,6 +507,35 @@ export const SCHEMAS: Record<string, any> = {
           "type": "string"
         },
         "description": "The names of the settings that are set and withheld: a token, a password. Enough for an interface to offer to replace one without ever reading it."
+      },
+      "mount": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "network": {
+            "type": "boolean"
+          },
+          "readOnly": {
+            "type": "boolean"
+          },
+          "point": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "device",
+          "type",
+          "network",
+          "readOnly",
+          "point"
+        ],
+        "nullable": true,
+        "description": "What the sources route adds for a local source: the disk its root sits on, or `null` when that disk is not mounted right now. Absent for the kinds that have no disk to be on."
       }
     },
     "required": [
@@ -1955,7 +1984,19 @@ export const SCHEMAS: Record<string, any> = {
             "const": "cast"
           },
           {
-            "type": "string"
+            "type": "string",
+            "const": "satellite"
+          },
+          {
+            "allOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {}
+              }
+            ]
           }
         ]
       },

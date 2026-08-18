@@ -1,16 +1,23 @@
 import { useState } from 'react'
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react'
 import type { Output, PlayerState } from '@jukebox/client-sdk'
-import { api, useOutputs } from './api'
+import { useOutputs } from './api'
 import { Icon } from './Icon'
 import { t } from './i18n'
 
 /** What each protocol is called by the people who bought the speaker. */
-const KIND: Record<string, string> = {
+const KIND = {
   airplay: 'AirPlay',
   cast: 'Chromecast',
   upnp: 'UPnP · Sonos',
   satellite: 'Satellite',
+}
+
+/** A protocol the table does not name yet is shown as the server spelt it. */
+function kindLabel(kind: Output['kind']): string {
+  // SAFETY: the `in` check proves `kind` is one of KIND's own keys; TS cannot
+  // narrow a plain string through `in`, so the cast only restates the check.
+  return kind in KIND ? KIND[kind as keyof typeof KIND] : kind
 }
 
 /**
@@ -102,7 +109,7 @@ export function OutputPicker({
                       speaker into it. */}
                   <span className="n" title={o.address}>{o.name}</span>
                   <em className="dim">
-                    {KIND[o.kind] ?? o.kind}
+                    {kindLabel(o.kind)}
                     {o.model ? ` · ${o.model}` : ''}
                     {/* Registered and quiet for five minutes. Still offered,
                         because it is somebody's speaker and it comes back. */}
@@ -136,32 +143,4 @@ export function OutputPicker({
       )}
     </>
   )
-}
-
-/**
- * The volume of whatever is actually making the sound.
- *
- * A slider that moves this tab's volume while the music comes out of a speaker
- * in another room is a control that does nothing, which is worse than one that
- * is not there. So it drives the speaker — and when the speaker cannot be
- * driven it says so instead of failing in silence: AirPlay keeps its volume in
- * RTSP, a protocol this server deliberately does not speak, and answers 501.
- *
- * Trailing edge only. A range input fires on every pixel of a drag, and a
- * request per pixel would reach the speaker as a stutter, out of order.
- */
-let pending: ReturnType<typeof setTimeout> | undefined
-
-export function setOutputVolume(
-  target: PlayerState['target'],
-  volume: number,
-  onRefused: (reason: string) => void,
-) {
-  if (target.kind !== 'output') return
-  clearTimeout(pending)
-  pending = setTimeout(() => {
-    void api.outputs.volume(target.id, volume).catch((err: unknown) => {
-      onRefused(err instanceof Error ? err.message : t('That speaker did not take the volume'))
-    })
-  }, 150)
 }

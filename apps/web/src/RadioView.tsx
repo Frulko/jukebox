@@ -188,7 +188,7 @@ export function RadioView({
                     <button
                       className={`tile-fav ${s.favorite ? 'on' : ''}`}
                       title={s.favorite ? 'A favourite' : 'Mark as a favourite'}
-                      onClick={() => void patch(s.id, { favorite: (s.favorite ? 0 : 1) as 0 | 1 })}
+                      onClick={() => void patch(s.id, { favorite: s.favorite ? 0 : 1 })}
                     >
                       <Icon name="star" size={11} />
                     </button>
@@ -256,7 +256,7 @@ export function RadioView({
                 <button
                   className={`st-fav ${s.favorite ? 'on' : ''}`}
                   title={s.favorite ? 'A favourite' : 'Mark as a favourite'}
-                  onClick={() => void patch(s.id, { favorite: (s.favorite ? 0 : 1) as 0 | 1 })}
+                  onClick={() => void patch(s.id, { favorite: s.favorite ? 0 : 1 })}
                 >
                   <Icon name="star" size={11} />
                 </button>

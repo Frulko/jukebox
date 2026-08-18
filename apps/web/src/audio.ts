@@ -112,7 +112,7 @@ export function useAudio({
     if (c && c.listened >= 1) played.current(c.id, Math.round(c.listened), c.startedAt)
   }, [])
 
-  if (el.current === null && typeof Audio !== 'undefined') {
+  if (el.current === null) {
     el.current = new Audio()
     el.current.preload = 'metadata'
     // In the document, not detached: it costs nothing, and an element the page
@@ -160,7 +160,7 @@ export function useAudio({
       a.removeEventListener('ended', done)
       a.removeEventListener('error', fail)
     }
-  }, [report])
+  }, [report, setTime])
 
   useEffect(() => {
     if (el.current) el.current.volume = Math.min(1, Math.max(0, volume / 100))

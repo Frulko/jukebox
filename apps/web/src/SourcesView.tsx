@@ -4,13 +4,9 @@ import type { Source } from '@jukebox/client-sdk'
 import { api, useSources, useTrackCount } from './api'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
-import { AddSource, canWrite, fieldsOf, kindIcon, kindLabel } from './AddSource'
+import { AddSource } from './AddSource'
+import { canWrite, fieldsOf, kindIcon, kindLabel } from './sourceKinds'
 import { getLocale } from './i18n'
-
-/** The mount the sources route adds for a local source; api-types does not name it yet. */
-type Mounted = Source & {
-  mount?: { device: string; type: string; network: boolean; readOnly: boolean; point: string } | null
-}
 
 const when = (ms: number | null) =>
   ms ? new Date(ms).toLocaleString(getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never'
@@ -31,7 +27,7 @@ function SourceCard({
   onChanged,
   onNotice,
 }: {
-  source: Mounted
+  source: Source
   onScan: (full: boolean) => void
   onChanged: () => void
   onNotice: (message: string) => void
@@ -295,7 +291,7 @@ function SourceCard({
 export function SourcesView({ onNotice }: { onNotice: (message: string) => void }) {
   const qc = useQueryClient()
   const pane = useScrollMemory<HTMLDivElement>('sources')
-  const sources = (useSources().data?.items ?? []) as Mounted[]
+  const sources = useSources().data?.items ?? []
   const [adding, setAdding] = useState(false)
 
   const jobs = useQuery({ queryKey: ['jobs'], queryFn: () => api.jobs.list({ limit: 20 }), enabled: false })

@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { t } from './i18n'
 import { useQuery, useQueryClient, useMutation, type QueryClient } from '@tanstack/react-query'
 import {
   createClient, type Job, type PlayerState, type Track, type TrackPatch, type TrackQuery,
@@ -203,6 +204,9 @@ export function useServerEvents(qc: QueryClient) {
           // A feed that just refused to answer has a `lastError` worth reading,
           // and it only lands on the podcast row — which nothing else refetches.
           qc.invalidateQueries({ queryKey: ['podcasts'] })
+          // The sidebar's Missing badge reads these; a scan that just found
+          // the files must take the number with it.
+          qc.invalidateQueries({ queryKey: ['stats'] })
         }
       },
       'library.changed': () => qc.invalidateQueries({ queryKey: ['tracks'] }),
@@ -252,7 +256,10 @@ export function usePlayerActions() {
   return useMemo(() => {
     const land = (p: Promise<PlayerState>) =>
       p.then((state) => {
-        qc.setQueryData(keys.player, (old: object | undefined) => ({ ...old, ...state }))
+        // The cache holds what `get` returned — the state plus its resolved
+        // `track` — and a verb's answer is only the state, so merge over it.
+        qc.setQueryData(keys.player, (old: (PlayerState & { track?: Track | null }) | undefined) =>
+          ({ ...old, ...state }))
         return state
       })
     return {
@@ -338,12 +345,17 @@ export function useTrackQuery(input: {
     }
     if (input.lossless) q.lossless = input.lossless === 'yes'
     if (input.tag) q.tag = input.tag
-    if (input.missing) q.missing = input.missing as never
+    if (input.missing) {
+      // SAFETY: the only writer of `missing` is the review page's gap chips,
+      // whose values are exactly the fields the query accepts — the wide
+      // string type is the chip state's, not evidence of a wider range.
+      q.missing = input.missing as TrackQuery['missing']
+    }
     // Only the ids that are actually a kind of track. The library also holds
     // places — albums, artists, playlists, missing — and sending one of those
     // as `kind` would ask the server for a kind of music that does not exist.
     if (input.view.kind === 'library' && (input.view.id === 'podcasts' || input.view.id === 'audiobooks')) {
-      q.kind = (input.view.id === 'podcasts' ? 'podcast' : 'audiobook') as never
+      q.kind = input.view.id === 'podcasts' ? 'podcast' : 'audiobook'
     }
     // Songs, Albums and Artists are about music. A downloaded podcast episode
     // is a track like any other and would otherwise turn up between two albums
@@ -351,7 +363,7 @@ export function useTrackQuery(input: {
     // listings narrow this way: a playlist holding an episode still shows it,
     // because someone put it there on purpose.
     if (input.view.kind === 'library' && ['music', 'albums', 'artists'].includes(input.view.id)) {
-      q.kind = 'music' as never
+      q.kind = 'music'
     }
     if (input.deviceFilter) {
       if (input.deviceFilter.mode === 'on') q.onDevice = input.deviceFilter.deviceId
@@ -359,6 +371,33 @@ export function useTrackQuery(input: {
     }
     return q
   }, [input.view.kind, input.view.id, input.search, input.browse.genre, input.browse.artist,
-      input.browse.album, input.format, input.rating, input.lossless, input.tag, input.missing, input.sort,
-      input.deviceFilter?.deviceId, input.deviceFilter?.mode])
+      input.browse.album, input.format, input.rating, input.lossless, input.tag, input.missing, input.sort, input.deviceFilter])
+}
+
+/**
+ * The volume of whatever is actually making the sound.
+ *
+ * A slider that moves this tab's volume while the music comes out of a speaker
+ * in another room is a control that does nothing, which is worse than one that
+ * is not there. So it drives the speaker — and when the speaker cannot be
+ * driven it says so instead of failing in silence: AirPlay keeps its volume in
+ * RTSP, a protocol this server deliberately does not speak, and answers 501.
+ *
+ * Trailing edge only. A range input fires on every pixel of a drag, and a
+ * request per pixel would reach the speaker as a stutter, out of order.
+ */
+let pending: ReturnType<typeof setTimeout> | undefined
+
+export function setOutputVolume(
+  target: PlayerState['target'],
+  volume: number,
+  onRefused: (reason: string) => void,
+) {
+  if (target.kind !== 'output') return
+  clearTimeout(pending)
+  pending = setTimeout(() => {
+    void api.outputs.volume(target.id, volume).catch((err) => {
+      onRefused(err instanceof Error ? err.message : t('That speaker did not take the volume'))
+    })
+  }, 150)
 }

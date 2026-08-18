@@ -1,29 +1,10 @@
-import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Playlist } from './data'
 import { api, useSources } from './api'
 import { Icon } from './Icon'
 import { PlaylistCover } from './Artwork'
-import { usePersisted, useScrollMemory } from './viewState'
+import { useScrollMemory } from './viewState'
 import { getLocale } from './i18n'
-
-/**
- * Which playlists were opened, most recent first.
- *
- * The server does not record this and should not have to: "what was I listening
- * to" is a question about this browser, not about the library. Kept as ids so a
- * renamed or deleted playlist resolves to what it is now, or to nothing.
- */
-export function useRecentPlaylists() {
-  const [recent, setRecent] = usePersisted<string[]>('jukebox.recent.playlists', [])
-  // Stable, because navigation is built on top of it: an identity that changed
-  // every render would make every consumer of `setView` re-render with it.
-  const remember = useCallback(
-    (id: string) => setRecent((old) => [id, ...old.filter((x) => x !== id)].slice(0, 12)),
-    [setRecent],
-  )
-  return [recent, remember] as const
-}
 
 const day = (ms: number) =>
   new Date(ms).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })
@@ -62,6 +43,11 @@ export function HomeView({
    * A plugin declares `contributes["home.section"]` and the host renders it as
    * data — title and rows, never markup. Nothing ships one yet, so the zone
    * says what it is for instead of pretending to be empty by accident.
+   *
+   * SAFETY: a `home.section` contribution is manifest data whose spec is a
+   * `{ title }` object; the host reads only `title` and falls back to the
+   * plugin's name, so a malformed declaration degrades to an unnamed card
+   * rather than running anything.
    */
   const contributed = (plugins.data?.items ?? [])
     .filter((pl) => pl.state === 'active' && pl.contributes && 'home.section' in pl.contributes)

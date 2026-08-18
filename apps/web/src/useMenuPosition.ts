@@ -39,7 +39,7 @@ export function useMenuPosition(point: { x: number; y: number } | null) {
         bottom: point.y,
       }),
     })
-  }, [point?.x, point?.y, refs])
+  }, [point, refs])
 
   return { setFloating: refs.setFloating, floatingStyles }
 }

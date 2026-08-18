@@ -25,9 +25,7 @@ export const LOCALES = {
 
 export type Locale = keyof typeof LOCALES
 
-type Dict = Record<string, string>
-
-const fr: Dict = {
+const fr = {
   Discover: 'Découvrir',
 
   'Tick the {n} shown': 'Cocher les {n} affichés', 'Untick the {n} shown': 'Décocher les {n} affichés',
@@ -95,7 +93,14 @@ const fr: Dict = {
   songs: 'morceaux', song: 'morceau',
 }
 
-const it: Dict = {
+/**
+ * French owns the key set; the other dictionaries are checked against it, so a
+ * key added to one and forgotten in another fails the build instead of falling
+ * back to English silently for three languages out of four.
+ */
+type Translated = Record<keyof typeof fr, string>
+
+const it = {
   Discover: 'Scopri',
 
   'Tick the {n} shown': 'Spunta i {n} mostrati', 'Untick the {n} shown': 'Togli la spunta ai {n} mostrati',
@@ -157,9 +162,9 @@ const it: Dict = {
   Search: 'Cerca', 'Column Browser': 'Browser a colonne', 'The queue': 'La coda',
   'No songs': 'Nessun brano', 'Loading…': 'Caricamento…', 'Nothing here.': 'Niente qui.',
   songs: 'brani', song: 'brano',
-}
+} satisfies Translated
 
-const es: Dict = {
+const es = {
   Discover: 'Descubrir',
 
   'Tick the {n} shown': 'Marcar los {n} mostrados', 'Untick the {n} shown': 'Desmarcar los {n} mostrados',
@@ -221,9 +226,9 @@ const es: Dict = {
   Search: 'Buscar', 'Column Browser': 'Explorador por columnas', 'The queue': 'La cola',
   'No songs': 'Sin canciones', 'Loading…': 'Cargando…', 'Nothing here.': 'Nada aquí.',
   songs: 'canciones', song: 'canción',
-}
+} satisfies Translated
 
-const de: Dict = {
+const de = {
   Discover: 'Entdecken',
 
   'Tick the {n} shown': 'Die {n} angezeigten anhaken', 'Untick the {n} shown': 'Bei den {n} angezeigten den Haken entfernen',
@@ -285,9 +290,9 @@ const de: Dict = {
   Search: 'Suchen', 'Column Browser': 'Spaltenbrowser', 'The queue': 'Die Warteschlange',
   'No songs': 'Keine Titel', 'Loading…': 'Wird geladen…', 'Nothing here.': 'Nichts hier.',
   songs: 'Titel', song: 'Titel',
-}
+} satisfies Translated
 
-const DICTS: Record<Locale, Dict> = { en: {}, fr, it, es, de }
+const DICTS = { en: {}, fr, it, es, de }
 
 /**
  * The chosen language, or the browser's if it is one we have.
@@ -298,20 +303,22 @@ const DICTS: Record<Locale, Dict> = { en: {}, fr, it, es, de }
  */
 const KEY = 'jukebox.locale'
 
+const isLocale = (v: string): v is Locale => v in LOCALES
+
 function initial(): Locale {
-  const saved = localStorage.getItem(KEY) as Locale | null
-  if (saved && saved in LOCALES) return saved
-  const tag = (navigator.language || 'en').slice(0, 2) as Locale
-  return tag in LOCALES ? tag : 'en'
+  const saved = localStorage.getItem(KEY)
+  if (saved && isLocale(saved)) return saved
+  const tag = (navigator.language || 'en').slice(0, 2)
+  return isLocale(tag) ? tag : 'en'
 }
 
-let current: Locale = typeof localStorage === 'undefined' ? 'en' : initial()
+let current: Locale = initial()
 const listeners = new Set<() => void>()
 
 // `lang` on the document, not only on a change: it is what a screen reader
 // picks a voice from and what the browser hyphenates by, and the first load is
 // the one that would otherwise claim English for a French interface.
-if (typeof document !== 'undefined') document.documentElement.lang = current
+document.documentElement.lang = current
 
 export function setLocale(next: Locale) {
   if (next === current) return
@@ -332,7 +339,10 @@ export const getLocale = () => current
  * place, but plenty of sentences do not.
  */
 export function t(key: string, vars?: Record<string, string | number>): string {
-  const text = DICTS[current][key] ?? key
+  // SAFETY: keys are free English sentences, not a closed set — a dictionary
+  // translates some of them and `?? key` is the designed fallback for the rest,
+  // so a partial string map is exactly the read contract here.
+  const text = (DICTS[current] as Partial<Record<string, string>>)[key] ?? key
   if (!vars) return text
   return text.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`))
 }

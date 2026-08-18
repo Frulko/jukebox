@@ -156,6 +156,12 @@ export type Source = {
    * Enough for an interface to offer to replace one without ever reading it.
    */
   secrets?: string[]
+  /**
+   * What the sources route adds for a local source: the disk its root sits on,
+   * or `null` when that disk is not mounted right now. Absent for the kinds
+   * that have no disk to be on.
+   */
+  mount?: { device: string; type: string; network: boolean; readOnly: boolean; point: string } | null
 }
 
 export type JobKind =
@@ -525,7 +531,10 @@ export type MissingTrack = {
 export type Output = {
   id: string
   name: string
-  kind: 'upnp' | 'airplay' | 'cast' | string
+  // `(string & {})` keeps the named kinds in the union instead of letting a
+  // plain `string` absorb them: satellites register their own kind, so the set
+  // is open, but a client still gets the known four back in completion.
+  kind: 'upnp' | 'airplay' | 'cast' | 'satellite' | (string & {})
   manufacturer: string
   model: string
   address: string

@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { useTable, type ColumnDef, type RowData } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { features } from './tableFeatures'
-import { titleIfClipped } from './Tooltip'
+import { titleIfClipped } from './titleIfClipped'
 import { useScrollMemory } from './viewState'
 
 /**
@@ -129,6 +129,9 @@ export function DataTable<T extends RowData>({
         ref={bodyRef}
         onScroll={onScroll}
         style={{
+          // SAFETY: React's CSSProperties has no entry for CSS custom
+          // properties, but the DOM accepts any `--*` name; the computed-key
+          // cast only tells TS what the browser already allows.
           ['--row-h' as string]: `${rowHeight}px`,
           // Exactly the rows, when the table is sized to them.
           ...(fit ? { height: rows.length * rowHeight } : null),
@@ -156,7 +159,8 @@ export function DataTable<T extends RowData>({
                   anchor.current = row.id
                   if (e.metaKey || e.ctrlKey) {
                     const next = new Set(selected ?? [])
-                    next.has(row.id) ? next.delete(row.id) : next.add(row.id)
+                    if (next.has(row.id)) next.delete(row.id)
+                    else next.add(row.id)
                     return onSelectedChange(next)
                   }
                   onSelectedChange(new Set([row.id]))

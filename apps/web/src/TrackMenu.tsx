@@ -163,7 +163,7 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter') return
-                const value = (e.target as HTMLInputElement).value.trim()
+                const value = e.currentTarget.value.trim()
                 if (!value) return
                 actions.onTag(ids, [value], [])
                 close()

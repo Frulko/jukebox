@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fmtDate, fmtSize, fmtTime, type Track } from './data'
 import { Icon } from './Icon'
-import { albumSeed, Cover } from './Artwork'
+import { Cover } from './Artwork'
+import { albumSeed } from './albumSeed'
 import { useSources } from './api'
 import { explainTab, runPluginTab, type PluginTab } from './pluginMenu'
 
@@ -104,27 +105,32 @@ export function InfoModal({
   const [on, setOn] = useState<Set<string>>(new Set())
 
   const base = useMemo(
-    () => Object.fromEntries(FIELDS.map((f) => [f.key, shared(tracks, f.key)])) as Record<string, unknown>,
+    () => new Map(FIELDS.map((f) => [f.key, shared(tracks, f.key)] as const)),
     [tracks],
   )
 
-  const setField = (f: Field, value: unknown) => {
+  const setField = (f: Field, value: string | number | boolean) => {
     setPatch((old) => ({ ...old, [f.key]: value }))
-    if (multi) setOn((old) => new Set(old).add(f.key as string))
+    if (multi) setOn((old) => new Set(old).add(f.key))
   }
 
   const valueOf = (f: Field) => {
     if (f.key in patch) return patch[f.key]
-    const b = base[f.key as string]
+    const b = base.get(f.key)
     return b === MIXED ? (f.type === 'check' ? false : '') : b
   }
 
   const apply = () => {
     const out: Partial<Track> = {}
+    // One generic keeps key and value correlated, so no cast is needed to
+    // copy a field from one Partial<Track> to the other.
+    const take = <K extends keyof Track>(k: K) => {
+      out[k] = patch[k]
+    }
     for (const f of FIELDS) {
-      if (multi && !on.has(f.key as string)) continue
+      if (multi && !on.has(f.key)) continue
       if (!(f.key in patch)) continue
-      ;(out as Record<string, unknown>)[f.key] = patch[f.key]
+      take(f.key)
     }
     if (Object.keys(out).length) onApply(out)
     onClose()
@@ -253,23 +259,23 @@ export function InfoModal({
           ) : (
             <div className="fields">
               {visible.map((f) => {
-                const mixed = base[f.key as string] === MIXED && !(f.key in patch)
-                const enabled = !multi || on.has(f.key as string)
+                const mixed = base.get(f.key) === MIXED && !(f.key in patch)
+                const enabled = !multi || on.has(f.key)
                 return (
                   <label
-                    key={f.key as string}
+                    key={f.key}
                     className={`field ${f.half ? 'half' : ''} ${f.type === 'check' ? 'bool' : ''} ${f.type === 'textarea' ? 'tall' : ''} ${enabled ? '' : 'off'}`}
                   >
                     {multi && (
                       <input
                         type="checkbox"
                         className="apply-box"
-                        checked={on.has(f.key as string)}
+                        checked={on.has(f.key)}
                         onChange={(e) =>
                           setOn((old) => {
                             const n = new Set(old)
-                            if (e.target.checked) n.add(f.key as string)
-                            else n.delete(f.key as string)
+                            if (e.target.checked) n.add(f.key)
+                            else n.delete(f.key)
                             return n
                           })
                         }

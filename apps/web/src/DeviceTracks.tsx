@@ -158,7 +158,10 @@ export function DeviceTracks({
         </button>
         <button
           disabled={!inLibrary}
-          onClick={() => (t.libraryTrackId && onReveal(t.libraryTrackId), setMenu(null))}
+          onClick={() => {
+            if (t.libraryTrackId) onReveal(t.libraryTrackId)
+            setMenu(null)
+          }}
         >
           Show in library
         </button>

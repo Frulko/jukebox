@@ -81,7 +81,7 @@ export function makeLibrary(): Track[] {
           id: `t${++n}`,
           sourceId: 'demo',
           path: `${artist}/${album}/${i}.flac`,
-          kind: 'music' as TrackKind,
+          kind: 'music',
           enabled: r() > 0.06,
           name: `${WORDS_A[Math.floor(r() * WORDS_A.length)]} ${WORDS_B[Math.floor(r() * WORDS_B.length)]}`,
           artist: compilation ? `${FIRST[Math.floor(r() * FIRST.length)]} ${LAST[Math.floor(r() * LAST.length)]}` : artist,
