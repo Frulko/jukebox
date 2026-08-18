@@ -1564,11 +1564,24 @@ export function createApp(dbFile: string) {
     return { config, secrets }
   }
 
-  /** The `favorites` column, defensively: a row predating the migration, or a hand-edited one, must not 500 the list. */
-  const favoritesOf = (raw: unknown): string[] => {
+  /** What a favorite may file things as. `null` is a plain bookmark. */
+  const FAVORITE_KINDS = new Set(['music', 'audiobook', 'podcast'])
+
+  /**
+   * The `favorites` column, defensively: a row predating the migration, a bare
+   * string from before kinds existed, or a hand-edited one, must not 500 the
+   * list. Always answers `{ path, kind }` whatever the row holds.
+   */
+  const favoritesOf = (raw: unknown): Array<{ path: string; kind: string | null }> => {
     try {
       const parsed = JSON.parse(typeof raw === 'string' ? raw : '[]')
-      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+      if (!Array.isArray(parsed)) return []
+      return parsed.flatMap((f) => {
+        const path = typeof f === 'string' ? f : typeof f?.path === 'string' ? f.path : ''
+        if (!path) return []
+        const kind = f && typeof f === 'object' && FAVORITE_KINDS.has(f.kind) ? f.kind : null
+        return [{ path, kind }]
+      })
     } catch {
       return []
     }
@@ -1712,8 +1725,12 @@ export function createApp(dbFile: string) {
     const b = await c.req.json().catch(() => null)
     if (!b) return fail(c, 400, 'bad_body', 'expected { name?, writable?, config?, favorites? }')
     if (b.favorites !== undefined &&
-      !(Array.isArray(b.favorites) && b.favorites.every((f: unknown) => typeof f === 'string'))) {
-      return fail(c, 400, 'bad_body', 'favorites must be a list of relative paths')
+      !(Array.isArray(b.favorites) && b.favorites.every((f: any) =>
+        typeof f === 'string' ||
+        (f && typeof f === 'object' && typeof f.path === 'string' &&
+          (f.kind == null || FAVORITE_KINDS.has(f.kind)))))) {
+      return fail(c, 400, 'bad_body',
+        'favorites must be a list of { path, kind? } — kind music, audiobook, podcast or null')
     }
     if (b.root !== undefined && b.root !== src.root) {
       return fail(c, 409, 'root_immutable',
@@ -1736,13 +1753,37 @@ export function createApp(dbFile: string) {
     }
 
     // Replaced whole, not merged: a list someone just reordered or emptied in
-    // the interface is the truth, and `[]` has to be sayable.
+    // the interface is the truth, and `[]` has to be sayable. A bare string is
+    // still accepted — it is a bookmark with no kind. Deduped by path: two
+    // stars on one folder with two kinds is not a thing that can be obeyed.
     const favorites = b.favorites === undefined
       ? src.favorites
-      : JSON.stringify([...new Set((b.favorites as string[]).map((f) => f.trim()).filter(Boolean))])
+      : JSON.stringify([...new Map((b.favorites as any[])
+          .map((f) => typeof f === 'string' ? { path: f, kind: null } : { path: f.path, kind: f.kind ?? null })
+          .map((f) => ({ path: f.path.trim().replace(/\/+$/, ''), kind: f.kind }))
+          .filter((f) => f.path)
+          .map((f) => [f.path, f] as const)).values()])
 
     db.prepare(`UPDATE sources SET name = ?, writable = ?, config = ?, favorites = ?, rev = ? WHERE id = ?`)
       .run(name, writable, config, favorites, nextRev(db), src.id)
+
+    // A kind makes the favorite a filing rule, and a rule that only applied to
+    // files scanned later would look broken on a library already in: what sits
+    // under the folder is refiled now. Shallow first, so a deeper favorite has
+    // the last word on what it covers. Removing a kind refiles nothing — the
+    // rule stops, it does not guess what things should go back to.
+    if (b.favorites !== undefined) {
+      const mapped = favoritesOf(favorites).filter((f) => f.kind)
+      if (mapped.length) {
+        const rev = nextRev(db)
+        const refile = db.prepare(`UPDATE tracks SET kind = ?, rev = ?
+          WHERE sourceId = ? AND deletedAt IS NULL AND kind != ? AND path LIKE ? ESCAPE '\\'`)
+        for (const f of mapped.sort((a, z) => a.path.length - z.path.length)) {
+          refile.run(f.kind, rev, src.id, f.kind, `${f.path.replace(/([%_\\])/g, '\\$1')}/%`)
+        }
+      }
+    }
+
     const after = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(src.id) as any
     return c.json({ ...after, favorites: favoritesOf(after.favorites), ...publicConfig(after.config) })
   })

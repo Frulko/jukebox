@@ -236,6 +236,24 @@ export function makeScanHandler(db: DB) {
     const source = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(ctx.payload.sourceId) as any
     if (!source) throw new Error(`unknown source: ${ctx.payload.sourceId}`)
 
+    // A favorite with a kind is a filing rule: everything scanned under that
+    // folder is that kind of track. Insert-time only — the ON CONFLICT below
+    // leaves `kind` alone on purpose, so a track someone refiled by hand keeps
+    // its filing. Deepest prefix first: the closest starred parent decides.
+    const filed: Array<{ prefix: string; kind: string }> = (() => {
+      try {
+        const parsed = JSON.parse(source.favorites ?? '[]')
+        return (Array.isArray(parsed) ? parsed : [])
+          .filter((f: any) => f && typeof f === 'object' && typeof f.path === 'string' &&
+            ['music', 'audiobook', 'podcast'].includes(f.kind))
+          .map((f: any) => ({ prefix: `${f.path}/`, kind: f.kind }))
+          .sort((a: any, b: any) => b.prefix.length - a.prefix.length)
+      } catch { return [] }
+    })()
+    const kindOf = (rel: string) =>
+      filed.find((m) => rel.startsWith(m.prefix))?.kind
+        ?? (extname(rel).toLowerCase() === '.m4b' ? 'audiobook' : 'music')
+
     const upsert = db.prepare(`
       INSERT INTO tracks (id, sourceId, path, kind, name, artist, albumArtist, album, genre,
         composer, year, trackNumber, trackCount, discNumber, duration, bitRate, sampleRate,
@@ -310,7 +328,7 @@ export function makeScanHandler(db: DB) {
       const artist = meta.artist ?? ''
       upsert.run(
         idFor(source.id, rel), source.id, rel,
-        extname(rel).toLowerCase() === '.m4b' ? 'audiobook' : 'music',
+        kindOf(rel),
         name, artist, meta.albumartist ?? artist, meta.album ?? '', meta.genre?.[0] ?? '',
         meta.composer?.[0] ?? '', meta.year ?? 0, meta.track?.no ?? 0, meta.track?.of ?? 0,
         meta.disk?.no ?? 1, Math.round(meta.duration ?? 0),

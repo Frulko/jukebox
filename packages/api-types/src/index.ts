@@ -168,7 +168,20 @@ export type Source = {
    * music actually is once you are in. Withheld, like `root`, from accounts
    * that are not allowed to know the machine's layout.
    */
-  favorites?: string[]
+  favorites?: SourceFavorite[]
+}
+
+/**
+ * One starred folder, and what it files things as.
+ *
+ * A `kind` makes the folder a rule: everything scanned under it is that kind
+ * of track, which is what keeps `Audiobooks/` from landing among the songs on
+ * every rescan. `null` is a plain bookmark — starred, mapped to nothing.
+ */
+export type SourceFavorite = {
+  /** Relative to the source root, no trailing slash. */
+  path: string
+  kind: TrackKind | null
 }
 
 /** One entry of a source's directory listing. */

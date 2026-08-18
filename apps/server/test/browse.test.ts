@@ -88,18 +88,77 @@ test('favorites survive the round trip, replace whole, and refuse non-lists', as
 
     const starred = await h.call('PATCH', `/sources/${made.body.id}`,
       { favorites: ['Albums/Discovery', ' Singles ', 'Albums/Discovery'] })
-    assert.deepEqual(starred.body.favorites, ['Albums/Discovery', 'Singles'], 'trimmed, deduped')
+    assert.deepEqual(starred.body.favorites,
+      [{ path: 'Albums/Discovery', kind: null }, { path: 'Singles', kind: null }],
+      'trimmed, deduped — a bare string is a bookmark with no kind')
 
     const listed = await h.call('GET', '/sources')
-    assert.deepEqual(listed.body.items[0].favorites, ['Albums/Discovery', 'Singles'])
+    assert.deepEqual(listed.body.items[0].favorites,
+      [{ path: 'Albums/Discovery', kind: null }, { path: 'Singles', kind: null }])
+
+    const kinded = await h.call('PATCH', `/sources/${made.body.id}`,
+      { favorites: [{ path: 'Albums/', kind: 'audiobook' }] })
+    assert.deepEqual(kinded.body.favorites, [{ path: 'Albums', kind: 'audiobook' }],
+      'the trailing slash goes, the kind stays')
 
     const cleared = await h.call('PATCH', `/sources/${made.body.id}`, { favorites: [] })
     assert.deepEqual(cleared.body.favorites, [], 'an emptied list has to be sayable')
 
     assert.equal((await h.call('PATCH', `/sources/${made.body.id}`, { favorites: 'Albums' })).status, 400)
     assert.equal((await h.call('PATCH', `/sources/${made.body.id}`, { favorites: [1] })).status, 400)
+    assert.equal((await h.call('PATCH', `/sources/${made.body.id}`,
+      { favorites: [{ path: 'Albums', kind: 'video' }] })).status, 400,
+      'a kind the library does not have is a refusal')
   } finally { await h.cleanup() }
 })
+
+test('a favorite with a kind files what is under it — now, and on the next scan', async () => {
+  const h = await harness()
+  try {
+    const made = await h.call('POST', '/sources', { name: 'Music', root: h.music })
+    const id = made.body.id
+    await h.call('POST', `/sources/${id}/scan`)
+    await settle(h.app.jobs)
+
+    const kinds = async () => Object.fromEntries(
+      ((await h.call('GET', '/tracks?limit=50')).body.items as any[]).map((t) => [t.path, t.kind]))
+    assert.deepEqual(await kinds(), {
+      'Albums/Discovery/One More Time.mp3': 'music',
+      'Singles/loose.flac': 'music',
+    }, 'nothing said otherwise, so everything is music')
+
+    // Starring with a kind refiles what is already scanned…
+    await h.call('PATCH', `/sources/${id}`, { favorites: [{ path: 'Albums', kind: 'audiobook' }] })
+    assert.equal((await kinds())['Albums/Discovery/One More Time.mp3'], 'audiobook')
+    assert.equal((await kinds())['Singles/loose.flac'], 'music', 'the unstarred folder is untouched')
+
+    // …and files what a later scan brings in.
+    await writeFile(join(h.music, 'Albums', 'chapter two.mp3'), 'x')
+    await h.call('POST', `/sources/${id}/scan`)
+    await settle(h.app.jobs)
+    assert.equal((await kinds())['Albums/chapter two.mp3'], 'audiobook')
+
+    // The closest starred parent decides.
+    await h.call('PATCH', `/sources/${id}`, { favorites: [
+      { path: 'Albums', kind: 'audiobook' },
+      { path: 'Albums/Discovery', kind: 'music' },
+    ] })
+    const after = await kinds()
+    assert.equal(after['Albums/Discovery/One More Time.mp3'], 'music')
+    assert.equal(after['Albums/chapter two.mp3'], 'audiobook')
+  } finally { await h.cleanup() }
+})
+
+/** Waits for the queue to drain — more reliable than a fixed delay. */
+async function settle(jobs: any, ms = 4000) {
+  const until = Date.now() + ms
+  while (Date.now() < until) {
+    const busy = jobs.list({}).some((j: any) => j.state === 'queued' || j.state === 'running')
+    if (!busy) return
+    await new Promise((r) => setTimeout(r, 20))
+  }
+  throw new Error('the queue never drains')
+}
 
 test('the folder tree is the machine’s layout: admins browse, guests do not', async () => {
   const h = await harness()

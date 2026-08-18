@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Source } from '@jukebox/client-sdk'
+import type { Source, SourceFavorite } from '@jukebox/client-sdk'
 import { api, useSources, useTrackCount } from './api'
 import { Icon } from './Icon'
 import { useScrollMemory } from './viewState'
 import { AddSource } from './AddSource'
+import { SourceFavorites, favoriteKindLabel } from './SourceFavorites'
 import { canWrite, fieldsOf, kindIcon, kindLabel } from './sourceKinds'
 import { getLocale } from './i18n'
 
@@ -34,8 +35,10 @@ function SourceCard({
 }) {
   const [probe, setProbe] = useState<'asking' | { ok: boolean; text: string } | null>(null)
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<{ name: string; writable: boolean; config: Record<string, string> }>({
-    name: source.name, writable: !!source.writable, config: {},
+  const [draft, setDraft] = useState<{
+    name: string; writable: boolean; config: Record<string, string>; favorites: SourceFavorite[]
+  }>({
+    name: source.name, writable: !!source.writable, config: {}, favorites: source.favorites ?? [],
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,7 +52,7 @@ function SourceCard({
   const secrets = new Set(source.secrets ?? [])
 
   const open = () => {
-    setDraft({ name: source.name, writable: !!source.writable, config: {} })
+    setDraft({ name: source.name, writable: !!source.writable, config: {}, favorites: source.favorites ?? [] })
     setError(null)
     setEditing(true)
   }
@@ -66,6 +69,9 @@ function SourceCard({
         // holds — which is the only way to edit a port next to a token the
         // page was never shown.
         config: Object.fromEntries(Object.entries(draft.config).filter(([, v]) => v !== '')),
+        // Unlike config, replaced whole: the list on screen is the truth, and
+        // an emptied one has to be sayable.
+        favorites: draft.favorites,
       })
       onChanged()
       setEditing(false)
@@ -158,6 +164,22 @@ function SourceCard({
             </div>
           )
         })}
+        {/* The starred folders, visible without opening the editor: where the
+            music is, and what each folder files its contents as. */}
+        {(source.favorites?.length ?? 0) > 0 && (
+          <div>
+            <dt>Favorites</dt>
+            <dd className="sf-chips">
+              {source.favorites!.map((f) => (
+                <span key={f.path} className="sf-chip" title={f.path}>
+                  <Icon name="star" size={9} />
+                  {f.path}
+                  {f.kind && <em> → {favoriteKindLabel(f.kind)}</em>}
+                </span>
+              ))}
+            </dd>
+          </div>
+        )}
         {source.kind === 'local' && (
           <div>
             <dt>Filesystem</dt>
@@ -223,6 +245,15 @@ function SourceCard({
               </span>
             </label>
           ) : null}
+
+          <div className="sf-block">
+            <span className="sf-title">Favorite folders</span>
+            <SourceFavorites
+              sourceId={source.id}
+              value={draft.favorites}
+              onChange={(favorites) => setDraft((d) => ({ ...d, favorites }))}
+            />
+          </div>
 
           {/* The one thing that cannot be edited, said where someone would go
               looking for it rather than left as a missing field. */}

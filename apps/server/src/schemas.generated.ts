@@ -540,7 +540,7 @@ export const SCHEMAS: Record<string, any> = {
       "favorites": {
         "type": "array",
         "items": {
-          "type": "string"
+          "$ref": "#/components/schemas/SourceFavorite"
         },
         "description": "Folders inside the source someone starred: paths relative to the root. Connection settings say how to reach a source; favorites say where the music actually is once you are in. Withheld, like `root`, from accounts that are not allowed to know the machine's layout."
       }
@@ -553,6 +553,24 @@ export const SCHEMAS: Record<string, any> = {
       "writable",
       "lastScanAt",
       "rev"
+    ]
+  },
+  "SourceFavorite": {
+    "description": "One starred folder, and what it files things as. A `kind` makes the folder a rule: everything scanned under it is that kind of track, which is what keeps `Audiobooks/` from landing among the songs on every rescan. `null` is a plain bookmark — starred, mapped to nothing.",
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Relative to the source root, no trailing slash."
+      },
+      "kind": {
+        "$ref": "#/components/schemas/TrackKind",
+        "nullable": true
+      }
+    },
+    "required": [
+      "path",
+      "kind"
     ]
   },
   "SourceEntry": {

@@ -6,7 +6,7 @@ import type {
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
-  Source, SourceBrowse, Stats,
+  Source, SourceBrowse, SourceFavorite, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
@@ -395,8 +395,11 @@ export function createClient(opts: ClientOptions = {}) {
        */
       update: (id: string, patch: {
         name?: string; writable?: boolean; config?: Record<string, unknown>
-        /** Replaced whole, unlike `config`: an emptied list has to be sayable. */
-        favorites?: string[]
+        /**
+         * Replaced whole, unlike `config`: an emptied list has to be sayable.
+         * A bare string is accepted and means a bookmark with no kind.
+         */
+        favorites?: Array<string | SourceFavorite>
       }) => request<Source>(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
       /**
        * One level of the source's folders — or, for the API-backed kinds, the
@@ -648,7 +651,7 @@ export type {
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
-  Source, SourceBrowse, Stats,
+  Source, SourceBrowse, SourceFavorite, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,

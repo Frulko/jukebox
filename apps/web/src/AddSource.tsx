@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import type { Source, SourceFavorite } from '@jukebox/client-sdk'
 import { api } from './api'
 import { Icon } from './Icon'
 import { t } from './i18n'
 import { KINDS, type Field } from './sourceKinds'
+import { SourceFavorites } from './SourceFavorites'
 
 export function AddSource({
   onClose,
@@ -19,6 +21,10 @@ export function AddSource({
   const [writable, setWritable] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The step after the source exists: starring where the music is. It needs
+  // the source's id to browse, which is why it cannot come before "Add".
+  const [created, setCreated] = useState<Source | null>(null)
+  const [favorites, setFavorites] = useState<SourceFavorite[]>([])
 
   const kind = KINDS.find((k) => k.id === kindId)!
   const value = (f: Field) => values[`${kindId}.${f.key}`] ?? ''
@@ -62,12 +68,53 @@ export function AddSource({
       } catch {
         onNotice(`Added ${made.name} — scan it to bring its music in`)
       }
+      setCreated(made)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'the server refused it')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // The source already exists; the stars are the only thing left to say, and
+  // saying nothing is allowed.
+  const finish = async () => {
+    if (busy) return
+    if (!created || favorites.length === 0) return onClose()
+    setBusy(true)
+    setError(null)
+    try {
+      await api.sources.update(created.id, { favorites })
+      onAdded()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'the server refused it')
     } finally {
       setBusy(false)
     }
+  }
+
+  if (created) {
+    return (
+      <div className="modal-backdrop" onMouseDown={onClose}>
+        <div className="modal add-source" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <button className="close" onClick={onClose} />
+            <span>Favorite folders — {created.name}</span>
+          </div>
+          <div className="modal-body">
+            <SourceFavorites sourceId={created.id} value={favorites} onChange={setFavorites} />
+            {error && <p className="pod-add-error">{error}</p>}
+          </div>
+          <div className="modal-foot">
+            <span className="spacer" />
+            <button className="default" disabled={busy} onClick={() => void finish()}>
+              {busy ? 'Saving…' : favorites.length ? 'Save favorites' : 'Done'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
