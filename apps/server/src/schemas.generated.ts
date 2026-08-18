@@ -629,7 +629,8 @@ export const SCHEMAS: Record<string, any> = {
       "analyze",
       "relay",
       "move",
-      "backup"
+      "backup",
+      "download"
     ]
   },
   "JobState": {
@@ -655,6 +656,11 @@ export const SCHEMAS: Record<string, any> = {
       },
       "state": {
         "$ref": "#/components/schemas/JobState"
+      },
+      "label": {
+        "type": "string",
+        "nullable": true,
+        "description": "What the job is about, in words a display can show — an episode title."
       },
       "progress": {
         "type": "object",
@@ -695,6 +701,7 @@ export const SCHEMAS: Record<string, any> = {
       "id",
       "kind",
       "state",
+      "label",
       "progress",
       "error",
       "createdAt",

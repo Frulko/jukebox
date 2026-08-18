@@ -13,7 +13,8 @@ import { makeWritebackHandler } from './writeback.ts'
 import { makeAcquireHandler } from './acquire.ts'
 import { makeSyncHandler, planSync } from './sync.ts'
 import { getSchedule, listSchedules, parseCron, Scheduler } from './cron.ts'
-import { createPodcast, getPodcast, listEpisodes, listPodcasts, makePodcastHandler } from './podcasts.ts'
+import { createPodcast, getPodcast, listEpisodes, listPodcasts, makeEpisodeDownloadHandler, makePodcastHandler } from './podcasts.ts'
+import { dropTarget, receiveUpload, UPLOAD_KINDS } from './upload.ts'
 import { createRadio, deleteRadio, discover, getRadio, listRadios, searchDirectory, updateRadio } from './radio.ts'
 import {
   countTracks, deviceStats, facets, getTrack, listDeviceTracks, listTracks, membershipsOf,
@@ -243,6 +244,7 @@ export function createApp(dbFile: string) {
   jobs.register('acquire', makeAcquireHandler(db))
   jobs.register('sync', makeSyncHandler(db))
   jobs.register('podcast', makePodcastHandler(db))
+  jobs.register('download', makeEpisodeDownloadHandler(db))
   jobs.register('transcode', makeConvertHandler(db))
   // One kind, two directions: the payload says which. A separate kind would
   // need its own concurrency cap for work that must never run beside itself.
@@ -2070,9 +2072,32 @@ export function createApp(dbFile: string) {
       ? (db.prepare(`SELECT writable FROM sources WHERE id = ?`).get(p.targetSourceId) as any)?.writable
       : db.prepare(`SELECT id FROM sources WHERE kind = 'local' AND writable = 1`).get()
     if (!writable) return fail(c, 400, 'no_writable_source', 'no writable source to download into')
-    const job = jobs.create('podcast', { podcastId: id, episodeId: e.id },
+    // The label is what the LCD shows while the bytes come in.
+    const job = jobs.create('download', { podcastId: id, episodeId: e.id, label: e.title },
       { idempotencyKey: `podcast-ep-${e.id}` })
     return c.json(publicJob(job), 202)
+  })
+
+  /* ---------------- dropped files ---------------- */
+
+  /**
+   * One file per request, raw body: the browser's drop handler loops. The kind
+   * comes from the view the file was dropped on; the destination from the
+   * favorites mapping (a folder tagged with that kind), and the upload is
+   * refused before any byte lands when there is nowhere to write.
+   */
+  api.post('/upload', async (c) => {
+    const kind = c.req.query('kind') ?? 'music'
+    const name = c.req.query('name') ?? ''
+    if (!UPLOAD_KINDS.has(kind)) return fail(c, 400, 'bad_kind', `kind must be one of: ${[...UPLOAD_KINDS].join(', ')}`)
+    if (!name) return fail(c, 400, 'bad_name', 'expected ?name=<filename>')
+    if (!c.req.raw.body) return fail(c, 400, 'no_body', 'expected the file as the request body')
+    const target = dropTarget(db, kind)
+    if (!target) return fail(c, 400, 'no_writable_source', 'no writable source to drop into')
+
+    const got = await receiveUpload(db, c.req.raw.body, { kind, name, target })
+    if ('error' in got) return fail(c, 400, 'bad_file', got.error)
+    return c.json(got, 201)
   })
 
   /* ---------------- schedules ---------------- */

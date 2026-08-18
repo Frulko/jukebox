@@ -106,17 +106,6 @@ export function makePodcastHandler(db: DB) {
       .get(ctx.payload.podcastId) as any
     if (!p) throw new Error(`unknown podcast: ${ctx.payload.podcastId}`)
 
-    // One episode, on demand — the row's right-click "Download". The feed is
-    // not refetched: the episode is already known, and a click on one row
-    // should not turn into a refresh of the whole show.
-    if (ctx.payload.episodeId) {
-      const e = db.prepare(`SELECT * FROM episodes WHERE id = ? AND podcastId = ?`)
-        .get(ctx.payload.episodeId, p.id) as any
-      if (!e) throw new Error(`unknown episode: ${ctx.payload.episodeId}`)
-      await download(db, ctx, p, [e])
-      return
-    }
-
     const headers: Record<string, string> = { accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' }
     if (p.etag) headers['if-none-match'] = p.etag
     if (p.lastModified) headers['if-modified-since'] = p.lastModified
@@ -197,9 +186,37 @@ const fail = (db: DB, id: string, message: string) =>
   db.prepare(`UPDATE podcasts SET lastFetchAt = ?, lastError = ? WHERE id = ?`)
     .run(Date.now(), message, id)
 
+/**
+ * One episode, on demand — the row's right-click "Download". Its own job kind:
+ * the display calls a refresh "Refreshing podcasts" and this "Downloading",
+ * and its progress is bytes of one file, not episodes of a feed.
+ */
+export function makeEpisodeDownloadHandler(db: DB) {
+  return async function episodeDownload(ctx: JobContext): Promise<void> {
+    const p = db.prepare(`SELECT * FROM podcasts WHERE id = ? AND deletedAt IS NULL`)
+      .get(ctx.payload.podcastId) as any
+    if (!p) throw new Error(`unknown podcast: ${ctx.payload.podcastId}`)
+    const e = db.prepare(`SELECT * FROM episodes WHERE id = ? AND podcastId = ?`)
+      .get(ctx.payload.episodeId, p.id) as any
+    if (!e) throw new Error(`unknown episode: ${ctx.payload.episodeId}`)
+    if (e.trackId) return // already in the library — a duplicate click, not an error
+
+    await download(db, ctx, p, [e], (done, total) => ctx.checkpoint(null, { done, total, bytes: done }))
+    // A single episode that did not land is a failed job, not a quiet success —
+    // the batch path tolerates one bad episode in a feed, a hand-picked one is
+    // the whole job.
+    const after = db.prepare(`SELECT trackId FROM episodes WHERE id = ?`).get(e.id) as any
+    if (!after?.trackId && !ctx.aborted()) throw new Error(`“${e.title}” could not be downloaded`)
+  }
+}
+
 /** Fetches the newest undownloaded episodes, bounded by `keepLast` — or just
- *  `only`, when a single episode was asked for by hand. */
-async function download(db: DB, ctx: JobContext, p: any, only?: any[]): Promise<void> {
+ *  `only`, when a single episode was asked for by hand. `onBytes` hears each
+ *  file's progress; the hand-picked path turns it into checkpoints. */
+async function download(
+  db: DB, ctx: JobContext, p: any, only?: any[],
+  onBytes?: (done: number, total: number) => void,
+): Promise<void> {
   // The podcast's own target when it has one; otherwise the first local
   // writable source, so a feed subscribed without a destination can still
   // answer a hand-picked "Download".
@@ -218,8 +235,28 @@ async function download(db: DB, ctx: JobContext, p: any, only?: any[]): Promise<
     if (ctx.aborted()) return
     try {
       const res = await fetch(e.enclosureUrl)
-      if (!res.ok) throw new Error(`${res.status} fetching the episode`)
-      const buf = Buffer.from(await res.arrayBuffer())
+      if (!res.ok || !res.body) throw new Error(`${res.status} fetching the episode`)
+      // Streamed rather than buffered in one gulp, so progress exists while
+      // the file is still coming — an hour-long episode is a minute of "is
+      // anything happening?" otherwise. The reported total prefers the wire's
+      // content-length over the feed's enclosure length, which routinely lies.
+      const total = Number(res.headers.get('content-length')) || e.enclosureLength || 0
+      const chunks: Buffer[] = []
+      let received = 0
+      let lastTold = 0
+      for await (const chunk of res.body) {
+        if (ctx.aborted()) return
+        chunks.push(Buffer.from(chunk))
+        received += chunk.length
+        // Every quarter-megabyte, not every chunk: a checkpoint is a DB write
+        // and an event to every open window.
+        if (onBytes && received - lastTold >= 256 * 1024) {
+          lastTold = received
+          onBytes(received, total)
+        }
+      }
+      onBytes?.(received, received) // the file is the truth about its own size
+      const buf = Buffer.concat(chunks)
 
       const ext = extname(new URL(e.enclosureUrl).pathname) || '.mp3'
       const rel = join(p.targetPath, safe(p.title), `${safe(e.title)}${ext}`)

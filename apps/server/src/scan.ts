@@ -12,7 +12,7 @@ import { configOf as jfConfig, items as jfItems, libraries as jfLibraries } from
 import { configOf as plexConfig, items as plexItems, musicSections } from './plex.ts'
 import { insideRoot } from './organize.ts'
 
-const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.flac', '.alac', '.ogg', '.opus', '.wav', '.aiff', '.aif', '.wma', '.m4b'])
+export const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.flac', '.alac', '.ogg', '.opus', '.wav', '.aiff', '.aif', '.wma', '.m4b'])
 
 /**
  * Streamed walk, never an array.

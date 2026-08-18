@@ -3,6 +3,7 @@ import type { Job, JobKind, PlayerState } from '@jukebox/client-sdk'
 import { useAudioTime, type Audio } from './audio'
 import { useJobs } from './api'
 import { num, t, useLocale } from './i18n'
+import { fmtBytes } from './media'
 import { OutputPicker } from './Outputs'
 import { fmtTime, type Track } from './data'
 import { Icon } from './Icon'
@@ -82,12 +83,19 @@ const JOB_LABEL = {
   relay: 'Relaying',
   move: 'Moving files',
   backup: 'Backing up',
+  download: 'Downloading',
 } satisfies Record<JobKind, string>
+
+/** Kinds whose done/total are bytes of a file, not items of a list. */
+const BYTE_KINDS = new Set<JobKind>(['download'])
+
+export type Upload = { id: string; label: string; done: number; total: number }
 
 export function Player({
   track,
   playing,
   audio,
+  uploads,
   shuffle,
   repeat,
   volume,
@@ -114,6 +122,8 @@ export function Player({
 }: {
   track: Track | null
   playing: boolean
+  /** Files on their way to the server — the app's own work, so not in `jobs`. */
+  uploads: Upload[]
   /**
    * The element, for the two things only this bar draws: where the track is and
    * how long it is. Subscribed here rather than passed down as numbers, so a
@@ -170,9 +180,10 @@ export function Player({
   // a second panel would take space from a window that has none to give.
   // Silence is not a task: with nothing playing the panel goes straight to the
   // scan, and the cycle button only appears when there is somewhere to cycle to.
-  const tasks: Array<{ key: string; job?: Job }> = [
+  const tasks: Array<{ key: string; job?: Job; upload?: Upload }> = [
     ...(track ? [{ key: 'now-playing' }] : []),
     ...jobs.map((j) => ({ key: j.id, job: j })),
+    ...uploads.map((u) => ({ key: u.id, upload: u })),
   ]
   const [at, setAt] = useState(0)
   const [scopeOpen, setScopeOpen] = useState(false)
@@ -183,6 +194,7 @@ export function Player({
   }, [at, tasks.length])
   const shown = tasks[Math.min(at, tasks.length - 1)]
   const job = shown?.job
+  const upload = shown?.upload
   const done = job ? (job.progress.total ? (job.progress.done / job.progress.total) * 100 : 0) : 0
 
   return (
@@ -217,18 +229,42 @@ export function Player({
         <OutputPicker target={target} onChoose={onTarget} />
       </div>
 
-      <div className={`lcd ${job ? 'job' : track ? '' : 'idle'}`}>
-        {job ? (
+      <div className={`lcd ${job || upload ? 'job' : track ? '' : 'idle'}`}>
+        {upload ? (
+          <div className="lcd-main">
+            <Marquee className="lcd-title" text={upload.label} />
+            <div className="lcd-sub">
+              {t('Uploading')} · {t('{done} of {total}', { done: fmtBytes(upload.done), total: fmtBytes(upload.total) })}
+            </div>
+            <div className="lcd-scrub">
+              <div className="track">
+                <div className="fill" style={{ width: `${upload.total ? (upload.done / upload.total) * 100 : 0}%` }} />
+              </div>
+            </div>
+          </div>
+        ) : job ? (
           <>
             <div className="lcd-main">
-              <div className="lcd-title">
-                {t(JOB_LABEL[job.kind])}
-                {job.state === 'paused' && ' — paused'}
-              </div>
+              {/* A job that says what it is about — an episode title — gets the
+                  title line, and the verb steps down beside the numbers. */}
+              {job.label ? (
+                <Marquee className="lcd-title" text={job.label} />
+              ) : (
+                <div className="lcd-title">
+                  {t(JOB_LABEL[job.kind])}
+                  {job.state === 'paused' && ' — paused'}
+                </div>
+              )}
               <div className="lcd-sub">
-                {job.progress.total
-                  ? t('{done} of {total}', { done: num(job.progress.done), total: num(job.progress.total) })
-                  : t('{done} so far', { done: num(job.progress.done) })}
+                {job.label ? `${t(JOB_LABEL[job.kind])}${job.state === 'paused' ? ' — paused' : ''} · ` : ''}
+                {(() => {
+                  // Bytes read as sizes, items read as counts: "12.4 MB of
+                  // 52.9 MB" and "3 of 345" are different sentences.
+                  const show = (n: number) => (BYTE_KINDS.has(job.kind) ? fmtBytes(n) : num(n))
+                  return job.progress.total
+                    ? t('{done} of {total}', { done: show(job.progress.done), total: show(job.progress.total) })
+                    : t('{done} so far', { done: show(job.progress.done) })
+                })()}
                 {job.error ? ` · ${job.error}` : ''}
               </div>
               <div className="lcd-scrub">

@@ -180,6 +180,7 @@ const DOCS: Record<string, Doc> = {
   'GET /podcasts/:id/episodes': { summary: 'Episodes, newest first.', tag: 'podcasts' },
   'POST /podcasts/:id/refresh': { summary: 'Refreshes now. Conditional: unchanged feeds cost no body.', tag: 'podcasts' },
   'POST /podcasts/:id/episodes/:eid/download': { summary: 'Downloads one episode into the library.', tag: 'podcasts' },
+  'POST /upload': { summary: 'One dropped file, raw body; filed under ?kind at the kind’s favorite folder.', tag: 'tracks', query: ['kind', 'name'] },
 
   'GET /radios': { summary: 'Stations.', tag: 'radios' },
   'GET /radios/search': { summary: 'Stations the community directory proposes for a name, best-voted first.', returns: 'RadioHit[]', tag: 'radios', query: ['q'] },

@@ -76,6 +76,10 @@ const EXPECTED: Record<string, 'admin' | 'user' | 'guest'> = {
   'POST /radios/:id/discover': 'user',
   'POST /podcasts': 'user', 'PATCH /podcasts/:id': 'user', 'DELETE /podcasts/:id': 'user',
   'POST /podcasts/:id/refresh': 'user',
+  // Fetching an episode writes a file into the library, like a transcode does.
+  'POST /podcasts/:id/episodes/:eid/download': 'user',
+  // A dropped file is the library changing; a guest's tablet has no business here.
+  'POST /upload': 'user',
   'PATCH /jobs/:id': 'user', 'DELETE /jobs/:id': 'user',
 }
 

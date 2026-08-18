@@ -2238,3 +2238,28 @@ button:disabled { opacity: .5; }
 .ep.sel, .ep.sel.odd { background: var(--sel); color: var(--sel-text); }
 .ep.sel .dim, .ep.sel .num, .ep.sel .c-where, .ep.sel .c-date { color: var(--sel-text); opacity: .85; }
 .ep.sel .ep-have, .ep.sel.playing .c-name { color: var(--sel-text); }
+
+/* ---------------- files dragged over the window ----------------
+   pointer-events: none, so the drop falls through to the shell's handler —
+   the veil only says where the files will go. */
+.drop-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 3px dashed var(--accent);
+  outline-offset: -8px;
+}
+.drop-veil span {
+  padding: 10px 22px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .3);
+}

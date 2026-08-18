@@ -12,7 +12,7 @@ import type { DB } from './db.ts'
 
 export type JobKind =
   | 'scan' | 'transcode' | 'fingerprint' | 'podcast' | 'writeback'
-  | 'sync' | 'acquire' | 'analyze' | 'relay' | 'move' | 'backup'
+  | 'sync' | 'acquire' | 'analyze' | 'relay' | 'move' | 'backup' | 'download'
 
 export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
 
@@ -88,6 +88,7 @@ const CONCURRENCY: Record<JobKind, number> = {
   relay: 4,         // bounded by the network, not the CPU
   move: 1,          // moving files around does not parallelise safely
   backup: 1,
+  download: 2,      // bounded by the network; two keeps a slow feed from blocking a fast one
 }
 
 type Listener = (job: Job) => void
@@ -406,9 +407,21 @@ export const publicJob = (j: Job) => ({
   id: j.id,
   kind: j.kind,
   state: j.state,
+  // What the job is about, in words a display can show — an episode title, a
+  // source name. Carried in the payload so the queue stays ignorant of kinds.
+  label: labelOf(j.payload),
   progress: { done: j.done, total: j.total, bytes: j.bytes },
   error: j.error,
   createdAt: j.createdAt,
   startedAt: j.startedAt,
   finishedAt: j.finishedAt,
 })
+
+function labelOf(payload: unknown): string | null {
+  try {
+    const label = JSON.parse(String(payload ?? '{}')).label
+    return typeof label === 'string' ? label : null
+  } catch {
+    return null
+  }
+}

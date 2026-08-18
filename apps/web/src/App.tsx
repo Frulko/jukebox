@@ -98,6 +98,9 @@ export default function App() {
   const [gap, setGap] = useState<string>('any')
   const [queueOpen, setQueueOpen] = useState(false)
   const [artOpen, setArtOpen] = useState(false)
+  /** Files on their way up, for the LCD. Client work, so not server jobs. */
+  const [uploads, setUploads] = useState<{ id: string; label: string; done: number; total: number }[]>([])
+  const [dropping, setDropping] = useState(false)
   /**
    * The album being looked at, if any. Deliberately not a `View`: you are still
    * in the library, or in the playlist, or wherever you right-clicked — the
@@ -896,8 +899,71 @@ export default function App() {
       )
       : mediaView
 
+  /* ---- files dropped on the window ---- */
+
+  // The view that is open names what a dropped file *is*: a file dropped on
+  // Podcasts is a podcast, on Audiobooks a book. Everywhere else, music.
+  const dropKind = view.kind === 'library' && view.id === 'podcasts' ? 'podcast'
+    : view.kind === 'library' && view.id === 'audiobooks' ? 'audiobook' : 'music'
+  const dropWhere = { music: 'Music', podcast: 'Podcasts', audiobook: 'Audiobooks' }[dropKind]
+
+  const uploadFiles = (files: File[]) => {
+    const kind = dropKind
+    const where = dropWhere
+    for (const f of files) {
+      const id = `up-${Math.random().toString(36).slice(2, 9)}`
+      setUploads((u) => [...u, { id, label: f.name, done: 0, total: f.size }])
+      // XHR rather than fetch, for the one thing fetch still cannot say: how
+      // much of the body has left the machine — which is what the LCD shows.
+      const xhr = new XMLHttpRequest()
+      const base = import.meta.env.VITE_API_URL ?? '/api/v1'
+      xhr.open('POST', `${base}/upload?kind=${kind}&name=${encodeURIComponent(f.name)}`)
+      xhr.upload.onprogress = (e) =>
+        setUploads((u) => u.map((x) => (x.id === id ? { ...x, done: e.loaded, total: e.total || x.total } : x)))
+      const settle = (message: string) => {
+        setUploads((u) => u.filter((x) => x.id !== id))
+        setNotice(message)
+      }
+      xhr.onload = () => {
+        if (xhr.status === 201) {
+          qc.invalidateQueries({ queryKey: ['tracks'] })
+          settle(`“${f.name}” filed under ${where}`)
+        } else {
+          let why = 'the server refused it'
+          try { why = JSON.parse(xhr.responseText).error.message } catch { /* the status was the message */ }
+          settle(`“${f.name}”: ${why}`)
+        }
+      }
+      xhr.onerror = () => settle(`“${f.name}” did not make it to the server`)
+      xhr.send(f)
+    }
+  }
+
   return (
-    <div className="itunes">
+    <div
+      className="itunes"
+      // Only real files from outside: the app's own drags — a track to a
+      // playlist — carry no Files and keep their meaning.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false)
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return
+        e.preventDefault()
+        setDropping(false)
+        uploadFiles([...e.dataTransfer.files])
+      }}
+    >
+      {dropping && (
+        <div className="drop-veil">
+          <span>{t('Drop to add to {where}', { where: t(dropWhere) })}</span>
+        </div>
+      )}
       {/* The shell publishes **slots**, and a theme composes them.
           `chrome` (the player), `nav` (the library), `main` (whatever is open),
           `aside` (the queue), `status` (the line at the foot). Every one is a
@@ -909,6 +975,7 @@ export default function App() {
         track={current}
         playing={audio.playing}
         audio={audio}
+        uploads={uploads}
         shuffle={shuffle}
         repeat={repeat}
         volume={volume}

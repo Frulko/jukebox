@@ -232,8 +232,18 @@ test('one episode can be downloaded by hand, into the fallback source', async ()
 
     // The podcast names no target; the first local writable source serves.
     await h.call('POST', '/sources', { name: 'lib', root, writable: true })
-    assert.equal((await h.call('POST', `/podcasts/${p.id}/episodes/${ep.id}/download`)).status, 202)
+    const accepted = await h.call('POST', `/podcasts/${p.id}/episodes/${ep.id}/download`)
+    assert.equal(accepted.status, 202)
+    // Its own kind and a label: what the LCD needs to say more than "busy".
+    assert.equal(accepted.body.kind, 'download')
+    assert.equal(accepted.body.label, 'Fetch Me')
     await settle(h.jobs)
+
+    // Progress is bytes of the file, told while it streamed.
+    const job = (await h.call('GET', '/jobs')).body.items.find((j: any) => j.id === accepted.body.id)
+    assert.equal(job.state, 'done')
+    assert.equal(job.progress.done, 17, 'the fake mp3 is 17 bytes')
+    assert.equal(job.progress.total, 17)
 
     const after = (await h.call('GET', `/podcasts/${p.id}/episodes`)).body.items[0]
     assert.ok(after.trackId, 'the episode now points at a library track')

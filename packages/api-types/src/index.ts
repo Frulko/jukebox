@@ -207,7 +207,7 @@ export type SourceBrowse = {
 
 export type JobKind =
   | 'scan' | 'transcode' | 'fingerprint' | 'podcast' | 'writeback'
-  | 'sync' | 'acquire' | 'analyze' | 'relay' | 'move' | 'backup'
+  | 'sync' | 'acquire' | 'analyze' | 'relay' | 'move' | 'backup' | 'download'
 
 export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
 
@@ -216,6 +216,8 @@ export type Job = {
   id: string
   kind: JobKind
   state: JobState
+  /** What the job is about, in words a display can show — an episode title. */
+  label: string | null
   progress: { done: number; total: number; bytes: number }
   error: string | null
   createdAt: number
