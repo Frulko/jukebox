@@ -490,6 +490,13 @@ export type CommandResult =
       title?: string
       items: Array<{ name: string; artist: string; why?: string }>
     }
+  /**
+   * The verdict of a health check — "is this plugin actually able to do its
+   * job right now". Its own kind rather than `done`, because failing a check
+   * is a normal answer, not a broken plugin: a command that *throws* marks the
+   * plugin failed, which is exactly wrong for "your token is not valid yet".
+   */
+  | { kind: 'check'; ok: boolean; message: string }
 
 export type PluginState = 'installed' | 'active' | 'failed' | 'disabled'
 

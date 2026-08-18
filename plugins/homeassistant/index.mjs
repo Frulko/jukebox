@@ -41,12 +41,22 @@ export function activate(host) {
     command: `${base}/command`,
   }
 
+  // Registered before the no-broker return below, so the check exists in the
+  // one state where it is most needed: nothing configured yet.
+  let client = null
+  host.registerCommand('check', () => {
+    if (!host.config.url) return { kind: 'check', ok: false, message: 'No broker is configured.' }
+    return client?.connected
+      ? { kind: 'check', ok: true, message: `Connected to ${cfg().url} as “${cfg().name}”.` }
+      : { kind: 'check', ok: false, message: `Not connected to ${cfg().url} — check the address and the credentials.` }
+  })
+
   if (!host.config.url) {
     host.log('no broker configured — set `url` to something like mqtt://homeassistant.local:1883')
     return
   }
 
-  const client = new MqttClient({
+  client = new MqttClient({
     ...cfg(),
     clientId: `jukebox-${id}-${process.pid}`,
     log: host.log,

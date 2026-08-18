@@ -39,6 +39,7 @@
     "commands": [
       { "id": "connect", "label": "Connect to Last.fm", "command": "connect" },
       { "id": "flush", "label": "Send queued scrobbles now", "command": "flush" }
-    ]
+    ],
+    "check": { "label": "Test the connection", "command": "check" }
   }
 }

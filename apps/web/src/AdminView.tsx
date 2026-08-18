@@ -4,6 +4,7 @@ import { ApiError, type Account, type Job, type Role } from '@jukebox/client-sdk
 import { api, useJobs, useStats } from './api'
 import { fmtSize } from './data'
 import { Icon } from './Icon'
+import { PluginSettingsModal } from './PluginSettingsModal'
 import { useRemembered, useScrollMemory } from './viewState'
 import { getLocale } from './i18n'
 
@@ -201,6 +202,9 @@ export function AdminView() {
     staleTime: 10_000,
   })
   const [tab, setTab] = useRemembered<(typeof TABS)[number]>('admin.tab', 'Overview')
+  // The id, not the object: the list refetches when settings are saved, and the
+  // open modal should show the plugin as it now is, not as it was when opened.
+  const [configuring, setConfiguring] = useState<string | null>(null)
 
   const s = stats.data
   const running = jobs.filter((j) => j.state === 'running' || j.state === 'queued' || j.state === 'paused')
@@ -334,6 +338,7 @@ export function AdminView() {
                 <b>{pl.name}</b>
                 <span className="dim">{pl.version}</span>
                 <span className={`p-state ${pl.state}`}>{pl.state}</span>
+                <button onClick={() => setConfiguring(pl.id)}>Settings</button>
                 <button
                   onClick={() =>
                     api.plugins
@@ -365,6 +370,11 @@ export function AdminView() {
         </p>
       </section>
       )}
+
+      {(() => {
+        const open = plugins.data?.items.find((p) => p.id === configuring)
+        return open ? <PluginSettingsModal plugin={open} onClose={() => setConfiguring(null)} /> : null
+      })()}
     </div>
   )
 }

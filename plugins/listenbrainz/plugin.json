@@ -39,6 +39,7 @@
         "command": "trending",
         "description": "Public figures — no token needed, and nothing about you is sent."
       }
-    ]
+    ],
+    "check": { "label": "Test the token", "command": "check" }
   }
 }

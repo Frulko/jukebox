@@ -1762,6 +1762,26 @@ export const SCHEMAS: Record<string, any> = {
           "kind",
           "items"
         ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "check"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ok",
+          "message"
+        ]
       }
     ]
   },

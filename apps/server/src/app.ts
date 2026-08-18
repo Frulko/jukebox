@@ -1283,6 +1283,15 @@ export function createApp(dbFile: string) {
       db.prepare(`UPDATE plugins SET config = ? WHERE id = ?`).run(JSON.stringify(b.config), id)
     }
     if (b.enabled !== undefined) return c.json(await plugins.setEnabled(id, Boolean(b.enabled)))
+    if (b.config !== undefined && getPlugin(db, id)!.enabled) {
+      // A plugin reads its config on activation, so a save that only lands in
+      // the database is a settings dialog that lies. Restarted rather than
+      // patched live: the contract stays "activate reads config", which every
+      // plugin already honours — and a failed plugin gets its retry with the
+      // corrected settings, which is why its settings were just edited.
+      await plugins.deactivate(id)
+      return c.json(await plugins.activate(id))
+    }
     return c.json(getPlugin(db, id))
   })
 

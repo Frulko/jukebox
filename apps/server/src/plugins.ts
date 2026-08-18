@@ -154,6 +154,13 @@ export type CommandResult =
    * read what is on screen, which is what `contributes` exists to prevent.
    */
   | { kind: 'text'; title?: string; body: string }
+  /**
+   * The verdict of a health check. Its own kind rather than `done`, because
+   * failing a check is a normal answer, not a broken plugin: a command that
+   * *throws* marks the plugin failed, which is exactly wrong for "your token
+   * is not valid yet".
+   */
+  | { kind: 'check'; ok: boolean; message: string }
 
 /** What a plugin is handed on activation. The surface `hostApi` is versioning. */
 export type Host = {
@@ -470,13 +477,19 @@ export class PluginHost {
   ): Host {
     const db = this.#db
     const jobs = this.#jobs
+    const config = getPlugin(db, manifest.id)?.config ?? {}
     return {
       apiVersion: HOST_API_VERSION,
       pluginId: manifest.id,
       log: (...args) => console.log(`[plugin ${manifest.id}]`, ...args),
-      config: getPlugin(db, manifest.id)?.config ?? {},
+      config,
       setConfig: (next) => {
         db.prepare(`UPDATE plugins SET config = ? WHERE id = ?`).run(JSON.stringify(next), manifest.id)
+        // The object the plugin reads is updated too. Without this, a plugin
+        // saving a credential it just obtained — Last.fm's session key — would
+        // keep reading the stale snapshot until the next restart.
+        for (const k of Object.keys(config)) delete config[k]
+        Object.assign(config, next)
       },
       net: resources.transports(),
       on: ((event: string, handler: (...args: any[]) => void) => {

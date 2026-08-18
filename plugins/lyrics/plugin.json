@@ -32,6 +32,7 @@
         "label": "Lyrics",
         "command": "words"
       }
-    ]
+    ],
+    "check": { "label": "Test the server", "command": "check" }
   }
 }

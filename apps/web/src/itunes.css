@@ -2189,6 +2189,20 @@ button:disabled { opacity: .5; }
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+/* ---------------- plugin settings modal ---------------- */
+
+.plugin-modal .head-meta { justify-content: flex-start; }
+/* Two buttons in a card head: the first pushes right, the rest just follow. */
+.p-head button + button { margin-left: 0; }
+.p-setting { width: 100%; display: flex; flex-direction: column; gap: 2px; }
+.p-setting .p-help { margin: 0 0 3px 114px; font-size: 11px; color: var(--dim); }
+.p-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.p-actions button { padding: 4px 12px; border: 1px solid var(--btn-line); border-radius: var(--radius); background: var(--btn); color: var(--btn-text); }
+.p-actions button:disabled { opacity: .5; }
+.p-answer { margin: 8px 0 0; padding: 7px 9px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--content); white-space: pre-wrap; font: inherit; }
+.p-answer.ok { border-color: #1f9d4d; color: #1f9d4d; }
+.p-answer.bad { border-color: #e8890c; color: #e8890c; }
+
 /* ---------------- selected rows outside the track list ----------------
    Episodes and chapters select like tracks, so they look selected like
    tracks: the same band the library uses, over the zebra stripe. */

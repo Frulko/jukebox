@@ -60,6 +60,23 @@ export function activate(host) {
     return { kind: 'text', title: `${found.trackName} — ${found.artistName}`, body }
   })
 
+  // The health check: can the configured server be reached and does it answer
+  // like LRCLIB. Returned, never thrown — an unreachable mirror is a fact to
+  // report, not a broken plugin.
+  host.registerCommand('check', async () => {
+    const { url } = cfg()
+    let res
+    try {
+      res = await host.net.fetch(`${url}/api/search?q=test`, {
+        headers: { 'user-agent': 'jukebox lyrics plugin' },
+      })
+    } catch (err) {
+      return { kind: 'check', ok: false, message: `Could not reach ${url} — ${err.message}` }
+    }
+    if (!res.ok) return { kind: 'check', ok: false, message: `${url} answered ${res.status}.` }
+    return { kind: 'check', ok: true, message: `${url} answers.` }
+  })
+
   host.log('ready')
 }
 

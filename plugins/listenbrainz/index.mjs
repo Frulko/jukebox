@@ -107,6 +107,27 @@ export function activate(host) {
     }
   })
 
+  // The health check: is the token actually accepted by the configured server.
+  // ListenBrainz has an endpoint for exactly this question, so the answer is
+  // theirs, not a guess from a status code.
+  host.registerCommand('check', async () => {
+    const { url, token } = cfg()
+    if (!token) return { kind: 'check', ok: false, message: 'No user token is set.' }
+    let res
+    try {
+      res = await host.net.fetch(`${url}/1/validate-token`, {
+        headers: { authorization: `Token ${token}` },
+      })
+    } catch (err) {
+      return { kind: 'check', ok: false, message: `Could not reach ${url} — ${err.message}` }
+    }
+    if (!res.ok) return { kind: 'check', ok: false, message: `${url} answered ${res.status}.` }
+    const body = await res.json().catch(() => null)
+    return body?.valid
+      ? { kind: 'check', ok: true, message: `Token accepted — listens go to ${body.user_name}.` }
+      : { kind: 'check', ok: false, message: 'ListenBrainz says that token is not valid.' }
+  })
+
   /**
    * What the rest of ListenBrainz is listening to.
    *

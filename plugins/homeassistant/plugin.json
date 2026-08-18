@@ -44,6 +44,7 @@
         "default": "jukebox",
         "help": "Only change this if you run two of these against one broker."
       }
-    ]
+    ],
+    "check": { "label": "Test the broker", "command": "check" }
   }
 }

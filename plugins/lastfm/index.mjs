@@ -178,6 +178,26 @@ export function activate(host) {
     return { kind: 'done', message: before ? `${before - pending.length} of ${before} sent` : 'nothing queued' }
   })
 
+  // The health check: does a signed, authenticated call actually go through.
+  // `user.getInfo` exercises the key, the secret and the session key in one
+  // request, which is exactly the set of things that can be wrong here.
+  host.registerCommand('check', async () => {
+    const { apiKey, apiSecret, sessionKey } = cfg()
+    if (!apiKey || !apiSecret) {
+      return { kind: 'check', ok: false, message: 'Set the API key and shared secret first.' }
+    }
+    if (!sessionKey) {
+      return { kind: 'check', ok: false, message: 'Not connected yet — run “Connect to Last.fm”.' }
+    }
+    try {
+      const json = await call('user.getInfo', {})
+      const queued = pending.length ? ` ${pending.length} scrobbles waiting to be sent.` : ''
+      return { kind: 'check', ok: true, message: `Connected as ${json.user?.name ?? host.config.username}.${queued}` }
+    } catch (err) {
+      return { kind: 'check', ok: false, message: err.message }
+    }
+  })
+
   return () => host.net.clearInterval(timer)
 }
 

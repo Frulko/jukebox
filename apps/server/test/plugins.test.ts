@@ -429,3 +429,58 @@ test('a command that hangs gives up instead of holding the menu open', async () 
     assert.equal((await h.call('GET', '/plugins/cmd')).body.state, 'active')
   } finally { await h.cleanup() }
 })
+
+test('saving config restarts a running plugin, so the settings dialog does not lie', async () => {
+  const h = await harness({
+    tunable: {
+      manifest: manifest('tunable'),
+      code: `export function activate(host) { globalThis.__tuned = host.config.knob ?? null }`,
+    },
+  })
+  try {
+    await h.host.discover()
+    await h.host.activateAll()
+    assert.equal((globalThis as any).__tuned, null)
+
+    // A plugin reads its config on activation; a save must reach the running
+    // one, not only the database.
+    const p = (await h.call('PATCH', '/plugins/tunable', { config: { knob: 'eleven' } })).body
+    assert.equal(p.state, 'active')
+    assert.equal((globalThis as any).__tuned, 'eleven', 'the running plugin sees what was saved')
+
+    // And a config save is not an enable: a plugin switched off stays off.
+    await h.call('PATCH', '/plugins/tunable', { enabled: false })
+    const off = (await h.call('PATCH', '/plugins/tunable', { config: { knob: 'twelve' } })).body
+    assert.equal(off.state, 'disabled')
+    assert.equal((globalThis as any).__tuned, 'eleven', 'a disabled plugin was not restarted')
+  } finally {
+    delete (globalThis as any).__tuned
+    await h.cleanup()
+  }
+})
+
+test('setConfig is visible in host.config immediately, not after a restart', async () => {
+  const h = await harness({
+    saver: {
+      manifest: manifest('saver'),
+      code: `
+        export function activate(host) {
+          host.registerCommand('save', () => {
+            host.setConfig({ ...host.config, sessionKey: 'abc' })
+            // What Last.fm's connect does: save a credential, then read it back
+            // through host.config on the very next call.
+            return { kind: 'text', body: String(host.config.sessionKey) }
+          })
+        }
+      `,
+    },
+  })
+  try {
+    await h.host.discover()
+    await h.host.activate('saver')
+
+    const r = await h.host.run('saver', 'save', { trackIds: [], tracks: [] })
+    assert.equal((r as any).body, 'abc', 'the object the plugin reads is the object it wrote')
+    assert.deepEqual((await h.call('GET', '/plugins/saver')).body.config, { sessionKey: 'abc' })
+  } finally { await h.cleanup() }
+})

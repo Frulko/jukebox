@@ -52,15 +52,15 @@ function entriesOf(plugin: Plugin, zoneName = 'track.contextMenu'): PluginEntry[
 }
 
 /** What went wrong, in words that name the right culprit. */
-function explain(err: Error, entry: PluginEntry): string {
-  if (!(err instanceof ApiError)) return `${entry.pluginName} could not be reached`
+export function explainPlugin(err: Error, pluginName: string): string {
+  if (!(err instanceof ApiError)) return `${pluginName} could not be reached`
   switch (err.status) {
     case 409:
-      return `${entry.pluginName} is switched off`
+      return `${pluginName} is switched off`
     case 404:
-      return `${entry.pluginName} no longer has that command`
+      return `${pluginName} no longer has that command`
     case 504:
-      return `${entry.pluginName} did not answer`
+      return `${pluginName} did not answer`
     case 400:
       // The plugin's own message. It knows what it was doing; we do not.
       return err.message
@@ -77,7 +77,7 @@ export async function runPluginTab(tab: PluginTab, trackId: string): Promise<Com
 }
 
 /** The sentence to show when a tab's command fails, naming the right culprit. */
-export const explainTab = explain
+export const explainTab = (err: Error, tab: PluginTab) => explainPlugin(err, tab.pluginName)
 
 export function usePluginMenu(handlers: {
   notice: (message: string) => void
@@ -128,7 +128,7 @@ export function usePluginMenu(handlers: {
       if (err instanceof ApiError && err.status === 404) qc.invalidateQueries({ queryKey: ['plugins'] })
       // The catch's `unknown` is normalised here, at the boundary: everything
       // the SDK throws is an Error, and anything else becomes one.
-      handlers.notice(explain(err instanceof Error ? err : new Error(String(err)), entry))
+      handlers.notice(explainPlugin(err instanceof Error ? err : new Error(String(err)), entry.pluginName))
     }
   }
 
