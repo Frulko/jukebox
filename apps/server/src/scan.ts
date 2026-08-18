@@ -1,4 +1,4 @@
-import { opendir, stat } from 'node:fs/promises'
+import { opendir, readdir, stat } from 'node:fs/promises'
 import { join, relative, extname } from 'node:path'
 import { createHash } from 'node:crypto'
 import { parseFile, parseBuffer } from 'music-metadata'
@@ -7,9 +7,10 @@ import { nextRev } from './db.ts'
 import { describe } from './mounts.ts'
 import type { JobContext } from './jobs.ts'
 import { shortFormat } from './tags.ts'
-import { configOf, open as rcOpen, walk as rcWalk } from './rclone.ts'
-import { configOf as jfConfig, items as jfItems } from './jellyfin.ts'
-import { configOf as plexConfig, items as plexItems } from './plex.ts'
+import { configOf, list as rcList, open as rcOpen, walk as rcWalk } from './rclone.ts'
+import { configOf as jfConfig, items as jfItems, libraries as jfLibraries } from './jellyfin.ts'
+import { configOf as plexConfig, items as plexItems, musicSections } from './plex.ts'
+import { insideRoot } from './organize.ts'
 
 const AUDIO = new Set(['.mp3', '.m4a', '.aac', '.flac', '.alac', '.ogg', '.opus', '.wav', '.aiff', '.aif', '.wma', '.m4b'])
 
@@ -122,6 +123,74 @@ async function* entries(source: any): AsyncGenerator<Entry> {
     yield { path: rel, size: st.size, mtime: Math.floor(st.mtimeMs) }
   }
 }
+
+export type BrowseEntry = { name: string; path: string; dir: boolean; size?: number }
+
+/**
+ * One level of a source, for a person choosing a folder rather than a scanner
+ * eating them all.
+ *
+ * Folder-backed kinds list directories and the audio files that prove a folder
+ * holds music. The API-backed kinds have no folders to walk — their top level
+ * lists the server's libraries, which is what `config.section` / `parentId`
+ * ask the user to copy out of an URL today. `rel` uses the same relative-path
+ * contract as everything else; an absolute or escaping path is a refusal, not
+ * a join.
+ */
+export async function browse(source: any, rel = ''): Promise<BrowseEntry[]> {
+  if (rel !== '' && !insideRoot(source.root || '/', rel)) {
+    throw new BrowseError('bad_path', 'path must stay inside the source')
+  }
+
+  if (source.kind === 'rclone') {
+    const all = await rcList(configOf(source), rel)
+    return all
+      .filter((e) => e.isDir || AUDIO.has(extname(e.name).toLowerCase()))
+      .map((e) => ({ name: e.name, path: e.path, dir: e.isDir, ...(e.isDir ? {} : { size: e.size }) }))
+      .sort(dirsFirst)
+  }
+
+  if (source.kind === 'jellyfin' || source.kind === 'emby') {
+    if (rel !== '') return []
+    const libs = await jfLibraries(jfConfig(source))
+    return libs.map((l) => ({ name: l.kind ? `${l.name} (${l.kind})` : l.name, path: l.id, dir: true }))
+  }
+
+  if (source.kind === 'plex') {
+    if (rel !== '') return []
+    const sections = await musicSections(plexConfig(source))
+    return sections.map((s) => ({ name: s.title, path: s.key, dir: true }))
+  }
+
+  const base = join(source.root, rel)
+  let found
+  try {
+    found = await readdir(base, { withFileTypes: true })
+  } catch (err) {
+    throw new BrowseError('unreachable', err instanceof Error ? err.message : 'unreadable directory')
+  }
+  return found
+    .filter((e) => !e.name.startsWith('.'))
+    .filter((e) => e.isDirectory() || AUDIO.has(extname(e.name).toLowerCase()))
+    .map((e) => ({
+      name: e.name,
+      path: rel ? `${rel}/${e.name}` : e.name,
+      dir: e.isDirectory(),
+    }))
+    .sort(dirsFirst)
+}
+
+/** What went wrong browsing, split so the route can answer 400 vs 502. */
+export class BrowseError extends Error {
+  code: 'bad_path' | 'unreachable'
+  constructor(code: 'bad_path' | 'unreachable', message: string) {
+    super(message)
+    this.code = code
+  }
+}
+
+const dirsFirst = (a: BrowseEntry, b: BrowseEntry) =>
+  Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name)
 
 /**
  * How much of a remote file to pull just to read its tags.

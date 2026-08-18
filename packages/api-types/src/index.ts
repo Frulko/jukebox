@@ -162,6 +162,34 @@ export type Source = {
    * that have no disk to be on.
    */
   mount?: { device: string; type: string; network: boolean; readOnly: boolean; point: string } | null
+  /**
+   * Folders inside the source someone starred: paths relative to the root.
+   * Connection settings say how to reach a source; favorites say where the
+   * music actually is once you are in. Withheld, like `root`, from accounts
+   * that are not allowed to know the machine's layout.
+   */
+  favorites?: string[]
+}
+
+/** One entry of a source's directory listing. */
+export type SourceEntry = {
+  name: string
+  /** Relative to the source root — feed it back as `path` to descend. */
+  path: string
+  dir: boolean
+  size?: number
+}
+
+/**
+ * A look inside a source, before or after trusting it with a scan.
+ *
+ * For folder-backed kinds this is the raw directory tree. For the API-backed
+ * kinds (plex, emby, jellyfin) the top level lists the server's libraries —
+ * picking one is what `config.section` / `config.parentId` wanted all along.
+ */
+export type SourceBrowse = {
+  path: string
+  entries: SourceEntry[]
 }
 
 export type JobKind =
@@ -295,6 +323,23 @@ export type Radio = {
   favorite: 0 | 1
 }
 
+/**
+ * A station proposed by the community directory, not yet in the library.
+ * Everything needed to create a `Radio` from it without probing the stream.
+ */
+export type RadioHit = {
+  name: string
+  streamUrl: string
+  homepageUrl: string | null
+  imageUrl: string | null
+  genre: string
+  country: string
+  bitrate: number
+  codec: string
+  /** Community votes — what proposals are ranked by. */
+  votes: number
+}
+
 export type Podcast = {
   id: string
   feedUrl: string
@@ -323,23 +368,6 @@ export type Episode = {
   /** The feed's identity for this episode. Never the URL — those get rewritten. */
   guid: string
   title: string
-/**
- * A station proposed by the community directory, not yet in the library.
- * Everything needed to create a `Radio` from it without probing the stream.
- */
-export type RadioHit = {
-  name: string
-  streamUrl: string
-  homepageUrl: string | null
-  imageUrl: string | null
-  genre: string
-  country: string
-  bitrate: number
-  codec: string
-  /** Community votes — what proposals are ranked by. */
-  votes: number
-}
-
   description: string
   pubDate: number | null
   duration: number

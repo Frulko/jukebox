@@ -113,8 +113,16 @@ const DOCS: Record<string, Doc> = {
   'GET /sources': { summary: 'Where the music lives.', returns: 'Source[]', tag: 'sources' },
   'POST /sources': { summary: 'Adds a source. `rclone` sources carry `config: { url, fs }`.', tag: 'sources' },
   'PATCH /sources/:id': {
-    summary: 'Rename a source, change its write capability, or fix its settings.',
-    body: '{ name?, writable?, config? }', tag: 'sources',
+    summary: 'Rename a source, change its write capability, fix its settings, or re-star its favorite folders.',
+    body: '{ name?, writable?, config?, favorites? }', tag: 'sources',
+  },
+  'GET /sources/:id/browse': {
+    summary: 'One level of the source’s folders — or its libraries, for the API-backed kinds. Admin only, like the root it reveals.',
+    returns: 'SourceBrowse', tag: 'sources', query: ['path'],
+  },
+  'POST /sources/browse': {
+    summary: 'The same look inside before the source exists: the root is immutable, so it gets picked by walking, now or never.',
+    body: '{ root, kind?, config?, path? }', returns: 'SourceBrowse', tag: 'sources',
   },
   'DELETE /sources/:id': {
     summary: 'Forgets a source. Refused while it still holds tracks.', tag: 'sources',
@@ -173,6 +181,7 @@ const DOCS: Record<string, Doc> = {
   'POST /podcasts/:id/refresh': { summary: 'Refreshes now. Conditional: unchanged feeds cost no body.', tag: 'podcasts' },
 
   'GET /radios': { summary: 'Stations.', tag: 'radios' },
+  'GET /radios/search': { summary: 'Stations the community directory proposes for a name, best-voted first.', returns: 'RadioHit[]', tag: 'radios', query: ['q'] },
   'POST /radios': { summary: 'Adds one, discovering its name and logo unless told not to.', tag: 'radios' },
   'GET /radios/:id': { summary: 'One station.', tag: 'radios' },
   'PATCH /radios/:id': { summary: 'Edits it.', tag: 'radios' },
@@ -181,7 +190,6 @@ const DOCS: Record<string, Doc> = {
 
   'GET /jobs': { summary: 'Background work.', returns: 'Job[]', tag: 'jobs' },
   'GET /jobs/:id': { summary: 'One job.', returns: 'Job', tag: 'jobs' },
-  'GET /radios/search': { summary: 'Stations the community directory proposes for a name, best-voted first.', returns: 'RadioHit[]', tag: 'radios', query: ['q'] },
   'GET /jobs/:id/items': { summary: 'What it did item by item, with counts over the whole job.', returns: 'JobItemsPage', tag: 'jobs' },
   'PATCH /jobs/:id': { summary: 'Pauses or resumes it.', tag: 'jobs' },
   'DELETE /jobs/:id': { summary: 'Cancels it.', tag: 'jobs' },

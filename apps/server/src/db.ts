@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS sources (
   root         TEXT NOT NULL,
   writable     INTEGER NOT NULL DEFAULT 0, -- write capability, denied by default
   config       TEXT NOT NULL DEFAULT '{}',
+  favorites    TEXT NOT NULL DEFAULT '[]', -- starred folders, paths relative to root
   lastScanAt   INTEGER,
   rev          INTEGER NOT NULL
 );
@@ -528,6 +529,14 @@ const MIGRATIONS: Migration[] = [
     const has = (db.prepare(`PRAGMA table_info(tracks)`).all() as any[])
       .some((c) => c.name === 'mergedInto')
     if (!has) db.exec(`ALTER TABLE tracks ADD COLUMN mergedInto TEXT REFERENCES tracks(id)`)
+  },
+
+  // 8 — starred folders inside a source. Guarded like migration 2: the column
+  // is in SCHEMA too, so a fresh database already has it.
+  (db) => {
+    const has = (db.prepare(`PRAGMA table_info(sources)`).all() as any[])
+      .some((c) => c.name === 'favorites')
+    if (!has) db.exec(`ALTER TABLE sources ADD COLUMN favorites TEXT NOT NULL DEFAULT '[]'`)
   },
 ]
 

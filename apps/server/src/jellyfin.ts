@@ -76,6 +76,16 @@ async function call<T>(cfg: JellyfinConfig, path: string): Promise<T> {
 export const info = (cfg: JellyfinConfig) =>
   call<{ ServerName: string; Version: string; Id: string }>(cfg, '/System/Info')
 
+/**
+ * The server's libraries, so `parentId` can be picked from a list instead of
+ * copied out of an URL. All of them, not just the music-typed ones: plenty of
+ * real libraries carry no CollectionType at all, and choosing is the caller's.
+ */
+export const libraries = (cfg: JellyfinConfig) =>
+  call<{ Items?: Array<{ Id: string; Name: string; CollectionType?: string }> }>(
+    cfg, '/Library/MediaFolders')
+    .then((r) => (r.Items ?? []).map((i) => ({ id: i.Id, name: i.Name, kind: i.CollectionType ?? '' })))
+
 /** Ticks of 100ns to seconds, which is the unit everything else here uses. */
 const seconds = (ticks: unknown) => Math.round((Number(ticks) || 0) / 10_000_000)
 

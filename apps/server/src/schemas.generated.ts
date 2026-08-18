@@ -536,6 +536,13 @@ export const SCHEMAS: Record<string, any> = {
         ],
         "nullable": true,
         "description": "What the sources route adds for a local source: the disk its root sits on, or `null` when that disk is not mounted right now. Absent for the kinds that have no disk to be on."
+      },
+      "favorites": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Folders inside the source someone starred: paths relative to the root. Connection settings say how to reach a source; favorites say where the music actually is once you are in. Withheld, like `root`, from accounts that are not allowed to know the machine's layout."
       }
     },
     "required": [
@@ -546,6 +553,49 @@ export const SCHEMAS: Record<string, any> = {
       "writable",
       "lastScanAt",
       "rev"
+    ]
+  },
+  "SourceEntry": {
+    "description": "One entry of a source's directory listing.",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string",
+        "description": "Relative to the source root — feed it back as `path` to descend."
+      },
+      "dir": {
+        "type": "boolean"
+      },
+      "size": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "name",
+      "path",
+      "dir"
+    ]
+  },
+  "SourceBrowse": {
+    "description": "A look inside a source, before or after trusting it with a scan. For folder-backed kinds this is the raw directory tree. For the API-backed kinds (plex, emby, jellyfin) the top level lists the server's libraries — picking one is what `config.section` / `config.parentId` wanted all along.",
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string"
+      },
+      "entries": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceEntry"
+        }
+      }
+    },
+    "required": [
+      "path",
+      "entries"
     ]
   },
   "JobKind": {
@@ -1119,6 +1169,53 @@ export const SCHEMAS: Record<string, any> = {
       "favorite"
     ]
   },
+  "RadioHit": {
+    "description": "A station proposed by the community directory, not yet in the library. Everything needed to create a `Radio` from it without probing the stream.",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "streamUrl": {
+        "type": "string"
+      },
+      "homepageUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "imageUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "genre": {
+        "type": "string"
+      },
+      "country": {
+        "type": "string"
+      },
+      "bitrate": {
+        "type": "number"
+      },
+      "codec": {
+        "type": "string"
+      },
+      "votes": {
+        "type": "number",
+        "description": "Community votes — what proposals are ranked by."
+      }
+    },
+    "required": [
+      "name",
+      "streamUrl",
+      "homepageUrl",
+      "imageUrl",
+      "genre",
+      "country",
+      "bitrate",
+      "codec",
+      "votes"
+    ]
+  },
   "Podcast": {
     "type": "object",
     "properties": {
@@ -1218,60 +1315,73 @@ export const SCHEMAS: Record<string, any> = {
       },
       "title": {
         "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "pubDate": {
+        "type": "number",
+        "nullable": true
+      },
+      "duration": {
+        "type": "number"
+      },
+      "episodeNumber": {
+        "type": "number",
+        "nullable": true
+      },
+      "season": {
+        "type": "number",
+        "nullable": true
+      },
+      "enclosureUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "enclosureLength": {
+        "type": "number"
+      },
+      "enclosureType": {
+        "type": "string"
+      },
+      "imageUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "trackId": {
+        "type": "string",
+        "nullable": true,
+        "description": "Set once downloaded into the library."
+      },
+      "played": {
+        "type": "number",
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "position": {
+        "type": "number",
+        "description": "Resume point in seconds."
       }
     },
     "required": [
       "id",
       "podcastId",
       "guid",
-      "title"
-    ]
-  },
-  "RadioHit": {
-    "description": "A station proposed by the community directory, not yet in the library. Everything needed to create a `Radio` from it without probing the stream.",
-    "type": "object",
-    "properties": {
-      "name": {
-        "type": "string"
-      },
-      "streamUrl": {
-        "type": "string"
-      },
-      "homepageUrl": {
-        "type": "string",
-        "nullable": true
-      },
-      "imageUrl": {
-        "type": "string",
-        "nullable": true
-      },
-      "genre": {
-        "type": "string"
-      },
-      "country": {
-        "type": "string"
-      },
-      "bitrate": {
-        "type": "number"
-      },
-      "codec": {
-        "type": "string"
-      },
-      "votes": {
-        "type": "number",
-        "description": "Community votes — what proposals are ranked by."
-      }
-    },
-    "required": [
-      "name",
-      "streamUrl",
-      "homepageUrl",
+      "title",
+      "description",
+      "pubDate",
+      "duration",
+      "episodeNumber",
+      "season",
+      "enclosureUrl",
+      "enclosureLength",
+      "enclosureType",
       "imageUrl",
-      "genre",
-      "country",
-      "bitrate",
-      "codec",
-      "votes"
+      "trackId",
+      "played",
+      "position"
     ]
   },
   "OrganizePlan": {

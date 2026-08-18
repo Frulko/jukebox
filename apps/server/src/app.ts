@@ -8,7 +8,7 @@ import { Readable } from 'node:stream'
 import { join } from 'node:path'
 import { open, revision, nextRev, onRevision, type DB } from './db.ts'
 import { JobQueue, publicJob, type JobItemState, type JobKind } from './jobs.ts'
-import { makeScanHandler } from './scan.ts'
+import { makeScanHandler, browse, BrowseError } from './scan.ts'
 import { makeWritebackHandler } from './writeback.ts'
 import { makeAcquireHandler } from './acquire.ts'
 import { makeSyncHandler, planSync } from './sync.ts'
@@ -1555,6 +1555,22 @@ export function createApp(dbFile: string) {
     return { config, secrets }
   }
 
+  /** The `favorites` column, defensively: a row predating the migration, or a hand-edited one, must not 500 the list. */
+  const favoritesOf = (raw: unknown): string[] => {
+    try {
+      const parsed = JSON.parse(typeof raw === 'string' ? raw : '[]')
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  }
+
+  /** 400 for a path that tries to leave the source, 502 for a source that does not answer. */
+  const browseFail = (c: any, err: unknown) => {
+    if (err instanceof BrowseError && err.code === 'bad_path') return fail(c, 400, 'bad_path', err.message)
+    return fail(c, 502, 'unreachable', err instanceof Error ? err.message : 'source did not answer')
+  }
+
   api.get('/sources', async (c) => {
     // Narrowed accounts see the sources they may use and no others: listing the
     // name of a library somebody cannot open tells them it exists, which is
@@ -1572,7 +1588,13 @@ export function createApp(dbFile: string) {
     const admin = isOpen(db) || can(userOf(c), 'admin')
     const items = (db.prepare(`SELECT * FROM sources`).all() as any[])
       .filter((s) => !allowed || allowed.includes(s.id))
-      .map((s) => ({ ...s, root: admin ? s.root : '', ...publicConfig(s.config) }))
+      // Favorites are folder names — the machine's layout, like `root` — so
+      // they follow the same rule.
+      .map((s) => ({
+        ...s, root: admin ? s.root : '',
+        favorites: admin ? favoritesOf(s.favorites) : [],
+        ...publicConfig(s.config),
+      }))
     const mounts = await readMounts()
 
     const described = await Promise.all(items.map(async (s) => {
@@ -1607,7 +1629,57 @@ export function createApp(dbFile: string) {
       `INSERT INTO sources (id, kind, name, root, writable, config, rev) VALUES (?,?,?,?,?,?,?)`)
       .run(id, b.kind ?? 'local', b.name, b.root, b.writable ? 1 : 0,
         JSON.stringify(b.config ?? {}), nextRev(db))
-    return c.json(db.prepare(`SELECT * FROM sources WHERE id = ?`).get(id), 201)
+    const row = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(id) as any
+    return c.json({ ...row, favorites: favoritesOf(row.favorites) }, 201)
+  })
+
+  /**
+   * One level of a source's folders.
+   *
+   * Connection settings prove a source answers; this is what proves it holds
+   * the music — and where the root or a library gets *picked* instead of
+   * typed. Admin-gated by hand: GETs are open to every account, but a folder
+   * tree is the machine's layout, the exact thing `GET /sources` blanks the
+   * root for.
+   */
+  api.get('/sources/:id/browse', async (c) => {
+    if (!isOpen(db) && !can(userOf(c), 'admin')) {
+      return fail(c, 403, 'admin_only', 'browsing a source is for whoever manages them')
+    }
+    const src = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(c.req.param('id')) as any
+    if (!src) return fail(c, 404, 'not_found', 'unknown source')
+    const path = c.req.query('path') ?? ''
+    try {
+      return c.json({ path, entries: await browse(src, path) })
+    } catch (err) {
+      return browseFail(c, err)
+    }
+  })
+
+  /**
+   * The same look inside, before the source exists.
+   *
+   * `root` is immutable once created — a track path is relative to it — so the
+   * only moment it can be chosen by walking instead of typing is now. The
+   * settings travel in the body: a password in a query string ends up in logs.
+   */
+  api.post('/sources/browse', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    if (!b || typeof b.root !== 'string') {
+      return fail(c, 400, 'bad_body', 'expected { root, kind?, config?, path? }')
+    }
+    const draft = {
+      kind: typeof b.kind === 'string' ? b.kind : 'local',
+      // A blank root means "start at the top": the picker's first step.
+      root: b.root || '/',
+      config: JSON.stringify(b.config ?? {}),
+    }
+    const path = typeof b.path === 'string' ? b.path : ''
+    try {
+      return c.json({ path, entries: await browse(draft, path) })
+    } catch (err) {
+      return browseFail(c, err)
+    }
   })
 
   /**
@@ -1629,7 +1701,11 @@ export function createApp(dbFile: string) {
     const src = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(c.req.param('id')) as any
     if (!src) return fail(c, 404, 'not_found', 'unknown source')
     const b = await c.req.json().catch(() => null)
-    if (!b) return fail(c, 400, 'bad_body', 'expected { name?, writable?, config? }')
+    if (!b) return fail(c, 400, 'bad_body', 'expected { name?, writable?, config?, favorites? }')
+    if (b.favorites !== undefined &&
+      !(Array.isArray(b.favorites) && b.favorites.every((f: unknown) => typeof f === 'string'))) {
+      return fail(c, 400, 'bad_body', 'favorites must be a list of relative paths')
+    }
     if (b.root !== undefined && b.root !== src.root) {
       return fail(c, 409, 'root_immutable',
         'a track path is relative to the root; add a source and rescan instead')
@@ -1650,10 +1726,16 @@ export function createApp(dbFile: string) {
       config = JSON.stringify(merged)
     }
 
-    db.prepare(`UPDATE sources SET name = ?, writable = ?, config = ?, rev = ? WHERE id = ?`)
-      .run(name, writable, config, nextRev(db), src.id)
+    // Replaced whole, not merged: a list someone just reordered or emptied in
+    // the interface is the truth, and `[]` has to be sayable.
+    const favorites = b.favorites === undefined
+      ? src.favorites
+      : JSON.stringify([...new Set((b.favorites as string[]).map((f) => f.trim()).filter(Boolean))])
+
+    db.prepare(`UPDATE sources SET name = ?, writable = ?, config = ?, favorites = ?, rev = ? WHERE id = ?`)
+      .run(name, writable, config, favorites, nextRev(db), src.id)
     const after = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(src.id) as any
-    return c.json({ ...after, ...publicConfig(after.config) })
+    return c.json({ ...after, favorites: favoritesOf(after.favorites), ...publicConfig(after.config) })
   })
 
   /**
@@ -1812,6 +1894,19 @@ export function createApp(dbFile: string) {
     return c.json({ ...radio, probeError: found.error ?? null }, 201)
   })
 
+  /**
+   * Stations proposed by the community directory, by name, best-voted first.
+   * A 502 rather than an empty list when the directory is unreachable: "no
+   * station is called that" and "nobody could be asked" are different answers.
+   */
+  api.get('/radios/search', async (c) => {
+    const q = (c.req.query('q') ?? '').trim()
+    if (!q) return fail(c, 400, 'bad_query', 'expected ?q=<name>')
+    const items = await searchDirectory(q)
+    if (items === null) return fail(c, 502, 'directory_unreachable', 'the radio directory did not answer')
+    return c.json({ items })
+  })
+
   api.get('/radios/:id', (c) => {
     const r = getRadio(db, c.req.param('id'))
     return r ? c.json(r) : fail(c, 404, 'not_found', 'unknown radio')
@@ -1894,19 +1989,6 @@ export function createApp(dbFile: string) {
   api.delete('/podcasts/:id', (c) => {
     const r = db.prepare(`UPDATE podcasts SET deletedAt = ?, rev = ? WHERE id = ? AND deletedAt IS NULL`)
       .run(Date.now(), nextRev(db), c.req.param('id'))
-  /**
-   * Stations proposed by the community directory, by name, best-voted first.
-   * A 502 rather than an empty list when the directory is unreachable: "no
-   * station is called that" and "nobody could be asked" are different answers.
-   */
-  api.get('/radios/search', async (c) => {
-    const q = (c.req.query('q') ?? '').trim()
-    if (!q) return fail(c, 400, 'bad_query', 'expected ?q=<name>')
-    const items = await searchDirectory(q)
-    if (items === null) return fail(c, 502, 'directory_unreachable', 'the radio directory did not answer')
-    return c.json({ items })
-  })
-
     return r.changes ? c.body(null, 204) : fail(c, 404, 'not_found', 'unknown podcast')
   })
 

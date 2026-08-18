@@ -29,6 +29,9 @@ const EXPECTED: Record<string, 'admin' | 'user' | 'guest'> = {
   'PUT /users/:id/sources': 'admin',
 
   'POST /sources': 'admin',
+  // A draft browse carries connection credentials in its body and answers with
+  // the machine's folder layout: twice admin.
+  'POST /sources/browse': 'admin',
   'POST /sources/:id/scan': 'admin', 'POST /sources/:id/test': 'admin',
   // Same as creating one: a source is where the library comes from, and its
   // config holds the credentials for it.

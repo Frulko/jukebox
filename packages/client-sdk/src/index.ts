@@ -6,7 +6,7 @@ import type {
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
-  Source, Stats,
+  Source, SourceBrowse, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
@@ -395,7 +395,22 @@ export function createClient(opts: ClientOptions = {}) {
        */
       update: (id: string, patch: {
         name?: string; writable?: boolean; config?: Record<string, unknown>
+        /** Replaced whole, unlike `config`: an emptied list has to be sayable. */
+        favorites?: string[]
       }) => request<Source>(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+      /**
+       * One level of the source's folders — or, for the API-backed kinds, the
+       * server's libraries. What proves a connection actually holds the music.
+       */
+      browse: (id: string, path = '') =>
+        request<SourceBrowse>(`/sources/${id}/browse${qs({ path: path || undefined })}`),
+      /**
+       * The same look inside before the source exists. The root is immutable
+       * once created, so this is the only moment it can be picked by walking;
+       * the settings travel in the body, where a password belongs.
+       */
+      browseDraft: (draft: { root: string; kind?: string; config?: Record<string, unknown>; path?: string }) =>
+        request<SourceBrowse>('/sources/browse', { method: 'POST', body: JSON.stringify(draft) }),
       /** Refused while the source still holds tracks: that is a different request. */
       remove: (id: string) => request<void>(`/sources/${id}`, { method: 'DELETE' }),
       /** `full` re-reads every file instead of trusting mtime and size. */
@@ -428,6 +443,8 @@ export function createClient(opts: ClientOptions = {}) {
 
     radios: {
       list: () => request<{ items: Radio[] }>('/radios', {}, true),
+      /** Stations the community directory proposes for a name, best-voted first. */
+      search: (q: string) => request<{ items: RadioHit[] }>(`/radios/search${qs({ q })}`),
       get: (id: string) => request<Radio>(`/radios/${id}`),
       /**
        * Paste a URL, get a name, a genre and a logo. Pass `discover: false` to
@@ -443,8 +460,6 @@ export function createClient(opts: ClientOptions = {}) {
         request<Radio & { probeError: string | null }>(`/radios/${id}/discover`, { method: 'POST' }),
     },
 
-      /** Stations the community directory proposes for a name, best-voted first. */
-      search: (q: string) => request<{ items: RadioHit[] }>(`/radios/search${qs({ q })}`),
     podcasts: {
       list: () => request<{ items: Podcast[] }>('/podcasts', {}, true),
       get: (id: string) => request<Podcast>(`/podcasts/${id}`),
@@ -626,12 +641,12 @@ export type {
   Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Output, Podcast, Radio,
+  RadioHit,
   CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
-  Source, Stats,
+  Source, SourceBrowse, Stats,
   StoreEntry, SyncPlan,
   Track, TrackPatch, TrackQuery,
   TracksDelta, WantResult,
 }
-  RadioHit,
