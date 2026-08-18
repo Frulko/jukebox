@@ -5,60 +5,11 @@ import { api, usePodcasts, useTracks } from './api'
 import { AddPodcast } from './AddPodcast'
 import { Icon } from './Icon'
 import { fmtBytes } from './media'
+import { hostOf } from './podcasts'
 import { useRemembered, useScrollMemory } from './viewState'
 import { getLocale } from './i18n'
 
-/** The publisher's host, for a line that says where the sound comes from. */
-export const hostOf = (url: string) => {
-  try { return new URL(url).hostname } catch { return 'the publisher' }
-}
-
-/**
- * An episode dressed as a track, for the parts of the interface that only know
- * how to show a track — the LCD, the cover, the marquee.
- *
- * The id is prefixed `ep:` deliberately: it is not a library id, and anything
- * tempted to send it to the server has to notice.
- */
-export function episodeAsTrack(e: Episode, show: Podcast): Track {
-  return {
-    id: `ep:${e.id}`,
-    sourceId: '',
-    path: e.enclosureUrl ?? '',
-    kind: 'podcast',
-    name: e.title,
-    artist: show.author || show.title,
-    albumArtist: show.author || show.title,
-    album: show.title,
-    genre: 'Podcast',
-    composer: '',
-    year: e.pubDate ? new Date(e.pubDate).getFullYear() : 0,
-    trackNumber: e.episodeNumber ?? 0,
-    trackCount: 0,
-    discNumber: e.season ?? 1,
-    duration: e.duration,
-    bitRate: 0,
-    sampleRate: 0,
-    format: (e.enclosureType || '').split('/')[1] ?? '',
-    size: e.enclosureLength,
-    rating: 0,
-    loved: false,
-    enabled: true,
-    comments: '',
-    grouping: '',
-    bpm: 0,
-    compilation: false,
-    playCount: 0,
-    skipCount: 0,
-    dateAdded: e.pubDate ?? 0,
-    lastPlayed: null,
-    artwork: e.imageUrl ?? show.imageUrl,
-    devices: [],
-    tags: [],
-    renditions: [],
-    rev: 0,
-  }
-}
+const NO_TRACKS: Track[] = []
 
 /**
  * An episode's length, in seconds — which is what the server stores, and what
@@ -113,7 +64,9 @@ export function PodcastsView({
   const [confirming, setConfirming] = useState(false)
   // Episodes the library holds as files: what the folder half of "Add a
   // podcast" produces, and what a feed's downloads are too.
-  const onDisk = useTracks({ kind: 'podcast', limit: 500, sort: 'album' }).data?.items ?? []
+  // The fallback is a module constant: a fresh `[]` on every render while the
+  // query loads would re-run the grouping memo below for nothing.
+  const onDisk = useTracks({ kind: 'podcast', limit: 500, sort: 'album' }).data?.items ?? NO_TRACKS
   const diskShows = useMemo(() => {
     const by = new Map<string, { key: string; title: string; tracks: typeof onDisk }>()
     for (const t of onDisk) {
@@ -155,7 +108,10 @@ export function PodcastsView({
   const downloaded = eps.map((e) => e.trackId).filter((id): id is string => !!id)
 
   if (shows.isPending) return <div className="media split"><div className="list-empty">Asking the server…</div></div>
-  if (!items.length) {
+  // Feeds *or* files: a folder just filed as a podcast is a podcast, and the
+  // page saying "No podcasts yet" over it while the status bar says "1 episode
+  // filed" was the page and the app disagreeing about the same fact.
+  if (!items.length && !diskShows.length) {
     return (
       <div className="media split">
         <div className="pod-empty">
@@ -174,11 +130,15 @@ export function PodcastsView({
       </div>
     )
   }
-  if (!show) {
+  if (!show && !diskShows.length) {
     return <div className="media split"><div className="list-empty">Nothing matches “{search}”</div></div>
   }
 
-  const disk = sel?.startsWith('disk:') ? diskShows.find((d) => `disk:${d.key}` === sel) : undefined
+  // With no feed to open — none subscribed, or the search hid them all — the
+  // right pane falls back to the first folder of files rather than a blank.
+  const disk = sel?.startsWith('disk:')
+    ? diskShows.find((d) => `disk:${d.key}` === sel)
+    : show ? undefined : diskShows[0]
 
   return (
     <div className="media split podcasts">
@@ -193,7 +153,7 @@ export function PodcastsView({
         </div>
       <div className="show-list" ref={list.ref} onScroll={list.onScroll}>
         {visible.map((s) => (
-          <button key={s.id} className={`show ${s.id === show.id ? 'on' : ''}`} onClick={() => setSel(s.id)}>
+          <button key={s.id} className={`show ${s.id === show?.id ? 'on' : ''}`} onClick={() => setSel(s.id)}>
             {s.imageUrl ? (
               <img className="art" src={s.imageUrl} alt="" />
             ) : (
@@ -304,7 +264,7 @@ export function PodcastsView({
             ))}
           </div>
         </div>
-      ) : (
+      ) : show ? (
       <div className="ep-list">
         {/* Where this show comes from, and what to do about it. The feed URL is
             shown rather than hidden behind a settings dialog: it is the whole
@@ -418,7 +378,7 @@ export function PodcastsView({
           ))}
         </div>
       </div>
-      )}
+      ) : null}
 
       {addOpen && (
         <AddPodcast onClose={() => setAddOpen(false)} onNotice={onNotice} onAdded={refreshShows} />

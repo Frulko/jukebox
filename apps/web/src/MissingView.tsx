@@ -7,15 +7,12 @@ import { fmtTime } from './data'
 import { Icon } from './Icon'
 import { useMenuPosition } from './useMenuPosition'
 import { useScrollMemory } from './viewState'
-import { useViewSearch, ViewSearch } from './ViewSearch'
+import { ViewSearch } from './ViewSearch'
+import { useViewSearch } from './viewState'
 import { DataTable } from './DataTable'
+import { FolderBrowser } from './FolderBrowser'
 import type { features } from './tableFeatures'
 import { getLocale } from './i18n'
-
-/** What the sources route adds for a local source, and api-types does not name yet. */
-type Mounted = Source & {
-  mount?: { device: string; type: string; network: boolean; readOnly: boolean; point: string } | null
-}
 
 const folderOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/'))) || '/'
 const fileOf = (path: string) => path.slice(path.lastIndexOf('/') + 1)
@@ -47,7 +44,7 @@ function WhereDidItGo({
   onSubstituted,
 }: {
   track: MissingTrack
-  source: Mounted | undefined
+  source: Source | undefined
   /** The other tracks of the same album that are also missing. */
   siblings: MissingTrack[]
   onClose: () => void
@@ -69,6 +66,23 @@ function WhereDidItGo({
   const hunt = useTracks({ q: typed, limit: 30 }, typed.length > 1)
   const candidates = (hunt.data?.items ?? []).filter((t) => t.id !== track.id)
 
+  // Browsing, for when no words find it: a re-rip keeps its folder shape long
+  // after it lost its tags, so walking source → folder is how a person actually
+  // remembers where music lives. Opens on the source that lost the file — if
+  // the disk is back, the folder is right there.
+  const sources = useSources().data?.items ?? []
+  const [browseSource, setBrowseSource] = useState<string | null>(null)
+  const [browseFolder, setBrowseFolder] = useState<string | null>(null)
+  const browsing =
+    browseSource ??
+    (sources.some((s) => s.id === track.sourceId) ? track.sourceId : sources[0]?.id) ??
+    null
+  const inFolder = useTracks(
+    { sourceId: browsing ?? undefined, folder: browseFolder ?? undefined, limit: 100 },
+    !!browsing && !!browseFolder,
+  )
+  const folderTracks = (inFolder.data?.items ?? []).filter((t) => t.id !== track.id)
+
   const substitute = async (keeperId: string, keeperPath: string, keeperSourceId: string) => {
     if (busy) return
     setBusy(true)
@@ -89,6 +103,21 @@ function WhereDidItGo({
       setBusy(false)
     }
   }
+
+  /** A candidate file, wherever it was found: search hit or folder listing. */
+  const foundRow = (t: { id: string; name: string; artist: string; path: string; sourceId: string }) => (
+    <div key={t.id} className="where-found">
+      <Icon name="music" size={10} />
+      <span className="n">
+        {t.name}
+        <em className="dim"> — {t.artist}</em>
+      </span>
+      <span className="path" title={t.path}>{t.path}</span>
+      <button disabled={busy} onClick={() => void substitute(t.id, t.path, t.sourceId)}>
+        Use this
+      </button>
+    </div>
+  )
 
   const copy = (what: string, value: string) => {
     const done = navigator.clipboard?.writeText(value)
@@ -190,19 +219,26 @@ function WhereDidItGo({
           {typed.length > 1 && !hunt.isPending && candidates.length === 0 && (
             <p className="dim">Nothing in any source matches that.</p>
           )}
-          {candidates.map((t) => (
-            <div key={t.id} className="where-found">
-              <Icon name="music" size={10} />
-              <span className="n">
-                {t.name}
-                <em className="dim"> — {t.artist}</em>
-              </span>
-              <span className="path" title={t.path}>{t.path}</span>
-              <button disabled={busy} onClick={() => void substitute(t.id, t.path, t.sourceId)}>
-                Use this
-              </button>
-            </div>
-          ))}
+          {candidates.map(foundRow)}
+
+          {/* Words are the fast way and the folders are the sure one: a re-rip
+              that lost its tags matches no search, but it still lives where
+              that album's files live. Same "Use this" either way. */}
+          <h4 className="file-where">Or browse by folder</h4>
+          <FolderBrowser
+            sourceId={browsing}
+            onSource={setBrowseSource}
+            folder={browseFolder}
+            onFolder={setBrowseFolder}
+          />
+          {browseFolder && inFolder.isPending && <p className="dim">Asking the server…</p>}
+          {browseFolder && !inFolder.isPending && folderTracks.length === 0 && (
+            <p className="dim">No playable track under that folder.</p>
+          )}
+          {folderTracks.map(foundRow)}
+          {folderTracks.length >= 100 && (
+            <p className="dim">Only the first 100 are shown — open a subfolder to narrow it.</p>
+          )}
 
           {/* Files do not go missing one at a time. If the rest of the album is
               gone too, the copy you just found is almost certainly sitting next
@@ -319,7 +355,7 @@ export function MissingView() {
     )
   }
 
-  const sourceOf = (t: MissingTrack) => (sources as Mounted[]).find((x) => x.id === t.sourceId)
+  const sourceOf = (t: MissingTrack) => sources.find((x) => x.id === t.sourceId)
 
   return (
     <div className="media missing" ref={pane.ref} onScroll={pane.onScroll} onMouseDown={() => setMenu(null)}>
