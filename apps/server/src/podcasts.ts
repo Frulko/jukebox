@@ -106,6 +106,17 @@ export function makePodcastHandler(db: DB) {
       .get(ctx.payload.podcastId) as any
     if (!p) throw new Error(`unknown podcast: ${ctx.payload.podcastId}`)
 
+    // One episode, on demand — the row's right-click "Download". The feed is
+    // not refetched: the episode is already known, and a click on one row
+    // should not turn into a refresh of the whole show.
+    if (ctx.payload.episodeId) {
+      const e = db.prepare(`SELECT * FROM episodes WHERE id = ? AND podcastId = ?`)
+        .get(ctx.payload.episodeId, p.id) as any
+      if (!e) throw new Error(`unknown episode: ${ctx.payload.episodeId}`)
+      await download(db, ctx, p, [e])
+      return
+    }
+
     const headers: Record<string, string> = { accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' }
     if (p.etag) headers['if-none-match'] = p.etag
     if (p.lastModified) headers['if-modified-since'] = p.lastModified
@@ -186,13 +197,18 @@ const fail = (db: DB, id: string, message: string) =>
   db.prepare(`UPDATE podcasts SET lastFetchAt = ?, lastError = ? WHERE id = ?`)
     .run(Date.now(), message, id)
 
-/** Fetches the newest undownloaded episodes, bounded by `keepLast`. */
-async function download(db: DB, ctx: JobContext, p: any): Promise<void> {
-  const source = db.prepare(`SELECT * FROM sources WHERE id = ?`).get(p.targetSourceId) as any
+/** Fetches the newest undownloaded episodes, bounded by `keepLast` — or just
+ *  `only`, when a single episode was asked for by hand. */
+async function download(db: DB, ctx: JobContext, p: any, only?: any[]): Promise<void> {
+  // The podcast's own target when it has one; otherwise the first local
+  // writable source, so a feed subscribed without a destination can still
+  // answer a hand-picked "Download".
+  const source = (db.prepare(`SELECT * FROM sources WHERE id = ?`).get(p.targetSourceId)
+    ?? db.prepare(`SELECT * FROM sources WHERE kind = 'local' AND writable = 1 ORDER BY id`).get()) as any
   if (!source?.writable) return
 
   const limit = p.keepLast > 0 ? p.keepLast : 5
-  const pending = db.prepare(
+  const pending = only ?? db.prepare(
     `SELECT * FROM episodes WHERE podcastId = ? AND trackId IS NULL AND enclosureUrl IS NOT NULL
      ORDER BY pubDate DESC, id ASC LIMIT ?`).all(p.id, limit) as any[]
 

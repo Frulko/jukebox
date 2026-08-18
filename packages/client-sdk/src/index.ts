@@ -472,6 +472,9 @@ export function createClient(opts: ClientOptions = {}) {
       episodes: (id: string, q: { cursor?: string; limit?: number } = {}) =>
         request<Page<Episode>>(`/podcasts/${id}/episodes${qs(q)}`),
       refresh: (id: string) => request<Job>(`/podcasts/${id}/refresh`, { method: 'POST' }),
+      /** Downloads one episode into the library, as a job. */
+      download: (id: string, episodeId: string) =>
+        request<Job>(`/podcasts/${id}/episodes/${episodeId}/download`, { method: 'POST' }),
     },
 
     schedules: {

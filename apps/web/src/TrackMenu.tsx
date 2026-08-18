@@ -44,7 +44,15 @@ export type TrackActions = {
  * menu that has to look those up somewhere else is a menu each caller gets
  * subtly differently.
  */
-export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: boolean } = {}) {
+export function useTrackMenu(
+  actions: TrackActions,
+  options: {
+    inPlaylist?: boolean
+    /** Entries a kind of track has that others do not — a podcast's
+     *  "Download", an audiobook's sources. Rendered after the primary verbs. */
+    extra?: (tracks: Track[], close: () => void) => React.ReactNode
+  } = {},
+) {
   const [menu, setMenu] = useState<{ x: number; y: number; tracks: Track[]; queue: string[] } | null>(null)
   /** "Where is this?" — opened from the menu, at the same point. */
   const [where, setWhere] = useState<{ id: string; x: number; y: number } | null>(null)
@@ -128,6 +136,7 @@ export function useTrackMenu(actions: TrackActions, options: { inPlaylist?: bool
           <button onClick={() => (actions.onConvert(ids), close())}>
             {many ? t('Convert {n} Tracks…', { n: ids.length }) : t('Convert…')}
           </button>
+          {options.extra?.(menu.tracks, close)}
 
           {actions.pluginEntries.length > 0 && <hr />}
           {actions.pluginEntries.map((entry) => (

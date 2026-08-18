@@ -3,8 +3,22 @@ import type { Track } from '@jukebox/client-sdk'
 import { useTracks } from './api'
 import { Icon } from './Icon'
 import { fmtSize } from './data'
+import { Submenu } from './Submenu'
 import { useTrackMenu, type TrackActions } from './TrackMenu'
 import { useRemembered, useScrollMemory } from './viewState'
+import { useRowSelection } from './useRowSelection'
+import { t } from './i18n'
+
+/**
+ * Where a book can be looked up — Audible today, anything with a search URL
+ * tomorrow. Searches, not store integrations: actually *fetching* from Audible
+ * means credentials and DRM the server has no notion of. Add a source by
+ * adding a line.
+ */
+const BOOK_SOURCES = [
+  { name: 'Audible', url: (q: string) => `https://www.audible.com/search?keywords=${encodeURIComponent(q)}` },
+  { name: 'Google', url: (q: string) => `https://www.google.com/search?q=${encodeURIComponent(`${q} audiobook`)}` },
+]
 
 /** Deterministic colour for a book with no cover, so one looks like itself. */
 const hue = (id: string) => [...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 11)
@@ -40,7 +54,25 @@ export function AudiobooksView({
   actions: TrackActions
 }) {
   const { data, isPending } = useTracks({ kind: 'audiobook', limit: 500, sort: 'album' })
-  const menu = useTrackMenu(actions)
+  const menu = useTrackMenu(actions, {
+    // The book's own entries: where to find it. The album is the book and the
+    // album artist its author, which is the whole search anyone types.
+    extra: (tracks, close) => (
+      <Submenu label={t('Find the book on…')}>
+        {BOOK_SOURCES.map((s) => (
+          <button
+            key={s.name}
+            onClick={() => {
+              window.open(s.url(`${tracks[0].albumArtist} ${tracks[0].album || tracks[0].name}`.trim()), '_blank')
+              close()
+            }}
+          >
+            {s.name}
+          </button>
+        ))}
+      </Submenu>
+    ),
+  })
   const list = useScrollMemory<HTMLDivElement>('audiobooks.list')
   const body = useScrollMemory<HTMLDivElement>('audiobooks.chapters')
   const [sel, setSel] = useRemembered<string | null>('audiobooks.book', null)
@@ -66,6 +98,7 @@ export function AudiobooksView({
   const bookMatches = book ? hits(book.title) || hits(book.author) : false
   const chapters = q && book && !bookMatches ? book.chapters.filter((c) => hits(c.name)) : book?.chapters ?? []
   const ids = chapters.map((c) => c.id)
+  const rows = useRowSelection(ids)
 
   if (isPending) return <div className="media split"><div className="list-empty">Asking the server…</div></div>
   if (!books.length) {
@@ -111,9 +144,13 @@ export function AudiobooksView({
           {chapters.map((c, i) => (
             <div
               key={c.id}
-              className={`ep ${i % 2 ? 'odd' : ''} ${c.id === nowPlaying ? 'playing' : ''}`}
+              className={`ep ${i % 2 ? 'odd' : ''} ${c.id === nowPlaying ? 'playing' : ''} ${rows.selected.has(c.id) ? 'sel' : ''}`}
+              onMouseDown={(e) => e.button === 0 && rows.click(e, c.id)}
               onDoubleClick={() => onPlay(c.id, ids)}
-              onContextMenu={(e) => menu.open(e, [c], ids)}
+              onContextMenu={(e) => {
+                const chosen = rows.forMenu(c.id)
+                menu.open(e, chapters.filter((x) => chosen.includes(x.id)), ids)
+              }}
             >
               {/* The same speaker as a playing row in the library. One mark for
                   "this is the sound you are hearing", wherever the sound was

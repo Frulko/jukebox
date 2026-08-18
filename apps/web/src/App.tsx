@@ -841,6 +841,7 @@ export default function App() {
         onPlayEpisode={playEpisode}
         onPlay={playTrack}
         onNotice={setNotice}
+        actions={trackActions}
       />,
     audiobooks: (
       <AudiobooksView search={search} nowPlaying={nowPlaying} onPlay={playTrack} actions={trackActions} />

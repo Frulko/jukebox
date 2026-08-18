@@ -2005,6 +2005,26 @@ export function createApp(dbFile: string) {
     return c.json(publicJob(job), 202)
   })
 
+  api.post('/podcasts/:id/episodes/:eid/download', (c) => {
+    const id = c.req.param('id')
+    const p = getPodcast(db, id)
+    if (!p) return fail(c, 404, 'not_found', 'unknown podcast')
+    const e = db.prepare(`SELECT * FROM episodes WHERE id = ? AND podcastId = ?`)
+      .get(c.req.param('eid'), id) as any
+    if (!e) return fail(c, 404, 'not_found', 'unknown episode')
+    if (e.trackId) return fail(c, 409, 'already_downloaded', 'this episode is already in the library')
+    if (!e.enclosureUrl) return fail(c, 400, 'no_enclosure', 'the feed gave no file for this episode')
+    // Somewhere to write, checked here so the click fails now rather than
+    // silently inside a job: the podcast's target, or any local writable source.
+    const writable = p.targetSourceId
+      ? (db.prepare(`SELECT writable FROM sources WHERE id = ?`).get(p.targetSourceId) as any)?.writable
+      : db.prepare(`SELECT id FROM sources WHERE kind = 'local' AND writable = 1`).get()
+    if (!writable) return fail(c, 400, 'no_writable_source', 'no writable source to download into')
+    const job = jobs.create('podcast', { podcastId: id, episodeId: e.id },
+      { idempotencyKey: `podcast-ep-${e.id}` })
+    return c.json(publicJob(job), 202)
+  })
+
   /* ---------------- schedules ---------------- */
 
   api.get('/schedules', (c) => withBodyETag(c, { items: listSchedules(db) }))

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
 import { createApp } from '../src/app.ts'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -198,4 +198,55 @@ test('subscribing twice to the same feed is refused', async () => {
     const again = await h.call('POST', '/podcasts', { feedUrl: feed.url })
     assert.equal(again.status, 409)
   } finally { await h.cleanup(); feed.server.close() }
+})
+
+test('one episode can be downloaded by hand, into the fallback source', async () => {
+  // A separate server for the audio: the feeder only speaks RSS.
+  const media = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'audio/mpeg' })
+    res.end(Buffer.from('not really an mp3'))
+  })
+  await new Promise<void>((r) => media.listen(0, '127.0.0.1', r))
+  const mediaUrl = `http://127.0.0.1:${(media.address() as any).port}`
+
+  const feed = await serveFeed()
+  feed.setItems(`
+    <item>
+      <title>Fetch Me</title>
+      <guid>ep-fetch</guid>
+      <pubDate>${new Date(Date.UTC(2026, 7, 1)).toUTCString()}</pubDate>
+      <enclosure url="${mediaUrl}/fetch.mp3" length="17" type="audio/mpeg"/>
+    </item>`)
+
+  const h = await harness()
+  const root = await mkdtemp(join(tmpdir(), 'jukebox-pod-lib-'))
+  try {
+    const p = (await h.call('POST', '/podcasts', { feedUrl: feed.url })).body
+    await settle(h.jobs)
+    const ep = (await h.call('GET', `/podcasts/${p.id}/episodes`)).body.items[0]
+
+    // Nowhere to write yet: the click fails now, not silently inside a job.
+    const refused = await h.call('POST', `/podcasts/${p.id}/episodes/${ep.id}/download`)
+    assert.equal(refused.status, 400)
+    assert.equal(refused.body.error.code, 'no_writable_source')
+
+    // The podcast names no target; the first local writable source serves.
+    await h.call('POST', '/sources', { name: 'lib', root, writable: true })
+    assert.equal((await h.call('POST', `/podcasts/${p.id}/episodes/${ep.id}/download`)).status, 202)
+    await settle(h.jobs)
+
+    const after = (await h.call('GET', `/podcasts/${p.id}/episodes`)).body.items[0]
+    assert.ok(after.trackId, 'the episode now points at a library track')
+    const track = h.db.prepare(`SELECT * FROM tracks WHERE id = ?`).get(after.trackId) as any
+    assert.equal(track.kind, 'podcast')
+    await stat(join(root, track.path))
+
+    // Already in the library: downloading it again is a conflict, not a re-fetch.
+    assert.equal((await h.call('POST', `/podcasts/${p.id}/episodes/${ep.id}/download`)).status, 409)
+  } finally {
+    await h.cleanup()
+    await rm(root, { recursive: true, force: true })
+    feed.server.close()
+    media.close()
+  }
 })

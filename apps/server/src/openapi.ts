@@ -179,6 +179,7 @@ const DOCS: Record<string, Doc> = {
   'DELETE /podcasts/:id': { summary: 'Unsubscribes.', tag: 'podcasts' },
   'GET /podcasts/:id/episodes': { summary: 'Episodes, newest first.', tag: 'podcasts' },
   'POST /podcasts/:id/refresh': { summary: 'Refreshes now. Conditional: unchanged feeds cost no body.', tag: 'podcasts' },
+  'POST /podcasts/:id/episodes/:eid/download': { summary: 'Downloads one episode into the library.', tag: 'podcasts' },
 
   'GET /radios': { summary: 'Stations.', tag: 'radios' },
   'GET /radios/search': { summary: 'Stations the community directory proposes for a name, best-voted first.', returns: 'RadioHit[]', tag: 'radios', query: ['q'] },

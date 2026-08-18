@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Episode, Podcast, Track } from '@jukebox/client-sdk'
 import { api, usePodcasts, useTracks } from './api'
@@ -6,8 +6,11 @@ import { AddPodcast } from './AddPodcast'
 import { Icon } from './Icon'
 import { fmtBytes } from './media'
 import { hostOf } from './podcasts'
+import { useMenuPosition } from './useMenuPosition'
+import { useRowSelection } from './useRowSelection'
+import { useTrackMenu, type TrackActions } from './TrackMenu'
 import { useRemembered, useScrollMemory } from './viewState'
-import { getLocale } from './i18n'
+import { getLocale, t as tr } from './i18n'
 
 const NO_TRACKS: Track[] = []
 
@@ -50,6 +53,7 @@ export function PodcastsView({
   onPlayEpisode,
   onPlay,
   onNotice,
+  actions,
 }: {
   search: string
   nowPlaying: string | null
@@ -57,6 +61,8 @@ export function PodcastsView({
   /** For episodes that are simply files: they are library tracks and play like any. */
   onPlay: (id: string, queue?: string[]) => void
   onNotice: (message: string) => void
+  /** The same menu the library list opens: a downloaded episode is a track. */
+  actions: TrackActions
 }) {
   const qc = useQueryClient()
   const shows = usePodcasts()
@@ -107,6 +113,33 @@ export function PodcastsView({
   // What the show can queue: an undownloaded episode has no track to queue.
   const downloaded = eps.map((e) => e.trackId).filter((id): id is string => !!id)
 
+  // With no feed to open — none subscribed, or the search hid them all — the
+  // right pane falls back to the first folder of files rather than a blank.
+  const disk = sel?.startsWith('disk:')
+    ? diskShows.find((d) => `disk:${d.key}` === sel)
+    : show ? undefined : diskShows[0]
+
+  /* ---- selection and menus, one per pane ---- */
+  const trackById = new Map(onDisk.map((t) => [t.id, t]))
+  const menu = useTrackMenu(actions)
+  const diskRows = useRowSelection(disk?.tracks.map((t) => t.id) ?? [])
+  const epRows = useRowSelection(eps.map((e) => e.id))
+  // The menu for episodes that are not (all) in the library: what the row *is*
+  // decides what it offers — play, and the podcast's own verb, download.
+  const [epMenu, setEpMenu] = useState<{ x: number; y: number; eps: Episode[]; show: Podcast } | null>(null)
+  const epPos = useMenuPosition(epMenu)
+  useEffect(() => {
+    if (!epMenu) return
+    const away = () => setEpMenu(null)
+    window.addEventListener('mousedown', away)
+    window.addEventListener('scroll', away, true)
+    return () => {
+      window.removeEventListener('mousedown', away)
+      window.removeEventListener('scroll', away, true)
+    }
+  }, [epMenu])
+  const toFetch = epMenu ? epMenu.eps.filter((e) => !e.trackId && e.enclosureUrl) : []
+
   if (shows.isPending) return <div className="media split"><div className="list-empty">Asking the server…</div></div>
   // Feeds *or* files: a folder just filed as a podcast is a podcast, and the
   // page saying "No podcasts yet" over it while the status bar says "1 episode
@@ -134,14 +167,35 @@ export function PodcastsView({
     return <div className="media split"><div className="list-empty">Nothing matches “{search}”</div></div>
   }
 
-  // With no feed to open — none subscribed, or the search hid them all — the
-  // right pane falls back to the first folder of files rather than a blank.
-  const disk = sel?.startsWith('disk:')
-    ? diskShows.find((d) => `disk:${d.key}` === sel)
-    : show ? undefined : diskShows[0]
-
   return (
     <div className="media split podcasts">
+      {menu.node}
+      {epMenu && (
+        <div
+          className="ctx"
+          ref={epPos.setFloating}
+          style={epPos.floatingStyles}
+          onMouseDown={(ev) => ev.stopPropagation()}
+        >
+          <button onClick={() => (onPlayEpisode(epMenu.eps[0], epMenu.show, downloaded), setEpMenu(null))}>
+            {tr('Play')}
+          </button>
+          {toFetch.length > 0 && (
+            <button
+              onClick={() => {
+                Promise.all(toFetch.map((e) => api.podcasts.download(epMenu.show.id, e.id)))
+                  .then(() => onNotice(toFetch.length === 1
+                    ? `Downloading “${toFetch[0].title}”…`
+                    : `Downloading ${toFetch.length} episodes…`))
+                  .catch(() => onNotice('The server refused the download'))
+                setEpMenu(null)
+              }}
+            >
+              {toFetch.length > 1 ? tr('Download {n} Episodes', { n: toFetch.length }) : tr('Download')}
+            </button>
+          )}
+        </div>
+      )}
       <div className="show-col">
         {/* A button rather than a URL field: there are two ways a podcast gets
             into a library — a feed you subscribe to and a folder you already
@@ -246,8 +300,13 @@ export function PodcastsView({
             {disk.tracks.map((t, i) => (
               <div
                 key={t.id}
-                className={`ep ${i % 2 ? 'odd' : ''} ${t.id === nowPlaying ? 'playing' : ''}`}
+                className={`ep ${i % 2 ? 'odd' : ''} ${t.id === nowPlaying ? 'playing' : ''} ${diskRows.selected.has(t.id) ? 'sel' : ''}`}
+                onMouseDown={(ev) => ev.button === 0 && diskRows.click(ev, t.id)}
                 onDoubleClick={() => onPlay(t.id, disk.tracks.map((x) => x.id))}
+                onContextMenu={(ev) => {
+                  const chosen = diskRows.forMenu(t.id)
+                  menu.open(ev, disk.tracks.filter((x) => chosen.includes(x.id)), disk.tracks.map((x) => x.id))
+                }}
               >
                 <span className="c-dot">
                   {t.id === nowPlaying ? <Icon name="volumeHigh" size={10} className="spk" /> : null}
@@ -346,8 +405,22 @@ export function PodcastsView({
             return (
             <div
               key={e.id}
-              className={`ep ${i % 2 ? 'odd' : ''} ${on ? 'playing' : ''}`}
+              className={`ep ${i % 2 ? 'odd' : ''} ${on ? 'playing' : ''} ${epRows.selected.has(e.id) ? 'sel' : ''}`}
+              onMouseDown={(ev) => ev.button === 0 && epRows.click(ev, e.id)}
               onDoubleClick={() => onPlayEpisode(e, show, downloaded)}
+              onContextMenu={(ev) => {
+                // Downloaded episodes are tracks and get the track menu, with
+                // everything that entails. Anything less downloaded gets the
+                // episode menu: play, and the option to become a track.
+                const chosen = epRows.forMenu(e.id).map((cid) => eps.find((x) => x.id === cid)!)
+                const tracks = chosen.map((x) => (x.trackId ? trackById.get(x.trackId) : undefined))
+                if (tracks.length && tracks.every(Boolean)) {
+                  return menu.open(ev, tracks as Track[], downloaded)
+                }
+                ev.preventDefault()
+                ev.stopPropagation()
+                setEpMenu({ x: ev.clientX, y: ev.clientY, eps: chosen, show })
+              }}
               title={e.trackId ? 'In your library' : 'Not downloaded — plays from the publisher'}
             >
               {/* Three states, one column, in order of what is happening now:

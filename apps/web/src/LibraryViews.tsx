@@ -2,9 +2,10 @@
 // Artist instead of one flat song table. Songs stays in TrackList; these two are
 // grid-first, which is the whole point of the redesign.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Play } from './App'
 import { useRemembered, useScrollMemory } from './viewState'
+import { useRowSelection } from './useRowSelection'
 import { useMenuPosition } from './useMenuPosition'
 import { useTrackMenu, type TrackActions } from './TrackMenu'
 import { ViewSearch } from './ViewSearch'
@@ -112,38 +113,20 @@ export function AlbumTracks({
   onPlay: Play
   menu?: ReturnType<typeof useTrackMenu>
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const anchor = useRef<string | null>(null)
   const ids = album.tracks.map((t) => t.id)
-
-  const click = (e: React.MouseEvent, id: string) => {
-    if (e.shiftKey && anchor.current) {
-      const a = ids.indexOf(anchor.current)
-      const b = ids.indexOf(id)
-      if (a > -1 && b > -1) return setSelected(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)))
-    }
-    anchor.current = id
-    if (e.metaKey || e.ctrlKey) {
-      const next = new Set(selected)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return setSelected(next)
-    }
-    setSelected(new Set([id]))
-  }
+  const sel = useRowSelection(ids)
 
   return (
     <ol className="album-tracks">
       {album.tracks.map((t) => (
         <li
           key={t.id}
-          className={`${t.id === nowPlaying ? 'playing' : ''} ${selected.has(t.id) ? 'sel' : ''}`}
-          onMouseDown={(e) => e.button === 0 && click(e, t.id)}
+          className={`${t.id === nowPlaying ? 'playing' : ''} ${sel.selected.has(t.id) ? 'sel' : ''}`}
+          onMouseDown={(e) => e.button === 0 && sel.click(e, t.id)}
           onDoubleClick={() => onPlay(t.id, ids)}
           onContextMenu={(e) => {
             if (!menu) return
-            const chosen = selected.has(t.id) ? [...selected] : [t.id]
-            if (!selected.has(t.id)) setSelected(new Set([t.id]))
+            const chosen = sel.forMenu(t.id)
             menu.open(e, album.tracks.filter((x) => chosen.includes(x.id)), ids)
           }}
         >

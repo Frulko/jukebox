@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { Play } from './App'
 import { useTracks } from './api'
 import { Cover } from './Artwork'
@@ -6,6 +5,7 @@ import { albumSeed } from './albumSeed'
 import { Icon } from './Icon'
 import { fmtTime, type Track } from './data'
 import { useTrackMenu, type TrackActions } from './TrackMenu'
+import { useRowSelection } from './useRowSelection'
 
 /** What identifies an album to open. The artist is absent when the place you
  *  clicked from only knew a name — a column-browser row, say. */
@@ -53,8 +53,8 @@ export function AlbumView({
     limit: 500,
   })
   const tracks: Track[] = data?.items ?? []
-  const [selected, setSelected] = useState<Set<string>>(new Set())
   const ids = tracks.map((t) => t.id)
+  const sel = useRowSelection(ids)
   const artists = [...new Set(tracks.map((t) => t.albumArtist))]
   const discs = [...new Set(tracks.map((t) => t.discNumber))].sort((a, b) => a - b)
   const year = tracks[0]?.year
@@ -109,13 +109,12 @@ export function AlbumView({
                   .map((t) => (
                     <li
                       key={t.id}
-                      className={`${t.id === nowPlaying ? 'playing' : ''} ${selected.has(t.id) ? 'sel' : ''}`}
-                      onMouseDown={(e) => e.button === 0 && setSelected(new Set([t.id]))}
+                      className={`${t.id === nowPlaying ? 'playing' : ''} ${sel.selected.has(t.id) ? 'sel' : ''}`}
+                      onMouseDown={(e) => e.button === 0 && sel.click(e, t.id)}
                       onDoubleClick={() => onPlay(t.id, ids)}
                       onContextMenu={(e) => {
-                        const chosen = selected.has(t.id) ? tracks.filter((x) => selected.has(x.id)) : [t]
-                        if (!selected.has(t.id)) setSelected(new Set([t.id]))
-                        menu.open(e, chosen, ids)
+                        const chosen = sel.forMenu(t.id)
+                        menu.open(e, tracks.filter((x) => chosen.includes(x.id)), ids)
                       }}
                     >
                       <span className="n">

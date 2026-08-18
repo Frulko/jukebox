@@ -2188,3 +2188,10 @@ button:disabled { opacity: .5; }
 .station.playing {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+
+/* ---------------- selected rows outside the track list ----------------
+   Episodes and chapters select like tracks, so they look selected like
+   tracks: the same band the library uses, over the zebra stripe. */
+.ep.sel, .ep.sel.odd { background: var(--sel); color: var(--sel-text); }
+.ep.sel .dim, .ep.sel .num, .ep.sel .c-where, .ep.sel .c-date { color: var(--sel-text); opacity: .85; }
+.ep.sel .ep-have, .ep.sel.playing .c-name { color: var(--sel-text); }
