@@ -91,13 +91,15 @@
   padding: 8px 8px 0;
   gap: 8px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* One bar at the bottom, not a status strip floating over a player: the
+     statusbar folds into the bar's right third. Equal side columns keep the
+     transport on the centre of the window, where this client puts it. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: 1fr auto 1fr;
   grid-template-areas:
-    "find   find  find"
-    "body   body  body"
-    "status status status"
-    "pleft  pmid  pright";
+    "find  find find"
+    "body  body body"
+    "pleft pmid pright";
 }
 [data-theme="spotify"] .topbar { display: contents; }
 /* What plays sits at the LEFT of the bar, the transport in the middle —
@@ -106,7 +108,14 @@
 [data-theme="spotify"] .transport { grid-area: pmid; justify-self: center; }
 [data-theme="spotify"] .right-tools { grid-area: find; justify-self: center; margin-left: 0; }
 [data-theme="spotify"] .main { grid-area: body; }
-[data-theme="spotify"] .statusbar { grid-area: status; height: 24px; border-top: 0; padding: 0 12px; color: var(--dim); }
+[data-theme="spotify"] .statusbar { grid-area: pright; justify-self: end; align-self: center; border-top: 0; padding: 0 12px 0 0; color: var(--dim); }
+/* New-playlist, shuffle and repeat already live in the top bar and the
+   sidebar in this skin — only the refresh button earns its spot here. */
+[data-theme="spotify"] .statusbar > .sb-btn:not(.right) { display: none; }
+[data-theme="spotify"] .statusbar .summary { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; }
+/* When the window tightens, the summary gives way — the pickers never fold. */
+[data-theme="spotify"] .statusbar .lang-picker,
+[data-theme="spotify"] .statusbar .theme-picker { flex: none; }
 [data-theme="spotify"] .main {
   gap: 8px;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -190,6 +199,7 @@
 [data-theme="spotify"] .lcd-scrub:hover .fill { background: var(--accent); }
 [data-theme="spotify"] .lcd-scrub .knob { opacity: 0; border: 0; background: #fff; box-shadow: none; }
 [data-theme="spotify"] .lcd-scrub:hover .knob { opacity: 1; }
+[data-theme="spotify"] .lcd-eye { align-self: center; margin-top: 0; }
 [data-theme="spotify"] input[type="range"]::-webkit-slider-thumb { border: 0; background: #fff; }
 /* no column browser in this skin, so its toggle stays out of the bar */
 [data-theme="spotify"] .right-tools > button:nth-of-type(3) { display: none; }
