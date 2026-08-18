@@ -46,7 +46,7 @@ const EXPECTED: Record<string, 'admin' | 'user' | 'guest'> = {
   'POST /player/play': 'guest', 'POST /player/pause': 'guest', 'POST /player/next': 'guest',
   'POST /player/previous': 'guest', 'POST /player/seek': 'guest', 'POST /player/goto': 'guest',
   'POST /player/queue': 'guest', 'PUT /player/queue': 'guest', 'DELETE /player/queue': 'guest',
-  'PATCH /player': 'guest', 'POST /player/report': 'guest',
+  'PATCH /player': 'guest', 'POST /player/report': 'guest', 'POST /player/stream': 'guest',
   'POST /tracks/:id/play': 'guest',
   'POST /outputs/:id/play': 'guest', 'POST /outputs/:id/pause': 'guest',
   'POST /outputs/:id/stop': 'guest', 'POST /outputs/:id/volume': 'guest',

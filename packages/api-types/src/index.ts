@@ -569,6 +569,31 @@ export type PlayerState = {
   revision: number
   /** Which controller last changed it, from the `x-jukebox-client` header. */
   by: string | null
+  /**
+   * What is playing when it is not a library track — a radio station, a podcast
+   * episode still in its feed. Deliberately not `trackId`: those are URLs with
+   * a display name, not rows anything can look up, and every consumer of
+   * `trackId` gets to stay sure it names a track. Non-null wins over `trackId`
+   * as "what is current"; cleared the moment a queued track starts.
+   */
+  stream: PlayerStream | null
+}
+
+/**
+ * The whole of what another client needs to show — and, if it was already
+ * audible, keep playing — something the library does not hold.
+ */
+export type PlayerStream = {
+  /** `radio:<id>` or `ep:<id>`; the prefix is the kind. */
+  id: string
+  name: string
+  artist: string
+  album: string
+  imageUrl: string | null
+  /** The stream itself, so a second window can play it, not just name it. */
+  src: string
+  /** Seconds; 0 for a station, which has no end. */
+  duration: number
 }
 
 /**

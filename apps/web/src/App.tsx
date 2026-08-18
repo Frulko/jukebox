@@ -22,7 +22,7 @@ import { DiscoverView } from './DiscoverView'
 import { RadioView } from './RadioView'
 import { AudiobooksView } from './AudiobooksView'
 import { PodcastsView } from './PodcastsView'
-import { episodeAsTrack, hostOf } from './podcasts'
+import { episodeAsTrack, hostOf, streamAsTrack } from './podcasts'
 import { MissingView } from './MissingView'
 import { DesignSystemView } from './DesignSystemView'
 import { QueueView } from './QueueView'
@@ -529,9 +529,15 @@ export default function App() {
       audio.play(id, ep.enclosureUrl)
       setNowPlaying(id)
       setPlayingEpisode(episodeAsTrack(ep, show))
+      // Told to the server so every other window hears of it — this one
+      // already has the sound. See the `stream` field on the player state.
+      void control.stream({
+        id, name: ep.title, artist: show.author || show.title, album: show.title,
+        imageUrl: ep.imageUrl ?? show.imageUrl, src: ep.enclosureUrl, duration: ep.duration,
+      })
       setNotice(`Streaming “${ep.title}” from ${hostOf(ep.enclosureUrl)} — it is not in your library`)
     },
-    [audio, playTrack, setNotice],
+    [audio, control, playTrack, setNotice],
   )
 
   /**
@@ -564,9 +570,15 @@ export default function App() {
         kind: 'music',
         album: station.genre || 'Radio',
       })
+      // Told to the server so every other window hears of it — this one
+      // already has the sound. See the `stream` field on the player state.
+      void control.stream({
+        id, name: station.name, artist: 'Live', album: station.genre || 'Radio',
+        imageUrl: station.imageUrl, src: station.streamUrl, duration: 0,
+      })
       setNotice(`Tuned to ${station.name} — it plays until you stop it`)
     },
-    [audio, setNotice],
+    [audio, control, setNotice],
   )
 
   /**
@@ -636,19 +648,23 @@ export default function App() {
    *
    * What is current always follows — the queue moved on, so the track it is on
    * moved on, and a window showing the old one is a window telling a small lie.
+   * A stream — a radio, a feed episode — wins over the queue's track while it
+   * is set: it is what another window most recently started, and it carries its
+   * own display and source since the library cannot be asked for them.
    * What does *not* follow is the sound: the element is only started if it was
    * already playing. A page that begins making noise because a phone did
    * something is a page nobody asked to hear, and on load the browser would
    * refuse it anyway.
    */
   useEffect(() => {
-    const id = player?.trackId ?? null
+    const stream = player?.stream ?? null
+    const id = stream?.id ?? player?.trackId ?? null
     if (!id || id === nowPlaying) return
     setNowPlaying(id)
-    setPlayingEpisode(null)
-    if (audio.playing) audio.play(id)
+    setPlayingEpisode(stream ? streamAsTrack(stream) : null)
+    if (audio.playing) audio.play(id, stream?.src)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player?.trackId])
+  }, [player?.stream?.id, player?.trackId])
 
   /**
    * What is playing, as something to display.
@@ -663,7 +679,8 @@ export default function App() {
   const fetched = useQuery({
     queryKey: ['tracks', nowPlaying],
     queryFn: () => api.tracks.get(nowPlaying!),
-    enabled: !!nowPlaying && !nowPlaying.startsWith('ep:') && !tracks.some((t) => t.id === nowPlaying),
+    enabled: !!nowPlaying && !nowPlaying.startsWith('ep:') && !nowPlaying.startsWith('radio:')
+      && !tracks.some((t) => t.id === nowPlaying),
     staleTime: 60_000,
     retry: 1,
   })

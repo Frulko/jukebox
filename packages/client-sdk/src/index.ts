@@ -2,7 +2,7 @@ import type {
   Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Output, Podcast, Radio,
-  CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
+  CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
   Source, Stats,
@@ -287,6 +287,9 @@ export function createClient(opts: ClientOptions = {}) {
       /** For a renderer: where it actually got to. It may not reorder anything. */
       report: (position: number, playing?: boolean) =>
         request<PlayerState>('/player/report', { method: 'POST', body: JSON.stringify({ position, playing }) }),
+      /** A non-library stream — radio, feed episode — became what is playing. */
+      stream: (stream: PlayerStream) =>
+        request<PlayerState>('/player/stream', { method: 'POST', body: JSON.stringify({ stream }) }),
     },
 
     outputs: {
@@ -620,7 +623,7 @@ export type {
   Account, Role,
   Device, DeviceKind, DeviceStats, DeviceTrack, Job, Page, Playlist, SmartRules,
   Episode, JobItem, JobItemsPage, JobItemState, JobKind, JobState, MissingTrack, Output, Podcast, Radio,
-  CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerTarget, Plugin,
+  CommandResult, DuplicateGroup, Memberships, Move, OrganizePlan, PlayerState, PlayerStream, PlayerTarget, Plugin,
   PluginState, Rendition,
   RestoreReport, Schedule,
   Source, Stats,

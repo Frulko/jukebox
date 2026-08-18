@@ -2117,6 +2117,11 @@ export const SCHEMAS: Record<string, any> = {
         "type": "string",
         "nullable": true,
         "description": "Which controller last changed it, from the `x-jukebox-client` header."
+      },
+      "stream": {
+        "$ref": "#/components/schemas/PlayerStream",
+        "nullable": true,
+        "description": "What is playing when it is not a library track — a radio station, a podcast episode still in its feed. Deliberately not `trackId`: those are URLs with a display name, not rows anything can look up, and every consumer of `trackId` gets to stay sure it names a track. Non-null wins over `trackId` as \"what is current\"; cleared the moment a queued track starts."
       }
     },
     "required": [
@@ -2129,7 +2134,48 @@ export const SCHEMAS: Record<string, any> = {
       "repeat",
       "shuffle",
       "revision",
-      "by"
+      "by",
+      "stream"
+    ]
+  },
+  "PlayerStream": {
+    "description": "The whole of what another client needs to show — and, if it was already audible, keep playing — something the library does not hold.",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "`radio:<id>` or `ep:<id>`; the prefix is the kind."
+      },
+      "name": {
+        "type": "string"
+      },
+      "artist": {
+        "type": "string"
+      },
+      "album": {
+        "type": "string"
+      },
+      "imageUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "src": {
+        "type": "string",
+        "description": "The stream itself, so a second window can play it, not just name it."
+      },
+      "duration": {
+        "type": "number",
+        "description": "Seconds; 0 for a station, which has no end."
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "artist",
+      "album",
+      "imageUrl",
+      "src",
+      "duration"
     ]
   },
   "Memberships": {

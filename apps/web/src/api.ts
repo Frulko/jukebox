@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { t } from './i18n'
 import { useQuery, useQueryClient, useMutation, type QueryClient } from '@tanstack/react-query'
 import {
-  createClient, type Job, type PlayerState, type Track, type TrackPatch, type TrackQuery,
+  createClient, type Job, type PlayerState, type PlayerStream, type Track, type TrackPatch, type TrackQuery,
 } from '@jukebox/client-sdk'
 
 /**
@@ -281,6 +281,12 @@ export function usePlayerActions() {
        * call and not a protocol.
        */
       setTarget: (target: PlayerState['target']) => land(api.player.set({ target })),
+      /**
+       * A radio or a feed episode became what is playing. Said to the server so
+       * every other window hears of it — the one that pressed play already has
+       * the sound.
+       */
+      stream: (s: PlayerStream) => land(api.player.stream(s)),
     }
   }, [qc])
 }

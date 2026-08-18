@@ -339,10 +339,14 @@ export function PodcastsView({
               {q ? `Nothing matches “${search}”` : 'This feed has no episodes yet — refresh it.'}
             </div>
           )}
-          {eps.map((e, i) => (
+          {eps.map((e, i) => {
+            // A downloaded episode is current under its track id; one still in
+            // its feed under `ep:<id>` — possibly started from another window.
+            const on = (e.trackId ?? `ep:${e.id}`) === nowPlaying
+            return (
             <div
               key={e.id}
-              className={`ep ${i % 2 ? 'odd' : ''} ${e.trackId && e.trackId === nowPlaying ? 'playing' : ''}`}
+              className={`ep ${i % 2 ? 'odd' : ''} ${on ? 'playing' : ''}`}
               onDoubleClick={() => onPlayEpisode(e, show, downloaded)}
               title={e.trackId ? 'In your library' : 'Not downloaded — plays from the publisher'}
             >
@@ -351,7 +355,7 @@ export function PodcastsView({
                   mark as a playing row in the library — otherwise a dot if it
                   has not been listened to, otherwise nothing. */}
               <span className="c-dot">
-                {e.trackId && e.trackId === nowPlaying ? (
+                {on ? (
                   <Icon name="volumeHigh" size={10} className="spk" />
                 ) : !e.played ? (
                   <i />
@@ -375,7 +379,8 @@ export function PodcastsView({
               </span>
               <span className="c-size num">{e.enclosureLength ? fmtBytes(e.enclosureLength) : '—'}</span>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
       ) : null}

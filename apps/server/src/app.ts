@@ -938,6 +938,33 @@ export function createApp(dbFile: string) {
     return c.json(player.withTrack())
   })
 
+  /**
+   * Something outside the library started playing — a radio station, a feed
+   * episode. The tab that started it says so here, and every other client
+   * learns of it through the `player` event; without this route a radio only
+   * ever existed in the one window that pressed play. Not driven to an output:
+   * a stream is the local element's business, the queue is the renderer's.
+   */
+  api.post('/player/stream', async (c) => {
+    const b = await c.req.json().catch(() => null)
+    const s = b?.stream
+    if (!s || typeof s.id !== 'string' || !/^(radio|ep):./.test(s.id)
+      || typeof s.name !== 'string' || !s.name
+      || typeof s.src !== 'string' || !/^https?:\/\//.test(s.src)) {
+      return fail(c, 400, 'bad_body', 'expected { stream: { id: "radio:…"|"ep:…", name, src, … } }')
+    }
+    player.stream({
+      id: s.id,
+      name: s.name,
+      artist: typeof s.artist === 'string' ? s.artist : '',
+      album: typeof s.album === 'string' ? s.album : '',
+      imageUrl: typeof s.imageUrl === 'string' ? s.imageUrl : null,
+      src: s.src,
+      duration: typeof s.duration === 'number' && s.duration > 0 ? s.duration : 0,
+    }, by(c))
+    return c.json(player.withTrack())
+  })
+
   api.patch('/player', async (c) => {
     const b = await c.req.json().catch(() => ({}))
     if (b.target) {

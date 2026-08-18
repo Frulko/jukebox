@@ -195,3 +195,38 @@ test('clearing empties everything but keeps the revision moving forward', async 
     assert.ok(cleared.revision >= before)
   } finally { await h.cleanup() }
 })
+
+test('a declared stream is what every controller sees, and the queue is untouched', async () => {
+  const h = await harness()
+  try {
+    await h.call('PUT', '/player/queue', { trackIds: ['t1', 't2'] }, 'laptop')
+    const p = (await h.call('POST', '/player/stream', {
+      stream: { id: 'radio:fip', name: 'FIP', artist: 'Live', album: 'Jazz', imageUrl: null, src: 'https://radio.example/fip.aac', duration: 0 },
+    }, 'laptop')).body
+    assert.equal(p.stream.id, 'radio:fip')
+    assert.equal(p.playing, true)
+    // A radio is a detour: the queue and its position survive it.
+    assert.deepEqual(p.queue, ['t1', 't2'])
+    assert.equal(p.trackId, 't1')
+    // The second window — the entire point of the route.
+    const seen = (await h.call('GET', '/player', undefined, 'phone')).body
+    assert.equal(seen.stream.name, 'FIP')
+    assert.equal(seen.stream.src, 'https://radio.example/fip.aac')
+  } finally { await h.cleanup() }
+})
+
+test('a queued track starting clears the stream; a non-stream body is refused', async () => {
+  const h = await harness()
+  try {
+    await h.call('PUT', '/player/queue', { trackIds: ['t1', 't2'] })
+    await h.call('POST', '/player/stream', {
+      stream: { id: 'ep:99', name: 'Ep', artist: 'Show', album: 'Show', imageUrl: null, src: 'https://pod.example/99.mp3', duration: 60 },
+    })
+    assert.equal((await h.call('POST', '/player/goto', { trackId: 't2' })).body.stream, null)
+    // An id without the prefix would let a plain track id masquerade as a stream.
+    assert.equal((await h.call('POST', '/player/stream', {
+      stream: { id: 't1', name: 'X', src: 'https://x.example/a' },
+    })).status, 400)
+    assert.equal((await h.call('POST', '/player/stream', { stream: { id: 'radio:x', name: 'X', src: 'not-a-url' } })).status, 400)
+  } finally { await h.cleanup() }
+})

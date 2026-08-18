@@ -152,6 +152,7 @@ const DOCS: Record<string, Doc> = {
   'POST /player/previous': { summary: 'Previous track, or restarts this one.', tag: 'player' },
   'POST /player/seek': { summary: 'Moves the playhead.', tag: 'player', body: '{ position }' },
   'POST /player/goto': { summary: 'Jumps to a track already in the queue.', tag: 'player', body: '{ trackId }' },
+  'POST /player/stream': { summary: 'Declares a non-library stream — radio, feed episode — as what is playing, so every client hears of it.', tag: 'player', body: '{ stream: PlayerStream }' },
   'PATCH /player': { summary: 'Changes the output, repeat or shuffle.', tag: 'player', body: '{ target?, repeat?, shuffle? }' },
   'POST /player/report': { summary: 'A renderer saying where it actually is. It may not reorder anything.', tag: 'player', body: '{ position, playing? }' },
 

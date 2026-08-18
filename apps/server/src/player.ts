@@ -27,6 +27,25 @@ export type PlayerTarget =
   /** A renderer on the network, driven by the server. */
   | { kind: 'output'; id: string; name: string }
 
+/**
+ * What is playing when it is not a library track — a radio station, a podcast
+ * episode still in its feed. Deliberately not a `trackId`: those are URLs with
+ * a display name, not rows anything can look up, and every consumer of
+ * `trackId` gets to stay sure it names a track. Carries everything a second
+ * window needs to show it — and, if that window was already audible, play it.
+ */
+export type PlayerStream = {
+  /** `radio:<id>` or `ep:<id>`; the prefix is the kind. */
+  id: string
+  name: string
+  artist: string
+  album: string
+  imageUrl: string | null
+  src: string
+  /** Seconds; 0 for a station, which has no end. */
+  duration: number
+}
+
 export type PlayerState = {
   queue: string[]
   /** Index into `queue`. -1 when nothing is loaded. */
@@ -42,11 +61,14 @@ export type PlayerState = {
   revision: number
   /** Who last changed it, for a UI that wants to say "paused from iPhone". */
   by: string | null
+  /** Non-null wins over `trackId` as "what is current"; cleared when a queued track starts. */
+  stream: PlayerStream | null
 }
 
 const EMPTY: PlayerState = {
   queue: [], index: -1, trackId: null, playing: false, position: 0,
   target: { kind: 'local' }, repeat: 'off', shuffle: false, revision: 0, by: null,
+  stream: null,
 }
 
 export class Player {
@@ -85,6 +107,7 @@ export class Player {
       trackId: index >= 0 ? trackIds[index] : null,
       position: 0,
       playing: index >= 0,
+      stream: null,
     }, by)
   }
 
@@ -132,27 +155,36 @@ export class Player {
 
     if (shuffle && dir === 1) {
       const next = Math.floor(Math.random() * queue.length)
-      return this.#set({ index: next, trackId: queue[next], position: 0, playing: true }, by)
+      return this.#set({ index: next, trackId: queue[next], position: 0, playing: true, stream: null }, by)
     }
 
     const next = index + dir
     if (next >= queue.length) {
       if (repeat !== 'all') return this.#set({ playing: false, position: 0 }, by)
-      return this.#set({ index: 0, trackId: queue[0], position: 0, playing: true }, by)
+      return this.#set({ index: 0, trackId: queue[0], position: 0, playing: true, stream: null }, by)
     }
     if (next < 0) {
       // Going back from the first track restarts it rather than wrapping to the
       // end, which is what every player does and what people expect.
       return this.#set({ position: 0 }, by)
     }
-    return this.#set({ index: next, trackId: queue[next], position: 0, playing: true }, by)
+    return this.#set({ index: next, trackId: queue[next], position: 0, playing: true, stream: null }, by)
   }
 
   /** Jumps to a track already in the queue. */
   goTo(trackId: string, by?: string): PlayerState {
     const index = this.#state.queue.indexOf(trackId)
     if (index < 0) return this.state
-    return this.#set({ index, trackId, position: 0, playing: true }, by)
+    return this.#set({ index, trackId, position: 0, playing: true, stream: null }, by)
+  }
+
+  /**
+   * Something outside the library starts playing — a station, a feed episode.
+   * The queue is left alone: a radio is a detour, `next` still means "back to
+   * what was queued", which is also why `index` does not move.
+   */
+  stream(s: PlayerStream, by?: string): PlayerState {
+    return this.#set({ stream: s, position: 0, playing: true }, by)
   }
 
   setTarget(target: PlayerTarget, by?: string): PlayerState {
