@@ -5,8 +5,20 @@
 // tag writing. If ffmpeg is missing we say so instead of skipping quietly.
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 const DIR = '.fixtures'
+// The four files the tests are written against. The directory also serves as
+// the dev server's source root, so manual testing drifts it \u2014 a renamed
+// format, an extra album \u2014 and "the directory exists" stops meaning "the
+// fixtures are there". Checking the canon is what catches the afternoon where
+// 03.flac had become 03.m4a and the transcode tests ran against a ghost.
+const CANON = [
+  'Daft Punk/Discovery/01.mp3',
+  'Daft Punk/Discovery/02.mp3',
+  'Daft Punk/Discovery/03.flac',
+  'Radiohead/Kid A/01.m4a',
+]
 let ok = true
 try {
   execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
@@ -16,7 +28,11 @@ try {
   console.warn('  macOS: brew install ffmpeg chromaprint \u00b7 Debian: apt install ffmpeg libchromaprint-tools\n')
 }
 
-if (ok && !existsSync(DIR)) execFileSync('node', ['scripts/fixtures.mjs', DIR], { stdio: 'inherit' })
+// Regenerated whenever the canon is incomplete, not only when the directory is
+// missing. Regeneration is a clean rebuild: anything added by hand goes with it.
+if (ok && !CANON.every((f) => existsSync(join(DIR, f)))) {
+  execFileSync('node', ['scripts/fixtures.mjs', DIR], { stdio: 'inherit' })
+}
 
 try {
   execFileSync('node', [

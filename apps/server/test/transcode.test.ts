@@ -159,7 +159,13 @@ test('hanging up kills the encoder', async () => {
   assert.ok(child.pid)
   const pid = child.pid!
 
-  await new Promise((r) => child.stdout!.once('data', r))
+  // Raced against exit: an ffmpeg that fails on startup — a fixture gone
+  // missing — emits no data and, unguarded, this await pends for ever with
+  // the runner's timeout off. A hang is the one way a test must not fail.
+  await new Promise((resolve, reject) => {
+    child.stdout!.once('data', resolve)
+    child.once('exit', (code) => reject(new Error(`ffmpeg exited (${code}) before producing any data`)))
+  })
   assert.doesNotThrow(() => process.kill(pid, 0), 'it is running')
 
   child.kill('SIGKILL')
