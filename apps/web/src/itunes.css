@@ -1338,7 +1338,7 @@ input[type="range"]::-webkit-slider-thumb {
 .th-filter.on { opacity: 1; color: var(--accent); }
 .ctx-empty { padding: 3px 10px; color: var(--dim); font-size: 11px; }
 .ctx button em { margin-left: auto; padding-left: 12px; font-style: normal; }
-.ctx button { display: flex; align-items: center; width: 100%; }
+.ctx button { display: flex; align-items: center; justify-content: flex-start; width: 100%; }
 
 /* ---------------- the queue ----------------
    Fixed to the right edge rather than anchored to the player: the player is at
