@@ -1585,7 +1585,7 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 9px;
   font-weight: 600;
 }
-/* the playing row is marked in the margin, not by tinting the whole line */
+/* the margin marker, on top of the shared playing tint at the end of the file */
 [data-theme="studio"] .tr.playing .td.name { color: var(--accent); }
 [data-theme="studio"] .tr.playing::before {
   content: "";
@@ -2626,3 +2626,17 @@ button:disabled { opacity: .5; }
 .design .fb-demo { max-width: 460px; }
 .design .type-sample { margin: 0 0 8px; }
 .design .type-sample code { font-family: var(--font-mono); }
+
+/* ---------------- the playing row, everywhere ----------------
+   One rule at the end of the file, on purpose: every listing that can play
+   something marks its playing row with the same accent wash, and being last
+   lets it win over each list's zebra stripe without a specificity war.
+   Selection still owns the full background — a row both selected and playing
+   stays blue, so the two `:not(.sel)`. The queue already tints its current
+   row (`.q-row.on`) and keeps its stronger mark. */
+.tr.playing:not(.sel),
+.ep.playing,
+.album-tracks li.playing:not(.sel),
+.station.playing {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
