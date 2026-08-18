@@ -126,8 +126,11 @@ function fakeHost(url: string) {
   let state: any = { trackId: null, playing: false, position: 0, queue: [], index: -1, repeat: 'off', shuffle: false, revision: 1 }
   const listeners: ((s: any) => void)[] = []
 
+  const commands = new Map<string, (ctx: any) => any>()
+
   return {
     calls,
+    commands,
     emit: (next: any) => { state = next; listeners.forEach((l) => l(next)) },
     host: {
       apiVersion: '1.1.0',
@@ -135,6 +138,7 @@ function fakeHost(url: string) {
       log: () => {},
       config: { url, id: 'test', name: 'Test Jukebox' },
       setConfig: () => {},
+      registerCommand: (name: string, handler: (ctx: any) => any) => commands.set(name, handler),
       on: (_event: string, handler: (s: any) => void) => { listeners.push(handler); return () => {} },
       player: {
         state: () => state,
@@ -267,9 +271,15 @@ test('stopping the plugin says goodbye rather than going quiet', async () => {
 })
 
 test('with no broker configured it does nothing at all', () => {
-  const { host } = fakeHost('')
-  host.config = { id: 'test', name: 'Test' } as any
+  const fake = fakeHost('')
+  fake.host.config = { id: 'test', name: 'Test' } as any
   // Not an error and not a connection attempt to a default that is probably
   // wrong: a plugin installed but not configured should be inert.
-  assert.doesNotThrow(() => activate(host as any))
+  assert.doesNotThrow(() => activate(fake.host as any))
+  // Inert, not mute: the health check exists precisely in this state, and
+  // answers with what is missing rather than a connection error.
+  const verdict = fake.commands.get('check')!({})
+  assert.equal(verdict.kind, 'check')
+  assert.equal(verdict.ok, false)
+  assert.match(verdict.message, /broker/i)
 })
